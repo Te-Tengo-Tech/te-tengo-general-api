@@ -25,6 +25,10 @@ tetengo:
     # API contract, implementation choice: access token 60 min, refresh token 30 days.
     vigencia-acceso: 60m
     vigencia-refresco: 30d
+  enlaces:
+    # Link e-mailed to reset a password; {token} is the one-time token. The app's deep-link format is
+    # pending (docs/BLOCKERS.md).
+    recuperacion: ${TT_ENLACE_RECUPERACION:tetengo://recuperacion?token={token}}
 
 server:
   error:

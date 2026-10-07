@@ -29,9 +29,13 @@ public abstract class AbstractIntegrationTest {
     @Autowired
     protected RelojDePrueba reloj;
 
+    @Autowired
+    protected CorreoDePrueba correos;
+
     @BeforeEach
     void prepararEstadoInicial() {
         reloj.reiniciar();
+        correos.limpiar();
         List<String> tablas = jdbcDeLimpieza.queryForList(
                 "select tablename from pg_tables where schemaname = 'public' and tablename <> 'flyway_schema_history'",
                 String.class);

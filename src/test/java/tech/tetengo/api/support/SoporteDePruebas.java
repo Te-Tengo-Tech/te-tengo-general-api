@@ -13,4 +13,10 @@ public class SoporteDePruebas {
     RelojDePrueba relojDePrueba() {
         return new RelojDePrueba();
     }
+
+    @Bean
+    @Primary
+    CorreoDePrueba correoDePrueba() {
+        return new CorreoDePrueba();
+    }
 }

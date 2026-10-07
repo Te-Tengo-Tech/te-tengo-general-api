@@ -11,7 +11,11 @@ public enum CuentaError implements CodigoError {
             "CUENTA_BLOQUEADA",
             HttpStatus.LOCKED,
             "La cuenta está bloqueada por varios intentos fallidos. Vuelve a intentarlo más tarde."),
-    SESION_EXPIRADA("SESION_EXPIRADA", HttpStatus.UNAUTHORIZED, "La sesión expiró. Vuelve a iniciar sesión.");
+    SESION_EXPIRADA("SESION_EXPIRADA", HttpStatus.UNAUTHORIZED, "La sesión expiró. Vuelve a iniciar sesión."),
+    ENLACE_VENCIDO(
+            "ENLACE_VENCIDO",
+            HttpStatus.GONE,
+            "El enlace ya no es válido. Solicita uno nuevo para recuperar tu acceso.");
 
     private final String codigo;
     private final HttpStatus estado;
