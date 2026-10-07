@@ -17,6 +17,7 @@ CONTRASENA="${DEMO_CONTRASENA:-TeTengo-demo-2026}"
 NOMBRE="Carmen Huamán"
 ADULTO="Rosa Huamán"
 DIRECCION="Jr. Los Pinos 482, San Miguel, Lima"
+EDAD=78  # the prototype's demo older adult
 
 llamar() { # method path [json] [token]
   curl -sS -X "$1" "$API$2" -H 'Api-Version: 1' -H 'Content-Type: application/json' \
@@ -33,7 +34,7 @@ r=$(llamar POST /api/sesiones "$(jq -nc --arg c "$CORREO" --arg p "$CONTRASENA" 
 TOKEN=$(cuerpo "$r" | jq -r .tokenAcceso); HOGAR=$(cuerpo "$r" | jq -r '.hogarId // empty')
 
 if [ -z "$HOGAR" ]; then
-  r=$(llamar POST /api/hogar "$(jq -nc --arg n "$ADULTO" --arg d "$DIRECCION" '{adultoMayor:{nombre:$n,direccion:$d,convivencia:"SOLO"}}')" "$TOKEN")
+  r=$(llamar POST /api/hogar "$(jq -nc --arg n "$ADULTO" --arg d "$DIRECCION" --argjson e "$EDAD" '{adultoMayor:{nombre:$n,direccion:$d,edad:$e,convivencia:"SOLO"}}')" "$TOKEN")
   [ "$(estado "$r")" = 201 ] || { cuerpo "$r"; exit 1; }
   TOKEN=$(cuerpo "$r" | jq -r .tokenAcceso); HOGAR=$(cuerpo "$r" | jq -r .hogarId)
   echo "Household created: $ADULTO"
