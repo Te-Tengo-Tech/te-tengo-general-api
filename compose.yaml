@@ -8,17 +8,37 @@ services:
       POSTGRES_PASSWORD: tetengo
     ports:
       - "5432"
-  # S3-compatible clip storage for local runs (profile `local`, application-local.yml); there is no
-  # Spring service connection for it, the API reaches it through tetengo.clips.s3.*. Without an S3
-  # identities file it accepts any credentials. The host port is fixed because the pre-signed URLs
-  # point to http://localhost:8333, which the household agent and the iOS simulator must reach.
-  seaweedfs:
-    image: chrislusf/seaweedfs:4.48
-    command: server -s3 -dir=/data -master.telemetry=false
+  # Floci, a local AWS emulator (MIT, LocalStack-compatible): S3 for the clips, SES for e-mail and
+  # SNS for push (profile `local`, application-local.yml; ADR 0005). There is no Spring service
+  # connection for it: the API reaches it through tetengo.clips.s3.*, tetengo.correo.ses.* and
+  # tetengo.push.sns.*, signing with Floci's built-in test/test keys. The host port is fixed because
+  # the pre-signed clip URLs point to http://localhost:4566, which the household agent and the iOS
+  # simulator must reach. Sent e-mails: http://localhost:4566/_aws/ses; pushes:
+  # http://localhost:4566/_aws/sns/push-notifications.
+  floci:
+    image: floci/floci:2.2.0
+    environment:
+      # Keep the clips across restarts: in-memory reads, flushed to the volume.
+      FLOCI_STORAGE_MODE: hybrid
+      FLOCI_STORAGE_PERSISTENT_PATH: /app/data
+      # Verify the signature of the pre-signed URLs, as Amazon S3 does.
+      FLOCI_AUTH_VALIDATE_SIGNATURES: "true"
+      # No Docker socket is mounted: skip the ECS clean-up that would retry it at startup.
+      FLOCI_SERVICES_ECS_RECONCILE_CONTAINERS_ON_STARTUP: "false"
     ports:
-      - "8333:8333"
+      - "4566:4566"
+    volumes:
+      - floci-data:/app/data
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/"]
+      # The image has bash but no curl or wget.
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/4566 && printf "GET /_localstack/health HTTP/1.0\r\n\r\n" >&3 && read -r l <&3 && [[ $$l == *200* ]]'
       interval: 2s
       timeout: 2s
       retries: 30
+
+volumes:
+  floci-data:

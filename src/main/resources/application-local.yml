@@ -1,13 +1,15 @@
-# Profile `local`, the default of `./gradlew bootRun`: clips go to the SeaweedFS service of compose.yaml.
-# The pre-signed URLs point to http://localhost:8333, reachable from the household agent on this
-# machine and from the iOS simulator. SeaweedFS accepts any credentials, so the keys are dummies.
+# Profile `local`, the default of `./gradlew bootRun`: the AWS services run on Floci, the local AWS
+# emulator of compose.yaml, at http://localhost:4566 (ADR 0005). The keys are Floci's built-in
+# test/test pair: compose.yaml turns on signature verification, which only accepts known keys.
 tetengo:
   clips:
+    # The pre-signed URLs point to http://localhost:4566, reachable from the household agent on this
+    # machine and from the iOS simulator.
     s3:
       bucket: te-tengo-clips
       region: us-east-1
-      endpoint: http://localhost:8333
+      endpoint: http://localhost:4566
       path-style: true
-      access-key: local
-      secret-key: local
+      access-key: test
+      secret-key: test
       crear-bucket: true

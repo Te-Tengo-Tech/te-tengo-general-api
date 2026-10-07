@@ -5,7 +5,7 @@ Tasks that cannot be finished without an outside decision or credential. Agents 
 | Task | What is missing | Who decides | Date |
 |---|---|---|---|
 | Push delivery in production | AWS account, SNS platform applications (FCM server key, APNs certificate) | Team | — |
-| Clip storage in production | Amazon S3 bucket, region and credentials (or an instance role). The S3 adapter exists and is used when `TT_CLIPS_BUCKET` is set; locally `./gradlew bootRun` uses SeaweedFS from `compose.yaml`. Without a bucket the in-memory fake is used | Team | 2026-10-07 |
+| Clip storage in production | Amazon S3 bucket, region and credentials (or an instance role). The S3 adapter exists and is used when `TT_CLIPS_BUCKET` is set; locally `./gradlew bootRun` uses the S3 of Floci from `compose.yaml`. Without a bucket the in-memory fake is used | Team | 2026-10-07 |
 | Email delivery in production | Amazon SES verified domain or sender | Team | — |
 | Live view transport | Team confirmation of the WebSocket JPEG relay proposed in the API contract. Implemented as proposed (T19): app side at `urlTransmision`, agent side at `/api/agente/transmision` (see AGENT_CONTRACT.md); the relay is in memory, so it needs a single instance or sticky routing | Team | — |
 | T24 Error codes beyond the API contract | Found in the final contract review; the mobile contract should list them: `403 SIN_MEMBRESIA` on household endpoints when the token's user no longer belongs to the household (CA-08.3), and `401 CREDENCIAL_INVALIDA` / `404 EVENTO_NO_ENCONTRADO` on agent endpoints (AGENT_CONTRACT.md) | Team, with the mobile app | 2026-10-07 |

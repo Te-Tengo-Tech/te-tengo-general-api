@@ -98,7 +98,7 @@ tasks.withType<Test> {
 }
 
 // `./gradlew bootRun` uses the `local` profile unless another one is active:
-// clips go to the SeaweedFS service of compose.yaml (application-local.yml).
+// the AWS services run on Floci from compose.yaml (application-local.yml).
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
   systemProperty("spring.profiles.default", "local")
 }

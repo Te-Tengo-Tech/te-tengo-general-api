@@ -50,7 +50,7 @@ tetengo:
     vigencia-url-subida: 10m
     vigencia-url-lectura: 5m
     # Amazon S3 (or an S3-compatible store). Without a bucket the in-memory fake is used. Locally,
-    # `./gradlew bootRun` uses SeaweedFS from compose.yaml (application-local.yml).
+    # `./gradlew bootRun` uses Floci from compose.yaml (application-local.yml).
     s3:
       bucket: ${TT_CLIPS_BUCKET:}
       # Blank: the AWS SDK's default region chain (AWS_REGION, ~/.aws/config...).
