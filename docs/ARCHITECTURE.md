@@ -52,9 +52,9 @@ Every external service sits behind a port with a fake adapter, so tests and loca
 |---|---|---|
 | `NotificadorCorreo` (`shared`) | Amazon SES | Logs the message |
 | `NotificadorPush` (`shared`) | Amazon SNS (FCM, APNs) | Logs the notice |
-| `AlmacenamientoDeClips` (`alertas`) | Amazon S3, pre-signed URLs | In memory, placeholder URLs |
+| `AlmacenamientoDeClips` (`alertas`) | Amazon S3, pre-signed URLs | `AlmacenamientoDeClipsEnS3` when `TT_CLIPS_BUCKET` is set (SeaweedFS with the `local` profile of `bootRun`); otherwise in memory, placeholder URLs |
 
-Tests replace them with recording fakes (`CorreoDePrueba`, `PushDePrueba`, `AlmacenamientoDePrueba`) and move time with `RelojDePrueba`.
+Tests replace them with recording fakes (the S3 adapter has its own test against a SeaweedFS container) (`CorreoDePrueba`, `PushDePrueba`, `AlmacenamientoDePrueba`) and move time with `RelojDePrueba`.
 
 ## Scheduled jobs
 All are idempotent, find their candidates with a native query across households and then work one household at a time. Tests turn scheduling off (`tetengo.tareas.habilitadas=false`) and call them.

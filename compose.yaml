@@ -8,3 +8,17 @@ services:
       POSTGRES_PASSWORD: tetengo
     ports:
       - "5432"
+  # S3-compatible clip storage for local runs (profile `local`, application-local.yml); there is no
+  # Spring service connection for it, the API reaches it through tetengo.clips.s3.*. Without an S3
+  # identities file it accepts any credentials. The host port is fixed because the pre-signed URLs
+  # point to http://localhost:8333, which the household agent and the iOS simulator must reach.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.48
+    command: server -s3 -dir=/data -master.telemetry=false
+    ports:
+      - "8333:8333"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/"]
+      interval: 2s
+      timeout: 2s
+      retries: 30

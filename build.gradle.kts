@@ -22,6 +22,8 @@ repositories { mavenCentral() }
 
 extra["springModulithVersion"] = "2.1.1"
 
+extra["awsSdkVersion"] = "2.55.12"
+
 dependencies {
   // Web, WebSocket (vista en vivo) y documentación OpenAPI
   implementation("org.springframework.boot:spring-boot-starter-webmvc")
@@ -49,6 +51,9 @@ dependencies {
   implementation("org.springframework.modulith:spring-modulith-starter-jpa")
   runtimeOnly("org.springframework.modulith:spring-modulith-actuator")
   runtimeOnly("org.springframework.modulith:spring-modulith-runtime")
+
+  // Clips in Amazon S3 (or an S3-compatible store): pre-signed URLs with the AWS SDK v2
+  implementation("software.amazon.awssdk:s3")
 
   // Utilidades: UUID v7
   implementation("com.github.f4b6a3:uuid-creator:6.1.1")
@@ -83,12 +88,19 @@ dependencyManagement {
     mavenBom(
         "org.springframework.modulith:spring-modulith-bom:${property("springModulithVersion")}"
     )
+    mavenBom("software.amazon.awssdk:bom:${property("awsSdkVersion")}")
   }
 }
 
 tasks.withType<Test> {
   useJUnitPlatform()
   jvmArgs("-javaagent:${mockitoAgent.asPath}")
+}
+
+// `./gradlew bootRun` uses the `local` profile unless another one is active:
+// clips go to the SeaweedFS service of compose.yaml (application-local.yml).
+tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
+  systemProperty("spring.profiles.default", "local")
 }
 
 // Carriles de pruebas (como en reqsai-api): unitarias rápidas, integración (Docker) y arquitectura.

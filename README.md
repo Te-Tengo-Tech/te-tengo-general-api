@@ -14,8 +14,9 @@ It receives the events detected by the household agent and serves the family mem
 ## Getting started
 ```bash
 ./scripts/generate-keys.sh   # local RS256 keys for JWTs (.claves/, not versioned)
-./gradlew bootRun            # runs the API and starts PostgreSQL via compose.yaml
+./gradlew bootRun            # runs the API (profile `local`) and starts PostgreSQL and SeaweedFS via compose.yaml
 ```
+- Clips: with the `local` profile they go to SeaweedFS, an S3-compatible store, at http://localhost:8333 (bucket `te-tengo-clips`, created at startup). The pre-signed URLs use that host, so the household agent on this machine and the iOS simulator can upload and play clips.
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - Health: http://localhost:8080/actuator/health
 
@@ -28,6 +29,11 @@ It receives the events detected by the household agent and serves the family mem
 | `TT_URL_TRANSMISION` | Base of the live view stream URL (`wss://` in production) | `ws://localhost:8080` |
 | `TT_RETENCION_CLIPS` | How long clips are kept, e.g. `30d` (unset: kept; pending, see BLOCKERS) | — |
 | `TT_AGENTE_VERSION_PUBLICADA` | Agent release published by `GET /api/agente/configuracion` (thresholds: `tetengo.agente.umbrales`, empty by default) | `0.2.0` |
+| `TT_CLIPS_BUCKET` | S3 bucket of the clips; unset uses an in-memory fake (the `local` profile sets `te-tengo-clips` on SeaweedFS) | — |
+| `TT_CLIPS_REGION` | AWS region of the bucket | SDK default chain |
+| `TT_CLIPS_ENDPOINT` | Endpoint of an S3-compatible store; also the host of the pre-signed URLs | AWS |
+| `TT_CLIPS_PATH_STYLE` | Path-style URLs (`endpoint/bucket/key`) | `false` |
+| `TT_CLIPS_ACCESS_KEY` / `TT_CLIPS_SECRET_KEY` | Static credentials | SDK default chain |
 | `TT_ENLACE_INVITACION` | Invitation link sent by e-mail; `{token}` is replaced | `tetengo://app/invitacion/{token}` |
 
 ## Tests

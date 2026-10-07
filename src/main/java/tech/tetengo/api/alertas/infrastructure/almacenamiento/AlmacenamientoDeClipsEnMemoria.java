@@ -7,15 +7,13 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 import tech.tetengo.api.alertas.application.port.AlmacenamientoDeClips;
 
 /**
- * Fake adapter until Amazon S3 is configured (see {@code docs/BLOCKERS.md}). It hands out
+ * Fake adapter used when no bucket is configured ({@code tetengo.clips.s3.bucket}). It hands out
  * placeholder URLs and treats a clip as uploaded once its upload URL was issued, so the app flow can
- * be tried locally.
+ * be tried without a store.
  */
-@Component
 class AlmacenamientoDeClipsEnMemoria implements AlmacenamientoDeClips {
 
     private static final Logger log = LoggerFactory.getLogger(AlmacenamientoDeClipsEnMemoria.class);
@@ -26,7 +24,7 @@ class AlmacenamientoDeClipsEnMemoria implements AlmacenamientoDeClips {
     @Override
     public Subida urlDeSubida(String clave, String contentType, Instant expiraEn) {
         claves.add(clave);
-        log.info("URL de subida falsa (falta Amazon S3) para {}", clave);
+        log.info("URL de subida falsa (sin tetengo.clips.s3.bucket) para {}", clave);
         return new Subida(
                 URI.create(BASE + clave + "?subida&expira=" + expiraEn.getEpochSecond()),
                 Map.of("Content-Type", contentType));

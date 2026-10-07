@@ -49,6 +49,19 @@ tetengo:
     # Pre-signed clip URLs are short-lived (implementation choice).
     vigencia-url-subida: 10m
     vigencia-url-lectura: 5m
+    # Amazon S3 (or an S3-compatible store). Without a bucket the in-memory fake is used. Locally,
+    # `./gradlew bootRun` uses SeaweedFS from compose.yaml (application-local.yml).
+    s3:
+      bucket: ${TT_CLIPS_BUCKET:}
+      # Blank: the AWS SDK's default region chain (AWS_REGION, ~/.aws/config...).
+      region: ${TT_CLIPS_REGION:}
+      # Endpoint of an S3-compatible store; blank is AWS. It is the host of the pre-signed URLs.
+      endpoint: ${TT_CLIPS_ENDPOINT:}
+      path-style: ${TT_CLIPS_PATH_STYLE:false}
+      # Blank: the AWS SDK's default credentials chain (environment, profile, instance role...).
+      access-key: ${TT_CLIPS_ACCESS_KEY:}
+      secret-key: ${TT_CLIPS_SECRET_KEY:}
+      crear-bucket: false
   vista-en-vivo:
     # Base of urlTransmision (wss:// in production) and how long the URL can be used to connect
     # (implementation choice; the transport is a proposal pending team confirmation).
