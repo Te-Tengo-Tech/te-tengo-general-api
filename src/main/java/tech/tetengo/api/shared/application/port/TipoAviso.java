@@ -1,0 +1,18 @@
+package tech.tetengo.api.shared.application.port;
+
+/** Push notice types of the API contract (§7). */
+public enum TipoAviso {
+    ALERTA_CAIDA,
+    ALERTA_MOVIMIENTO_INESTABLE,
+    ALERTA_ACTUALIZADA_A_CAIDA,
+    CAIDA_CONFIRMADA,
+    SE_LEVANTO,
+    ALERTA_ATENDIDA,
+    ALERTA_ESCALADA,
+    SIN_CONTACTO_SECUNDARIO,
+    CAMARA_DESCONECTADA,
+    CAMARA_RECONECTADA,
+    DETECCION_NO_CONFIABLE,
+    PAUSA_FINALIZADA,
+    DATOS_ELIMINADOS
+}

@@ -1,13 +1,16 @@
 package tech.tetengo.api.camaras.interfaces.rest;
 
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import tech.tetengo.api.camaras.application.ConsultarEstadoDeCaptura;
 import tech.tetengo.api.camaras.application.RegistrarCamaraDelAgente;
+import tech.tetengo.api.camaras.application.RegistrarSenal;
 import tech.tetengo.api.camaras.application.RegistroDeCamara;
 import tech.tetengo.api.shared.infrastructure.security.UsuarioActual;
 import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
@@ -19,10 +22,22 @@ class AgenteController {
 
     private final RegistrarCamaraDelAgente registrarCamara;
     private final ConsultarEstadoDeCaptura consultarEstadoDeCaptura;
+    private final RegistrarSenal registrarSenal;
 
-    AgenteController(RegistrarCamaraDelAgente registrarCamara, ConsultarEstadoDeCaptura consultarEstadoDeCaptura) {
+    AgenteController(
+            RegistrarCamaraDelAgente registrarCamara,
+            ConsultarEstadoDeCaptura consultarEstadoDeCaptura,
+            RegistrarSenal registrarSenal) {
         this.registrarCamara = registrarCamara;
         this.consultarEstadoDeCaptura = consultarEstadoDeCaptura;
+        this.registrarSenal = registrarSenal;
+    }
+
+    /** US-07: periodic heartbeat; updates the time of the last signal. */
+    @PostMapping(path = "/senal", version = ApiVersioning.V1)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void senal() {
+        registrarSenal.ejecutar(UsuarioActual.camaraId().orElseThrow());
     }
 
     @PostMapping(path = "/camaras/registro", version = ApiVersioning.V1)

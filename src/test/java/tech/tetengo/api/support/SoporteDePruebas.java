@@ -19,4 +19,10 @@ public class SoporteDePruebas {
     CorreoDePrueba correoDePrueba() {
         return new CorreoDePrueba();
     }
+
+    @Bean
+    @Primary
+    PushDePrueba pushDePrueba() {
+        return new PushDePrueba();
+    }
 }

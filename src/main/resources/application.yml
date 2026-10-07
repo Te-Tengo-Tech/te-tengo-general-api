@@ -29,6 +29,9 @@ tetengo:
     # Lifetime of the per-camera token; the agent registers again at startup or on 401
     # (AGENT_CONTRACT.md, implementation choice).
     vigencia-token: 30d
+    # Heartbeat every 30 s; 3 missed heartbeats mean the camera is disconnected (AGENT_CONTRACT.md).
+    intervalo-senal: 30s
+    senales-perdidas: 3
   enlaces:
     # Link e-mailed to reset a password; {token} is the one-time token. The app's deep-link format is
     # pending (docs/BLOCKERS.md).

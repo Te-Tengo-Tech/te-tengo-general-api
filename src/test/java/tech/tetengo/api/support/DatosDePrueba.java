@@ -48,6 +48,19 @@ public final class DatosDePrueba {
         return credencial;
     }
 
+    /** A push device of the user (API contract §7). */
+    public static void dispositivo(JdbcTemplate jdbc, UUID usuario, String tokenPush) {
+        Timestamp ahora = Timestamp.from(Instant.now());
+        jdbc.update(
+                "insert into dispositivos (id, token_push, usuario_id, plataforma, creado_en, actualizado_en)"
+                        + " values (?, ?, ?, 'ANDROID', ?, ?)",
+                UUID.randomUUID(),
+                tokenPush,
+                usuario,
+                ahora,
+                ahora);
+    }
+
     public static void membresia(JdbcTemplate jdbc, UUID hogar, UUID usuario, Rol rol) {
         // Memberships created one after another keep their order even within the same millisecond.
         Timestamp creado = new Timestamp(System.currentTimeMillis());
