@@ -79,6 +79,17 @@ public class Camara extends EntidadDelHogar {
         return true;
     }
 
+    /** CA-15.3: for over 5 minutes the agent only got frames it had to discard. */
+    public boolean marcarDeteccionNoConfiable() {
+        boolean cambio = deteccionConfiable;
+        deteccionConfiable = false;
+        return cambio;
+    }
+
+    public void marcarDeteccionConfiable() {
+        deteccionConfiable = true;
+    }
+
     /** CA-22.1: a paused camera neither captures nor detects until its pause ends. */
     public boolean estaPausada(Instant ahora) {
         return pausadaHasta != null && ahora.isBefore(pausadaHasta);
