@@ -46,7 +46,7 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
   - A scheduled job marks cameras `DESCONECTADA` after the heartbeat timeout and sends push `CAMARA_DESCONECTADA`; `CAMARA_RECONECTADA` goes out on return (CA-07.2, CA-07.3).
   - Push goes through a `NotificadorPush` port with a fake adapter (SNS later).
 - [x] **T09 `hogares` — US-08 family.** Invitations (`POST /api/invitaciones`, public acceptance), `GET /api/familiares` and `DELETE /api/familiares/{usuarioId}`. The household–user membership table is global. — *invite, accept and remove family members (US-08)*
-- [ ] **T10 `alertas` — agent events.**
+- [x] **T10 `alertas` — agent events.** — *agent events create and update alerts (US-11 to US-17)*
   - `POST /api/agente/eventos`, idempotent by `eventoId`.
   - It creates or updates alerts: fall, unstable movement, unstable becoming a fall (CA-17.3), confirmation after 30 s (CA-13.1), recovery (CA-13.2) and unreliable detection (CA-15.3).
 - [ ] **T11 `alertas` — US-16 and US-17 push alerts.** Push to every member device (`POST` and `DELETE /api/dispositivos`) with the payload types of the contract; retry on failure (CA-16.4). Add a test asserting the push is requested synchronously when the event is received (the less-than-10 s requirement).

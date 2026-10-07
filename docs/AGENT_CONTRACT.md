@@ -25,6 +25,11 @@ The bodies below are not in the backlog; the backend defines them and the agent 
   - The token lasts 30 days; the agent registers again at startup or when it gets a `401`.
   - The project team creates the credential with `scripts/create-installation.sh <hogar-id>` (only its SHA-256 is stored).
 - **`GET /api/agente/estado-captura`**: → `200 {capturaPermitida, consentimientoVigente, pausadaHasta | null}`. The agent processes video only when `capturaPermitida` is true: a current consent (CA-05.2) and no active pause (CA-22.1).
+- **`POST /api/agente/senal`**: no body → `204`.
+- **`POST /api/agente/eventos`**: the detected event below → `202 {eventoId, alertaId | null}`.
+  - A repeated `eventoId` returns the first answer and changes nothing.
+  - `alertaId` is null when the event creates or updates no alert: `deteccion_no_confiable`, a recovery with no open fall, or an event received without a current consent or during a pause (it is stored, but ignored).
+  - An unknown `tipo` answers `400 VALIDACION`.
 - Agent tokens only open `/api/agente/**`; family members' tokens get `403` there.
 
 ## Detected event

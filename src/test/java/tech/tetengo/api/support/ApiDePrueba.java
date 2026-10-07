@@ -1,12 +1,18 @@
 package tech.tetengo.api.support;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
+import org.awaitility.Awaitility;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 /** Common flows through the real API, so tests read like the story they cover. */
 public final class ApiDePrueba {
@@ -77,6 +83,40 @@ public final class ApiDePrueba {
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
+    }
+
+    /**
+     * Grants consent in the owner's household, registers its agent and waits until capture is
+     * allowed (the capture state is updated asynchronously). Returns the registration JSON
+     * ({@code camaraId}, {@code token}).
+     */
+    public static String agenteConConsentimiento(
+            MockMvc mvc, JdbcTemplate jdbc, String sesionTitular, String habitacion) throws Exception {
+        otorgarConsentimiento(mvc, campo(sesionTitular, "$.tokenAcceso"));
+        String registro = registrarAgente(
+                mvc, DatosDePrueba.instalacion(jdbc, UUID.fromString(campo(sesionTitular, "$.hogarId"))), habitacion);
+        String token = campo(registro, "$.token");
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(5))
+                .until(() -> campo(
+                                mvc.perform(get("/api/agente/estado-captura").header("Authorization", bearer(token)))
+                                        .andReturn()
+                                        .getResponse()
+                                        .getContentAsString(),
+                                "$.capturaPermitida")
+                        .equals("true"));
+        return registro;
+    }
+
+    /** The agent sends a detected event (AGENT_CONTRACT.md). */
+    public static ResultActions enviarEvento(
+            MockMvc mvc, String tokenAgente, UUID eventoId, String tipo, Instant ocurridoEn) throws Exception {
+        return mvc.perform(post("/api/agente/eventos")
+                .header("Authorization", bearer(tokenAgente))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                        "{\"eventoId\":\"%s\",\"tipo\":\"%s\",\"ocurridoEn\":\"%s\",\"parametros\":{\"angulo_grados\":22.1}}"
+                                .formatted(eventoId, tipo, ocurridoEn)));
     }
 
     public static String campo(String json, String ruta) {
