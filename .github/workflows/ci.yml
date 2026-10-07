@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
 
 permissions:
@@ -20,5 +20,5 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
       - name: Format
         run: ./gradlew spotlessCheck
-      - name: Tests (unit, Testcontainers integration and architecture)
-        run: ./gradlew test jacocoTestReport
+      - name: Tests (unit, Testcontainers integration and architecture) and coverage of domain and application
+        run: ./gradlew test jacocoTestReport jacocoTestCoverageVerification

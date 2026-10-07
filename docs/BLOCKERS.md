@@ -5,5 +5,13 @@ Tasks that cannot be finished without an outside decision or credential. Agents 
 | Task | What is missing | Who decides | Date |
 |---|---|---|---|
 | Push delivery in production | AWS account, SNS platform applications (FCM server key, APNs certificate) | Team | — |
+| Clip storage in production | Amazon S3 bucket, region and credentials (or an instance role). The S3 adapter exists and is used when `TT_CLIPS_BUCKET` is set; locally `./gradlew bootRun` uses SeaweedFS from `compose.yaml`. Without a bucket the in-memory fake is used | Team | 2026-10-07 |
 | Email delivery in production | Amazon SES verified domain or sender | Team | — |
-| Live view transport | Team confirmation of the WebSocket JPEG relay proposed in the API contract | Team | — |
+| Live view transport | Team confirmation of the WebSocket JPEG relay proposed in the API contract. Implemented as proposed (T19): app side at `urlTransmision`, agent side at `/api/agente/transmision` (see AGENT_CONTRACT.md); the relay is in memory, so it needs a single instance or sticky routing | Team | — |
+| T24 Error codes beyond the API contract | Found in the final contract review; the mobile contract should list them: `403 SIN_MEMBRESIA` on household endpoints when the token's user no longer belongs to the household (CA-08.3), and `401 CREDENCIAL_INVALIDA` / `404 EVENTO_NO_ENCONTRADO` on agent endpoints (AGENT_CONTRACT.md) | Team, with the mobile app | 2026-10-07 |
+| T22 Clip retention period | CA-26.3 mentions a retention policy but not how long clips are kept. The job exists and runs only when `TT_RETENCION_CLIPS` is set | Team | 2026-10-07 |
+| T10 CA-17.3 time window | How long after an unstable-movement alert a fall in the same room still "updates it to a fall". The backlog gives no window, so any still-active (unattended) unstable alert of the camera is updated | Team | 2026-10-07 |
+| T09 Invitation validity | The backlog does not say how long an invitation link lasts. `tetengo.invitaciones.vigencia` uses 7 days as a placeholder | Team | 2026-10-07 |
+| T03, T09 Links in e-mails | The links use the app's custom scheme by default (`tetengo://app/nueva-contrasena?token={token}`, `tetengo://app/invitacion/{token}`, the routes of `te-tengo-mobile-flutter`), configurable with `TT_ENLACE_RECUPERACION` / `TT_ENLACE_INVITACION`. HTTPS app links, which mail clients open more reliably, need a domain with `assetlinks.json` / `apple-app-site-association` | Team, with the mobile app | 2026-10-07 |
+| T01, T03 Password policy | The backlog only requires a "valid" password; minimum length or complexity is not defined. The API only requires a non-blank password of at most 72 characters (the BCrypt limit) | Team | 2026-10-07 |
+| T07 Installation credentials | How the project team issues installation credentials in production (an admin flow is not in any contract). For now `scripts/create-installation.sh` inserts one per webcam | Team | 2026-10-07 |

@@ -1,5 +1,6 @@
 package tech.tetengo.api.camaras.infrastructure.persistence;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,5 +31,19 @@ class CamaraRepositoryAdapter implements CamaraRepository {
     @Override
     public List<Camara> listar() {
         return jpa.findAll(Sort.by("nombreHabitacion"));
+    }
+
+    @Override
+    public List<CamaraDeUnHogar> conPausaVencida(Instant ahora) {
+        return jpa.conPausaVencida(ahora).stream()
+                .map(fila -> new CamaraDeUnHogar((UUID) fila[0], (UUID) fila[1]))
+                .toList();
+    }
+
+    @Override
+    public List<CamaraDeUnHogar> enLineaSinSenalDesde(Instant limite) {
+        return jpa.enLineaSinSenalDesde(limite).stream()
+                .map(fila -> new CamaraDeUnHogar((UUID) fila[0], (UUID) fila[1]))
+                .toList();
     }
 }

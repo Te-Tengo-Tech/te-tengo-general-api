@@ -14,7 +14,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import tech.tetengo.api.shared.domain.model.Rol;
 import tech.tetengo.api.support.AbstractIntegrationTest;
+import tech.tetengo.api.support.DatosDePrueba;
 import tech.tetengo.api.support.JwtDePrueba;
 
 /** The key multi-tenancy test: a household never sees or changes another household's data. */
@@ -26,16 +28,17 @@ class CamarasMultitenancyIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     JdbcTemplate jdbc;
 
-    UUID hogarA = UUID.randomUUID();
-    UUID hogarB = UUID.randomUUID();
+    UUID titularA = UUID.randomUUID();
+    UUID titularB = UUID.randomUUID();
+    UUID hogarA;
+    UUID hogarB;
     UUID camaraDeB = UUID.randomUUID();
 
     @BeforeEach
     void datos() {
         var ahora = java.sql.Timestamp.from(Instant.now());
-        for (UUID hogar : new UUID[] {hogarA, hogarB}) {
-            jdbc.update("insert into hogares (id, creado_en, actualizado_en) values (?, ?, ?)", hogar, ahora, ahora);
-        }
+        hogarA = DatosDePrueba.hogar(jdbc, titularA, "Rosa");
+        hogarB = DatosDePrueba.hogar(jdbc, titularB, "Jorge");
         insertarCamara(UUID.randomUUID(), hogarA, "Sala", ahora);
         insertarCamara(UUID.randomUUID(), hogarA, "Dormitorio", ahora);
         insertarCamara(camaraDeB, hogarB, "Cocina", ahora);
@@ -54,18 +57,24 @@ class CamarasMultitenancyIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void cadaHogarVeSoloSusCamaras() throws Exception {
-        mvc.perform(get("/api/camaras").header("Authorization", "Bearer " + JwtDePrueba.tokenDeFamiliar(hogarA)))
+        mvc.perform(get("/api/camaras")
+                        .header("Authorization", "Bearer " + JwtDePrueba.token(titularA, hogarA, Rol.TITULAR)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].nombreHabitacion").value("Dormitorio"));
-        mvc.perform(get("/api/camaras").header("Authorization", "Bearer " + JwtDePrueba.tokenDeFamiliar(hogarB)))
+                .andExpect(jsonPath("$[0].nombreHabitacion").value("Dormitorio"))
+                .andExpect(jsonPath("$[0].estadoConexion").value("DESCONECTADA"))
+                .andExpect(jsonPath("$[0].ultimaSenal").isEmpty())
+                .andExpect(jsonPath("$[0].pausadaHasta").isEmpty())
+                .andExpect(jsonPath("$[0].deteccionConfiable").value(true));
+        mvc.perform(get("/api/camaras")
+                        .header("Authorization", "Bearer " + JwtDePrueba.token(titularB, hogarB, Rol.TITULAR)))
                 .andExpect(jsonPath("$", hasSize(1)));
     }
 
     @Test
     void unHogarNoPuedeRenombrarLaCamaraDeOtro() throws Exception {
         mvc.perform(patch("/api/camaras/" + camaraDeB)
-                        .header("Authorization", "Bearer " + JwtDePrueba.tokenDeFamiliar(hogarA))
+                        .header("Authorization", "Bearer " + JwtDePrueba.token(titularA, hogarA, Rol.TITULAR))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nombreHabitacion\":\"Baño\"}"))
                 .andExpect(status().isNotFound())
@@ -75,11 +84,56 @@ class CamarasMultitenancyIntegrationTest extends AbstractIntegrationTest {
     @Test
     void nombreVacioDevuelveProblemDetail() throws Exception {
         mvc.perform(patch("/api/camaras/" + camaraDeB)
-                        .header("Authorization", "Bearer " + JwtDePrueba.tokenDeFamiliar(hogarB))
+                        .header("Authorization", "Bearer " + JwtDePrueba.token(titularB, hogarB, Rol.TITULAR))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nombreHabitacion\":\"  \"}"))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.codigo").value("CAMARA_NOMBRE_VACIO"));
+    }
+
+    @Test
+    void ca06_2_elTitularRenombraLaHabitacion() throws Exception {
+        mvc.perform(patch("/api/camaras/" + camaraDeB)
+                        .header("Authorization", "Bearer " + JwtDePrueba.token(titularB, hogarB, Rol.TITULAR))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nombreHabitacion\":\" Baño \"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(camaraDeB.toString()))
+                .andExpect(jsonPath("$.nombreHabitacion").value("Baño"));
+    }
+
+    @Test
+    void elInvitadoVeLasCamarasPeroNoLasRenombra() throws Exception {
+        UUID invitado = UUID.randomUUID();
+        DatosDePrueba.membresia(jdbc, hogarB, invitado, Rol.INVITADO);
+        mvc.perform(get("/api/camaras")
+                        .header("Authorization", "Bearer " + JwtDePrueba.token(invitado, hogarB, Rol.INVITADO)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+        mvc.perform(patch("/api/camaras/" + camaraDeB)
+                        .header("Authorization", "Bearer " + JwtDePrueba.token(invitado, hogarB, Rol.INVITADO))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nombreHabitacion\":\"Baño\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("SOLO_TITULAR"));
+    }
+
+    @Test
+    void unNombreDeMasDeCuarentaCaracteresSeRechaza() throws Exception {
+        mvc.perform(patch("/api/camaras/" + camaraDeB)
+                        .header("Authorization", "Bearer " + JwtDePrueba.token(titularB, hogarB, Rol.TITULAR))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nombreHabitacion\":\"%s\"}".formatted("x".repeat(41))))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.codigo").value("CAMARA_NOMBRE_MUY_LARGO"));
+    }
+
+    @Test
+    void conUnTokenDeUnHogarAlQueNoPerteneceNoVeNada() throws Exception {
+        mvc.perform(get("/api/camaras")
+                        .header("Authorization", "Bearer " + JwtDePrueba.token(titularA, hogarB, Rol.TITULAR)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
     }
 
     @Test

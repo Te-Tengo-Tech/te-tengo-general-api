@@ -17,6 +17,69 @@ spring:
           # RS256 public key of the tokens. Locally: scripts/generate-keys.sh
           public-key-location: ${TT_JWT_CLAVE_PUBLICA:file:.claves/publica.pem}
 
+tetengo:
+  jwt:
+    # RS256 private key that signs the tokens this API issues (PKCS#8 PEM). Locally: scripts/generate-keys.sh
+    clave-privada-location: ${TT_JWT_CLAVE_PRIVADA:file:.claves/privada.pem}
+  sesiones:
+    # API contract, implementation choice: access token 60 min, refresh token 30 days.
+    vigencia-acceso: 60m
+    vigencia-refresco: 30d
+  agente:
+    # Lifetime of the per-camera token; the agent registers again at startup or on 401
+    # (AGENT_CONTRACT.md, implementation choice).
+    vigencia-token: 30d
+    # Heartbeat every 30 s; 3 missed heartbeats mean the camera is disconnected (AGENT_CONTRACT.md).
+    intervalo-senal: 30s
+    senales-perdidas: 3
+    # GET /api/agente/configuracion (AGENT_CONTRACT.md). The agent only logs a different version.
+    # Default: the current release of te-tengo-desktop-pywebview.
+    version-publicada: ${TT_AGENTE_VERSION_PUBLICADA:0.2.0}
+    # Classification thresholds by the field names of the agent's `Umbrales`. Empty by default, so
+    # every agent keeps the thresholds calibrated at installation; never set values that were not
+    # calibrated (docs/BLOCKERS.md). Example:
+    # umbrales:
+    #   "[velocidad_descenso_min]": 0.5
+  push:
+    # CA-16.4: a push the service did not accept is retried every 15 s, up to 20 attempts
+    # (implementation choice: the backlog only says "retries").
+    reintento-cada: 15s
+    intentos-maximos: 20
+  clips:
+    # Pre-signed clip URLs are short-lived (implementation choice).
+    vigencia-url-subida: 10m
+    vigencia-url-lectura: 5m
+    # Amazon S3 (or an S3-compatible store). Without a bucket the in-memory fake is used. Locally,
+    # `./gradlew bootRun` uses SeaweedFS from compose.yaml (application-local.yml).
+    s3:
+      bucket: ${TT_CLIPS_BUCKET:}
+      # Blank: the AWS SDK's default region chain (AWS_REGION, ~/.aws/config...).
+      region: ${TT_CLIPS_REGION:}
+      # Endpoint of an S3-compatible store; blank is AWS. It is the host of the pre-signed URLs.
+      endpoint: ${TT_CLIPS_ENDPOINT:}
+      path-style: ${TT_CLIPS_PATH_STYLE:false}
+      # Blank: the AWS SDK's default credentials chain (environment, profile, instance role...).
+      access-key: ${TT_CLIPS_ACCESS_KEY:}
+      secret-key: ${TT_CLIPS_SECRET_KEY:}
+      crear-bucket: false
+  vista-en-vivo:
+    # Base of urlTransmision (wss:// in production) and how long the URL can be used to connect
+    # (implementation choice; the transport is a proposal pending team confirmation).
+    url-base: ${TT_URL_TRANSMISION:ws://localhost:8080}
+    vigencia: 5m
+  historial:
+    # Retention of the recordings (CA-26.3): not defined in the backlog, so unset (clips are kept) until
+    # the team decides (docs/BLOCKERS.md). Example: TT_RETENCION_CLIPS=30d
+    retencion-de-clips: ${TT_RETENCION_CLIPS:}
+  enlaces:
+    # Links e-mailed to reset a password and to accept an invitation; {token} is the one-time token.
+    # Defaults: the mobile app's deep-link routes (custom scheme tetengo://app, lib/app/rutas.dart).
+    recuperacion: ${TT_ENLACE_RECUPERACION:tetengo://app/nueva-contrasena?token={token}}
+    invitacion: ${TT_ENLACE_INVITACION:tetengo://app/invitacion/{token}}
+  invitaciones:
+    # The backlog does not say how long an invitation lasts: placeholder pending (docs/BLOCKERS.md).
+    vigencia: 7d
+
 server:
   error:
     include-message: never

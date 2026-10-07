@@ -1,0 +1,13 @@
+# Profile `local`, the default of `./gradlew bootRun`: clips go to the SeaweedFS service of compose.yaml.
+# The pre-signed URLs point to http://localhost:8333, reachable from the household agent on this
+# machine and from the iOS simulator. SeaweedFS accepts any credentials, so the keys are dummies.
+tetengo:
+  clips:
+    s3:
+      bucket: te-tengo-clips
+      region: us-east-1
+      endpoint: http://localhost:8333
+      path-style: true
+      access-key: local
+      secret-key: local
+      crear-bucket: true

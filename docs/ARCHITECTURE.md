@@ -16,13 +16,62 @@ Mobile app ───────────────────────
 ## Modules
 | Module | Backlog epic | Stories | Status |
 |---|---|---|---|
-| `shared` | — | Base entities, multi-tenancy, security, errors, versioning | Done |
-| `cuentas` | EP01 Accounts and access | US-01 to US-03 | To do |
-| `hogares` | EP02 Profile, consent and family | US-04, US-05, US-08 to US-10 | To do |
-| `camaras` | EP02 Cameras | US-06, US-07 | **Reference slice** (list and rename) |
-| `alertas` | EP03 Detection and alerts | US-11 to US-21 (agent events) | To do |
-| `monitoreo` | EP04 Monitoring and privacy | US-22 to US-24 | To do |
-| `historial` | EP05 History and summary | US-25 to US-27 | To do |
+| `shared` | — | Base entities, multi-tenancy (with the membership check), security and token issuing, errors, versioning, OpenAPI, clock, ports for e-mail and push | Done |
+| `cuentas` | EP01 Accounts and access | US-01 to US-03 | Done |
+| `hogares` | EP02 Profile, consent and family | US-04, US-05, US-08 to US-10 | Done |
+| `camaras` | EP02 Cameras | US-06, US-07; camera side of US-05, US-15, US-22 | Done (**reference slice**) |
+| `alertas` | EP03 Detection and alerts | US-11 to US-21; alert list (US-25) and clips (US-18, US-26) | Done |
+| `monitoreo` | EP04 Monitoring and privacy | US-22 to US-24 | Done (live view transport pending confirmation) |
+| `historial` | EP05 History and summary | US-26 retention, US-27 | Done (retention period pending) |
+
+Open decisions and missing credentials are in [BLOCKERS.md](BLOCKERS.md).
+
+## How the modules talk
+Modules only use each other's **base package** (their public API: interfaces, records and events); `ModularidadTest` rejects anything else and any cycle.
+
+```
+cuentas ◄── hogares ◄── camaras ◄── monitoreo
+   ▲           ▲           ▲            ▲
+   └───────────┴─────── alertas ────────┘ ◄── historial
+```
+
+| From | To | What for |
+|---|---|---|
+| `hogares` | `cuentas` | `ServicioDeSesiones` (sessions after creating or switching households, accepting invitations), `AltaDeCuentas`, `DirectorioDeUsuarios`; implements the `MembresiasDeUsuario` SPI that sign-in uses |
+| `camaras` | `hogares` | Listens to `ConsentimientoOtorgado` / `ConsentimientoRevocado` to keep the capture state |
+| `monitoreo` | `camaras`, `cuentas` | Pauses and live view through `CamarasDelHogar`; names for the access log |
+| `alertas` | `camaras`, `hogares`, `monitoreo`, `cuentas` | Camera name, capture state and detection reliability; members and alert order; listens to camera, consent and pause events to send their pushes |
+| `historial` | `alertas` | `ConteoDeAlertas` (weekly summary) and `RetencionDeClips` |
+
+Cross-module listeners are `@Async @TransactionalEventListener`: they run after the publishing transaction commits, Spring Modulith keeps each publication in `event_publication`, and the listener binds the event's household with `EjecutorEnHogar` (see [MULTITENANCY.md](MULTITENANCY.md)).
+
+## External services
+Every external service sits behind a port with a fake adapter, so tests and local runs never call AWS:
+
+| Port | Production | Today |
+|---|---|---|
+| `NotificadorCorreo` (`shared`) | Amazon SES | Logs the message |
+| `NotificadorPush` (`shared`) | Amazon SNS (FCM, APNs) | Logs the notice |
+| `AlmacenamientoDeClips` (`alertas`) | Amazon S3, pre-signed URLs | `AlmacenamientoDeClipsEnS3` when `TT_CLIPS_BUCKET` is set (SeaweedFS with the `local` profile of `bootRun`); otherwise in memory, placeholder URLs |
+
+Tests replace them with recording fakes (the S3 adapter has its own test against a SeaweedFS container) (`CorreoDePrueba`, `PushDePrueba`, `AlmacenamientoDePrueba`) and move time with `RelojDePrueba`.
+
+## Scheduled jobs
+All are idempotent, find their candidates with a native query across households and then work one household at a time. Tests turn scheduling off (`tetengo.tareas.habilitadas=false`) and call them.
+
+| Job | Module | Story |
+|---|---|---|
+| `DetectarCamarasDesconectadas` | `camaras` | US-07: 3 missed 30-second heartbeats |
+| `ReintentarAvisos` | `alertas` | CA-16.4: retries pushes the service did not accept |
+| `EscalarAlertas` | `alertas` | US-20 |
+| `EliminarGrabaciones` | `alertas` | US-09: deletes recordings after revocation |
+| `FinalizarPausasVencidas` | `monitoreo` | US-22 |
+| `AplicarRetencionDeGrabaciones` | `historial` | US-26, only when the retention period is set |
+
+## Quality gates
+- `ModularidadTest` (Spring Modulith) and `ArquitecturaTest` (ArchUnit).
+- JaCoCo: at least 80 % line coverage of `domain` and `application` (`./gradlew jacocoTestCoverageVerification`, part of `check` and CI).
+- `DocumentacionOpenApiIntegrationTest`: every endpoint is documented in OpenAPI, and every endpoint of `API_CONTRACT.md` and `AGENT_CONTRACT.md` exists.
 
 ## Module layout
 ```

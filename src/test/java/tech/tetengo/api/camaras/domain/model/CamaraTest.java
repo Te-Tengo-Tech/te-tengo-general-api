@@ -16,6 +16,8 @@ class CamaraTest {
         assertThat(camara.getNombreHabitacion()).isEqualTo("Sala");
         assertThat(camara.getEstadoConexion()).isEqualTo(EstadoConexion.DESCONECTADA);
         assertThat(camara.getId()).isNotNull();
+        assertThat(camara.getPausadaHasta()).isNull();
+        assertThat(camara.isDeteccionConfiable()).isTrue();
     }
 
     @Test

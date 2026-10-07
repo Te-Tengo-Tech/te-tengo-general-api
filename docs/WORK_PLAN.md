@@ -27,44 +27,44 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 ## Tasks
 
 ### Sprint 3
-- [ ] **T01 `cuentas` — US-01 register.** `POST /api/cuentas`; BCrypt passwords; unique email (`409 CORREO_EN_USO`); `400 VALIDACION` with `campos`.
-- [ ] **T02 `cuentas` — US-02 sessions.**
+- [x] **T01 `cuentas` — US-01 register.** `POST /api/cuentas`; BCrypt passwords; unique email (`409 CORREO_EN_USO`); `400 VALIDACION` with `campos`. — *register accounts (US-01)*
+- [x] **T02 `cuentas` — US-02 sessions.** — *sign in, refresh and sign out with JWTs and lockout (US-02)*
   - `POST /api/sesiones`, `POST /api/sesiones/refresco` and `DELETE /api/sesiones/actual`.
   - Issue JWT RS256 access tokens (claims `sub`, `hogar_id`, `rol`) and persisted refresh tokens.
   - Lock for 15 min after 5 consecutive failures (`423 CUENTA_BLOQUEADA {bloqueadaHasta}`).
   - The private key is configured like the public key; tests use `JwtDePrueba`.
-- [ ] **T03 `cuentas` — US-03 password recovery.** `POST /api/recuperaciones` (always `202`) and `.../confirmacion`. Links are valid for 30 min (`410 ENLACE_VENCIDO`). Email goes through a `NotificadorCorreo` port with a logging/fake adapter (SES later; see BLOCKERS).
-- [ ] **T04 `hogares` — US-04 household and older adult.** `POST /api/hogar` creates the household with the caller as `TITULAR` and returns a `Sesion` with `hogar_id`. One per account (`409 HOGAR_YA_REGISTRADO`). Also `GET /api/hogar`, `PUT /api/hogar/adulto-mayor`, `GET /api/hogares` and `POST /api/sesiones/hogar`. Owner-only checks return `403 SOLO_TITULAR`.
-- [ ] **T05 `hogares` — US-05 consent.** `POST` and `GET /api/hogar/consentimiento`, storing the date and time. Publish a domain event that `camaras` listens to for the capture state.
-- [ ] **T06 `camaras` — align with the contract.**
+- [x] **T03 `cuentas` — US-03 password recovery.** `POST /api/recuperaciones` (always `202`) and `.../confirmacion`. Links are valid for 30 min (`410 ENLACE_VENCIDO`). Email goes through a `NotificadorCorreo` port with a logging/fake adapter (SES later; see BLOCKERS). — *password recovery links valid for 30 min (US-03)*
+- [x] **T04 `hogares` — US-04 household and older adult.** `POST /api/hogar` creates the household with the caller as `TITULAR` and returns a `Sesion` with `hogar_id`. One per account (`409 HOGAR_YA_REGISTRADO`). Also `GET /api/hogar`, `PUT /api/hogar/adulto-mayor`, `GET /api/hogares` and `POST /api/sesiones/hogar`. Owner-only checks return `403 SOLO_TITULAR`. — *household, older adult and household switching (US-04)*
+- [x] **T05 `hogares` — US-05 consent.** `POST` and `GET /api/hogar/consentimiento`, storing the date and time. Publish a domain event that `camaras` listens to for the capture state. — *register the older adult's consent and enable capture (US-05)*
+- [x] **T06 `camaras` — align with the contract.** — *owner-only rename, pausadaHasta and deteccionConfiable*
   - Renaming becomes owner-only.
   - Add `pausadaHasta` and `deteccionConfiable` to `Camara`.
   - Keep `CamarasMultitenancyIntegrationTest` green.
-- [ ] **T07 `camaras` — agent registration and capture state.** Endpoints from `docs/AGENT_CONTRACT.md`: registration with the installation credential issues the per-camera token; `GET /api/agente/estado-captura` reports consent and pauses (CA-05.2).
-- [ ] **T08 `camaras` — US-07 connection status.**
+- [x] **T07 `camaras` — agent registration and capture state.** Endpoints from `docs/AGENT_CONTRACT.md`: registration with the installation credential issues the per-camera token; `GET /api/agente/estado-captura` reports consent and pauses (CA-05.2). — *agent camera registration and capture state (CA-06.1, CA-05.2)*
+- [x] **T08 `camaras` — US-07 connection status.** — *heartbeat, disconnection job and connection pushes (US-07)*
   - `POST /api/agente/senal`.
   - A scheduled job marks cameras `DESCONECTADA` after the heartbeat timeout and sends push `CAMARA_DESCONECTADA`; `CAMARA_RECONECTADA` goes out on return (CA-07.2, CA-07.3).
   - Push goes through a `NotificadorPush` port with a fake adapter (SNS later).
-- [ ] **T09 `hogares` — US-08 family.** Invitations (`POST /api/invitaciones`, public acceptance), `GET /api/familiares` and `DELETE /api/familiares/{usuarioId}`. The household–user membership table is global.
-- [ ] **T10 `alertas` — agent events.**
+- [x] **T09 `hogares` — US-08 family.** Invitations (`POST /api/invitaciones`, public acceptance), `GET /api/familiares` and `DELETE /api/familiares/{usuarioId}`. The household–user membership table is global. — *invite, accept and remove family members (US-08)*
+- [x] **T10 `alertas` — agent events.** — *agent events create and update alerts (US-11 to US-17)*
   - `POST /api/agente/eventos`, idempotent by `eventoId`.
   - It creates or updates alerts: fall, unstable movement, unstable becoming a fall (CA-17.3), confirmation after 30 s (CA-13.1), recovery (CA-13.2) and unreliable detection (CA-15.3).
-- [ ] **T11 `alertas` — US-16 and US-17 push alerts.** Push to every member device (`POST` and `DELETE /api/dispositivos`) with the payload types of the contract; retry on failure (CA-16.4). Add a test asserting the push is requested synchronously when the event is received (the less-than-10 s requirement).
-- [ ] **T12 `alertas` — US-18 clips.** The agent uploads through `POST /api/agente/eventos/{id}/clip` (pre-signed PUT). The app reads through `GET /api/alertas/{id}/clip`, returning `404 CLIP_NO_DISPONIBLE` or `410 CLIP_ELIMINADO`. Object storage goes through a port with a fake adapter.
-- [ ] **T13 `alertas` — list and detail.** `GET /api/alertas` with filters and paging, and `GET /api/alertas/{id}` (CA-16.4 visibility, CA-25.1 to CA-25.3).
+- [x] **T11 `alertas` — US-16 and US-17 push alerts.** Push to every member device (`POST` and `DELETE /api/dispositivos`) with the payload types of the contract; retry on failure (CA-16.4). Add a test asserting the push is requested synchronously when the event is received (the less-than-10 s requirement). — *push alerts to every member device with retries (US-16, US-17)*
+- [x] **T12 `alertas` — US-18 clips.** The agent uploads through `POST /api/agente/eventos/{id}/clip` (pre-signed PUT). The app reads through `GET /api/alertas/{id}/clip`, returning `404 CLIP_NO_DISPONIBLE` or `410 CLIP_ELIMINADO`. Object storage goes through a port with a fake adapter. — *event clips through pre-signed URLs (US-18)*
+- [x] **T13 `alertas` — list and detail.** `GET /api/alertas` with filters and paging, and `GET /api/alertas/{id}` (CA-16.4 visibility, CA-25.1 to CA-25.3). — *alert list with filters and paging, and detail (US-25)*
 
 ### Sprint 4
-- [ ] **T14 `hogares` — US-09 revocation.** `DELETE /api/hogar/consentimiento`: stop capture, schedule clip deletion, push `DATOS_ELIMINADOS` when done.
-- [ ] **T15 `alertas` — US-19 alert state.** `POST /api/alertas/{id}/atencion` and `/falsa-alarma`; push `ALERTA_ATENDIDA` to the other members.
-- [ ] **T16 `hogares` — US-10 alert routing.** `GET` and `PUT /api/hogar/aviso`: 3, 5 or 10 min, default 5, single-member case.
-- [ ] **T17 `alertas` — US-20 escalation.** Scheduled job, idempotent: `ALERTA_ESCALADA` or `SIN_CONTACTO_SECUNDARIO`.
-- [ ] **T18 `monitoreo` — US-22 pauses.** `POST` and `DELETE /api/camaras/{id}/pausa` with the contract durations (`HASTA_MANANA` = next 07:00 America/Lima); automatic resume with push `PAUSA_FINALIZADA`.
-- [ ] **T19 `monitoreo` — US-23 live view sessions.** `POST /api/camaras/{id}/vista-en-vivo` (`409` when disconnected or paused) and `DELETE /api/vista-en-vivo/{sesionId}`. The WSS relay follows the contract proposal (see BLOCKERS).
-- [ ] **T20 `monitoreo` — US-24 access log.** `GET /api/accesos-vista-en-vivo`, newest first.
-- [ ] **T21 `alertas` — US-21 recovery notice.** Push `SE_LEVANTO`; none when the fall is confirmed (CA-21.2).
-- [ ] **T22 `historial` — US-26 recordings.** Download disposition and the retention job.
-- [ ] **T23 `historial` — US-27 weekly summary.** `GET /api/resumen-semanal`: false alarms excluded from falls, trend against the previous week.
-- [ ] **T24 Hardening.**
+- [x] **T14 `hogares` — US-09 revocation.** `DELETE /api/hogar/consentimiento`: stop capture, schedule clip deletion, push `DATOS_ELIMINADOS` when done. — *revoke consent, stop capture and delete recordings (US-09)*
+- [x] **T15 `alertas` — US-19 alert state.** `POST /api/alertas/{id}/atencion` and `/falsa-alarma`; push `ALERTA_ATENDIDA` to the other members. — *attend alerts or mark false alarms (US-19)*
+- [x] **T16 `hogares` — US-10 alert routing.** `GET` and `PUT /api/hogar/aviso`: 3, 5 or 10 min, default 5, single-member case. — *contact order and wait time (US-10)*
+- [x] **T17 `alertas` — US-20 escalation.** Scheduled job, idempotent: `ALERTA_ESCALADA` or `SIN_CONTACTO_SECUNDARIO`. — *escalate unattended alerts (US-20)*
+- [x] **T18 `monitoreo` — US-22 pauses.** `POST` and `DELETE /api/camaras/{id}/pausa` with the contract durations (`HASTA_MANANA` = next 07:00 America/Lima); automatic resume with push `PAUSA_FINALIZADA`. — *pause and resume cameras with automatic resume (US-22)*
+- [x] **T19 `monitoreo` — US-23 live view sessions.** `POST /api/camaras/{id}/vista-en-vivo` (`409` when disconnected or paused) and `DELETE /api/vista-en-vivo/{sesionId}`. The WSS relay follows the contract proposal (see BLOCKERS). — *live view sessions and the WebSocket relay of the contract proposal (US-23)*
+- [x] **T20 `monitoreo` — US-24 access log.** `GET /api/accesos-vista-en-vivo`, newest first. — *live view access log, newest first (US-24)*
+- [x] **T21 `alertas` — US-21 recovery notice.** Push `SE_LEVANTO`; none when the fall is confirmed (CA-21.2). — *push SE_LEVANTO on recovery, none for confirmed falls (US-21)*
+- [x] **T22 `historial` — US-26 recordings.** Download disposition and the retention job. — *clip download disposition and the retention job (US-26)*
+- [x] **T23 `historial` — US-27 weekly summary.** `GET /api/resumen-semanal`: false alarms excluded from falls, trend against the previous week. — *weekly summary with trend (US-27)*
+- [x] **T24 Hardening.** — *OpenAPI on every endpoint, 80 % coverage gate and contract check; RLS deferred (ADR 0002)*
   - OpenAPI annotations on every endpoint (springdoc).
   - JaCoCo report ≥ 80 % line coverage on `domain` and `application`.
   - Row-level security for household tables (optional, ADR 0002).
