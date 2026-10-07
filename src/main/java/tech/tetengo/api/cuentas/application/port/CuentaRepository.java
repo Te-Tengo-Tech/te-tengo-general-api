@@ -1,5 +1,7 @@
 package tech.tetengo.api.cuentas.application.port;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import tech.tetengo.api.cuentas.domain.model.Cuenta;
@@ -11,6 +13,8 @@ public interface CuentaRepository {
     Cuenta guardar(Cuenta cuenta);
 
     Optional<Cuenta> buscar(UUID id);
+
+    List<Cuenta> buscarTodos(Collection<UUID> ids);
 
     Optional<Cuenta> buscarPorCorreo(String correoNormalizado);
 

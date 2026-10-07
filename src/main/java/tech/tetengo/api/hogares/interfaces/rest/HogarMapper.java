@@ -1,5 +1,6 @@
 package tech.tetengo.api.hogares.interfaces.rest;
 
+import tech.tetengo.api.hogares.application.ConsentimientoConsultado;
 import tech.tetengo.api.hogares.application.HogarConsultado;
 import tech.tetengo.api.hogares.application.HogarDelUsuario;
 import tech.tetengo.api.hogares.domain.model.AdultoMayor;
@@ -25,7 +26,18 @@ final class HogarMapper {
                 consultado.hogar().getId(),
                 aRespuesta(consultado.hogar().getAdultoMayor()),
                 consultado.rol().name(),
-                null);
+                consultado.consentimiento().map(HogarMapper::aRespuesta).orElse(null));
+    }
+
+    static ConsentimientoResponse aRespuesta(ConsentimientoConsultado consultado) {
+        var c = consultado.consentimiento();
+        var registradoPor = consultado.registradoPor() == null
+                ? new ConsentimientoResponse.RegistradoPor(c.getRegistradoPor(), null)
+                : new ConsentimientoResponse.RegistradoPor(
+                        consultado.registradoPor().id(),
+                        consultado.registradoPor().nombre());
+        return new ConsentimientoResponse(
+                c.getOtorgadoEn(), c.getOtorgadoPor(), registradoPor, c.isVistaEnVivoAceptada(), c.vigente());
     }
 
     static HogarDelUsuarioResponse aRespuesta(HogarDelUsuario hogar) {

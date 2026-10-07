@@ -14,17 +14,20 @@ public class ConsultarHogar {
 
     private final HogarRepository hogares;
     private final MiembroActual miembroActual;
+    private final ConsultarConsentimiento consultarConsentimiento;
 
-    public ConsultarHogar(HogarRepository hogares, MiembroActual miembroActual) {
+    public ConsultarHogar(
+            HogarRepository hogares, MiembroActual miembroActual, ConsultarConsentimiento consultarConsentimiento) {
         this.hogares = hogares;
         this.miembroActual = miembroActual;
+        this.consultarConsentimiento = consultarConsentimiento;
     }
 
     @Transactional(readOnly = true)
     public HogarConsultado ejecutar(UUID usuarioId) {
         Membresia membresia = miembroActual.de(usuarioId);
         return hogares.buscar(membresia.getHogarId())
-                .map(hogar -> new HogarConsultado(hogar, membresia.getRol()))
+                .map(hogar -> new HogarConsultado(hogar, membresia.getRol(), consultarConsentimiento.ultimo()))
                 .orElseThrow(() -> new ErrorDeNegocio(HogarError.SIN_MEMBRESIA));
     }
 }
