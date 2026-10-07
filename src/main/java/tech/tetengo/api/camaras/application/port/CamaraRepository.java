@@ -21,5 +21,8 @@ public interface CamaraRepository {
      */
     List<CamaraDeUnHogar> enLineaSinSenalDesde(Instant limite);
 
+    /** Paused cameras of every household whose pause is over: a native query, only for jobs. */
+    List<CamaraDeUnHogar> conPausaVencida(Instant ahora);
+
     record CamaraDeUnHogar(UUID camaraId, UUID hogarId) {}
 }
