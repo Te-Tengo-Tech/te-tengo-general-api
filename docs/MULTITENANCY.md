@@ -13,7 +13,7 @@ One person can belong to several households, for example someone caring for both
 
 ## How it works
 1. **The token carries the household:** the family member or the agent sends a JWT with the `hogar_id` claim.
-2. **The filter binds it:** `FiltroHogarActual`, which runs after JWT validation, stores it in `HogarActual` (a ThreadLocal) and **clears it in `finally`**.
+2. **The filter binds it:** `FiltroHogarActual`, which runs after JWT validation, stores it in `HogarActual` (a ThreadLocal) and **clears it in `finally`**. For a family member it first checks that the user still belongs to the household (`ComprobadorDeMembresia`, implemented by `hogares`), so removing a member (CA-08.3) takes effect before their token expires.
 3. **Hibernate reads it:** `ResolvedorDeHogar` (`CurrentTenantIdentifierResolver<UUID>`) hands that household to every session.
 4. **Filtering is automatic:** in entities extending `EntidadDelHogar`, the `hogarId` field carries `@TenantId`. Hibernate:
    - fills `hogar_id` on insert;

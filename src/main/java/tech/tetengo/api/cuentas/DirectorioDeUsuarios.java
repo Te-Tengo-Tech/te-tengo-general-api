@@ -10,6 +10,9 @@ public interface DirectorioDeUsuarios {
 
     Optional<Usuario> buscar(UUID id);
 
+    /** By e-mail, compared trimmed and case-insensitively. */
+    Optional<Usuario> buscarPorCorreo(String correo);
+
     /** Users found, by id; unknown ids are left out. */
     Map<UUID, Usuario> buscarTodos(Collection<UUID> ids);
 
