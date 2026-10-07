@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.Optional;
+import tech.tetengo.api.shared.domain.model.ZonaHoraria;
 
 /** Pause durations of the prototype's pause screen (API contract §4). */
 public enum DuracionDePausa {
@@ -15,8 +16,7 @@ public enum DuracionDePausa {
     HORAS_2,
     HASTA_MANANA;
 
-    /** Household time zone of the API contract (implementation choice). */
-    public static final ZoneId ZONA_DEL_HOGAR = ZoneId.of("America/Lima");
+    public static final ZoneId ZONA_DEL_HOGAR = ZonaHoraria.DEL_HOGAR;
 
     static final LocalTime HORA_DE_MANANA = LocalTime.of(7, 0);
 

@@ -15,6 +15,12 @@ interface AlertaJpaRepository extends JpaRepository<Alerta, UUID>, JpaSpecificat
 
     List<Alerta> findByClipClaveIsNotNullAndClipEliminadoEnIsNull();
 
+    long countByTipoAndEstadoNotAndOcurridaEnGreaterThanEqualAndOcurridaEnLessThan(
+            TipoAlerta tipo, EstadoAlerta estado, Instant desde, Instant hasta);
+
+    long countByEstadoAndOcurridaEnGreaterThanEqualAndOcurridaEnLessThan(
+            EstadoAlerta estado, Instant desde, Instant hasta);
+
     List<Alerta> findByClipClaveIsNotNullAndClipEliminadoEnIsNullAndOcurridaEnBefore(Instant limite);
 
     /** Native, so not filtered by household: only for the retention policy. */
