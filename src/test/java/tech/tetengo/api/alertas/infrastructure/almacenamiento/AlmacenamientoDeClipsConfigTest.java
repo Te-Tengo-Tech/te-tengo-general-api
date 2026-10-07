@@ -43,7 +43,7 @@ class AlmacenamientoDeClipsConfigTest {
         contexto.withPropertyValues(
                         "tetengo.clips.s3.bucket=te-tengo-clips",
                         "tetengo.clips.s3.region=us-east-1",
-                        "tetengo.clips.s3.endpoint=http://localhost:8333",
+                        "tetengo.clips.s3.endpoint=http://localhost:4566",
                         "tetengo.clips.s3.path-style=true",
                         "tetengo.clips.s3.access-key=local",
                         "tetengo.clips.s3.secret-key=local")
@@ -54,12 +54,12 @@ class AlmacenamientoDeClipsConfigTest {
                                     "hogares/h/alertas/a/e",
                                     "video/mp4",
                                     Instant.now().plusSeconds(600));
-                    assertThat(subida.url().toString()).startsWith("http://localhost:8333/te-tengo-clips/hogares/h/");
+                    assertThat(subida.url().toString()).startsWith("http://localhost:4566/te-tengo-clips/hogares/h/");
                 });
     }
 
     @Test
-    void elPerfilLocalUsaSeaweedFsEnLocalhost8333() throws Exception {
+    void elPerfilLocalUsaFlociEnLocalhost4566() throws Exception {
         var fuente = (EnumerablePropertySource<?>) new YamlPropertySourceLoader()
                 .load("application-local.yml", new ClassPathResource("application-local.yml"))
                 .getFirst();
@@ -77,7 +77,7 @@ class AlmacenamientoDeClipsConfigTest {
             assertThat(propiedades.pathStyle()).isTrue();
             var subida = ctx.getBean(AlmacenamientoDeClips.class)
                     .urlDeSubida("clave", "video/mp4", Instant.now().plusSeconds(600));
-            assertThat(subida.url().toString()).startsWith("http://localhost:8333/te-tengo-clips/clave");
+            assertThat(subida.url().toString()).startsWith("http://localhost:4566/te-tengo-clips/clave");
         });
     }
 }

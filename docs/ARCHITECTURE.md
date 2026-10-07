@@ -46,15 +46,15 @@ cuentas ◄── hogares ◄── camaras ◄── monitoreo
 Cross-module listeners are `@Async @TransactionalEventListener`: they run after the publishing transaction commits, Spring Modulith keeps each publication in `event_publication`, and the listener binds the event's household with `EjecutorEnHogar` (see [MULTITENANCY.md](MULTITENANCY.md)).
 
 ## External services
-Every external service sits behind a port with a fake adapter, so tests and local runs never call AWS:
+Every external service sits behind a port with a fake adapter, so tests never call AWS; local runs use Floci, a local AWS emulator ([ADR 0005](adr/0005-floci-local-aws-emulator.md)):
 
 | Port | Production | Today |
 |---|---|---|
-| `NotificadorCorreo` (`shared`) | Amazon SES | Logs the message |
-| `NotificadorPush` (`shared`) | Amazon SNS (FCM, APNs) | Logs the notice |
-| `AlmacenamientoDeClips` (`alertas`) | Amazon S3, pre-signed URLs | `AlmacenamientoDeClipsEnS3` when `TT_CLIPS_BUCKET` is set (SeaweedFS with the `local` profile of `bootRun`); otherwise in memory, placeholder URLs |
+| `NotificadorCorreo` (`shared`) | Amazon SES | `tetengo.correo.proveedor`: logs by default, `ses` (Floci's SES with the `local` profile) |
+| `NotificadorPush` (`shared`) | Amazon SNS (FCM, APNs), or Firebase Cloud Messaging directly | `tetengo.push.proveedor`: logs by default, `fcm`, `sns` (Floci's SNS with the `local` profile) or `simulador` (iOS simulator); see [NOTIFICATIONS.md](NOTIFICATIONS.md) and [ADR 0006](adr/0006-push-provider-switch.md) |
+| `AlmacenamientoDeClips` (`alertas`) | Amazon S3, pre-signed URLs | `AlmacenamientoDeClipsEnS3` when `TT_CLIPS_BUCKET` is set (Floci with the `local` profile of `bootRun`); otherwise in memory, placeholder URLs |
 
-Tests replace them with recording fakes (the S3 adapter has its own test against a SeaweedFS container) (`CorreoDePrueba`, `PushDePrueba`, `AlmacenamientoDePrueba`) and move time with `RelojDePrueba`.
+Tests replace them with recording fakes (the AWS adapters have their own tests against a Floci container) (`CorreoDePrueba`, `PushDePrueba`, `AlmacenamientoDePrueba`) and move time with `RelojDePrueba`.
 
 ## Scheduled jobs
 All are idempotent, find their candidates with a native query across households and then work one household at a time. Tests turn scheduling off (`tetengo.tareas.habilitadas=false`) and call them.

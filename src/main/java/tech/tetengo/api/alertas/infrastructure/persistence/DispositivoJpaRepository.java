@@ -11,5 +11,5 @@ interface DispositivoJpaRepository extends JpaRepository<Dispositivo, UUID> {
 
     Optional<Dispositivo> findByTokenPush(String tokenPush);
 
-    List<Dispositivo> findByUsuarioIdIn(Collection<UUID> usuarioIds);
+    List<Dispositivo> findByUsuarioIdInAndActivoTrue(Collection<UUID> usuarioIds);
 }

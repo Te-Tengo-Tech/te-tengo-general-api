@@ -10,7 +10,7 @@ import org.springframework.util.StringUtils;
  *
  * @param bucket bucket of the clips
  * @param region AWS region; blank uses the SDK's default region chain
- * @param endpoint endpoint override for an S3-compatible store (e.g. SeaweedFS locally); blank uses
+ * @param endpoint endpoint override for an S3-compatible store (e.g. Floci locally); blank uses
  *     AWS. It is also the host of the pre-signed URLs, so the agent and the app must reach it
  * @param pathStyle path-style URLs ({@code endpoint/bucket/key}), needed by most local stores
  * @param accessKey static access key; blank uses the SDK's default credentials chain

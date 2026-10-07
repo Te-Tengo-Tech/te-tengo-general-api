@@ -26,7 +26,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import tech.tetengo.api.alertas.application.port.AlmacenamientoDeClips;
 
 /**
- * Clips in Amazon S3 or an S3-compatible store (SeaweedFS locally), through pre-signed URLs of the
+ * Clips in Amazon S3 or an S3-compatible store (Floci locally), through pre-signed URLs of the
  * AWS SDK v2: the agent uploads with a PUT URL and the app plays or downloads with a GET URL; the
  * backend never handles the video bytes.
  */

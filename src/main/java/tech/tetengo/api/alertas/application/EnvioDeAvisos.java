@@ -17,13 +17,15 @@ import tech.tetengo.api.hogares.MiembrosDelHogar.Miembro;
 import tech.tetengo.api.shared.application.port.NotificadorPush;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Aviso;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Destino;
+import tech.tetengo.api.shared.application.port.NotificadorPush.Resultado;
 import tech.tetengo.api.shared.application.port.TipoAviso;
 import tech.tetengo.api.shared.infrastructure.multitenancy.HogarActual;
 
 /**
- * Delivers push notices to the devices of the members of the household in context (API contract
- * §7), right away. If the push service does not respond, the error is logged and the notice is
- * queued for retry (CA-16.4). Callers outside a request bind the household with
+ * Delivers push notices to the active devices of the members of the household in context (API
+ * contract §7), right away. If the push service does not respond, the error is logged and the notice
+ * is queued for retry (CA-16.4). Devices whose token the service rejects are deactivated, and new
+ * provider addresses are stored with their device. Callers outside a request bind the household with
  * {@code EjecutorEnHogar}.
  */
 @Service
@@ -101,12 +103,43 @@ public class EnvioDeAvisos {
             log.info("Push {} sin dispositivos registrados", aviso.tipo());
             return ResultadoDeEnvio.SIN_DISPOSITIVOS;
         }
+        Resultado resultado;
         try {
-            notificador.enviar(destinos, aviso);
-            return ResultadoDeEnvio.ENTREGADO;
+            resultado = notificador.enviar(destinos, aviso);
         } catch (RuntimeException e) {
             log.error("Falló el envío del push {}; se reintentará", aviso.tipo(), e);
             return ResultadoDeEnvio.PENDIENTE;
+        }
+        actualizarDispositivos(resultado);
+        if (resultado.aceptados() == 0) {
+            log.info("Push {}: el servicio rechazó todos los dispositivos", aviso.tipo());
+            return ResultadoDeEnvio.SIN_DISPOSITIVOS;
+        }
+        return ResultadoDeEnvio.ENTREGADO;
+    }
+
+    /** Never fails the delivery: the notice already left. */
+    private void actualizarDispositivos(Resultado resultado) {
+        try {
+            resultado
+                    .tokensInvalidos()
+                    .forEach(token -> dispositivos.buscarPorToken(token).ifPresent(dispositivo -> {
+                        dispositivo.desactivar();
+                        dispositivos.guardar(dispositivo);
+                        log.info(
+                                "Dispositivo {} desactivado: el servicio de push rechazó su token",
+                                dispositivo.getId());
+                    }));
+            resultado
+                    .referencias()
+                    .forEach((token, referencia) -> dispositivos
+                            .buscarPorToken(token)
+                            .ifPresent(dispositivo -> {
+                                dispositivo.asignarReferenciaPush(referencia);
+                                dispositivos.guardar(dispositivo);
+                            }));
+        } catch (RuntimeException e) {
+            log.error("No se pudieron actualizar los dispositivos tras el push", e);
         }
     }
 
@@ -126,7 +159,8 @@ public class EnvioDeAvisos {
         return dispositivos.deUsuarios(elegidos).stream()
                 .map(d -> new Destino(
                         d.getTokenPush(),
-                        NotificadorPush.Plataforma.valueOf(d.getPlataforma().name())))
+                        NotificadorPush.Plataforma.valueOf(d.getPlataforma().name()),
+                        d.getReferenciaPush()))
                 .toList();
     }
 }

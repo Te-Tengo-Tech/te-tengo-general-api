@@ -15,30 +15,22 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 import tech.tetengo.api.alertas.application.port.AlmacenamientoDeClips.Subida;
+import tech.tetengo.api.support.Floci;
 
 /**
- * The S3 adapter against SeaweedFS, the S3-compatible store of {@code compose.yaml}: the agent
- * uploads through the pre-signed PUT URL with the returned headers, and the app reads through the
- * pre-signed GET URL.
+ * The S3 adapter against Floci, the local AWS emulator of {@code compose.yaml}, with signature
+ * verification on: the agent uploads through the pre-signed PUT URL with the returned headers, and
+ * the app reads through the pre-signed GET URL. A tampered URL is refused.
  */
 @Tag("integration")
 @Testcontainers
 class AlmacenamientoDeClipsEnS3IntegrationTest {
 
-    private static final int PUERTO_S3 = 8333;
-
     @Container
-    static final GenericContainer<?> SEAWEEDFS = new GenericContainer<>(
-                    DockerImageName.parse("chrislusf/seaweedfs:4.48"))
-            .withCommand("server", "-s3", "-dir=/data")
-            .withExposedPorts(PUERTO_S3)
-            .waitingFor(Wait.forHttp("/").forPort(PUERTO_S3).forStatusCodeMatching(estado -> estado < 500))
-            .withStartupTimeout(Duration.ofMinutes(2));
+    static final GenericContainer<?> FLOCI = Floci.contenedor().withEnv("FLOCI_AUTH_VALIDATE_SIGNATURES", "true");
 
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
@@ -47,9 +39,9 @@ class AlmacenamientoDeClipsEnS3IntegrationTest {
 
     @BeforeAll
     static void conectar() {
-        endpoint = URI.create("http://%s:%d".formatted(SEAWEEDFS.getHost(), SEAWEEDFS.getMappedPort(PUERTO_S3)));
+        endpoint = Floci.endpoint(FLOCI);
         almacenamiento = AlmacenamientoDeClipsEnS3.crear(
-                new PropiedadesDeS3("te-tengo-clips", "us-east-1", endpoint, true, "local", "local", true),
+                new PropiedadesDeS3("te-tengo-clips", "us-east-1", endpoint, true, Floci.CLAVE, Floci.CLAVE, true),
                 Clock.systemUTC());
     }
 
@@ -103,6 +95,20 @@ class AlmacenamientoDeClipsEnS3IntegrationTest {
         assertThat(HTTP.send(HttpRequest.newBuilder(descarga).build(), HttpResponse.BodyHandlers.discarding())
                         .statusCode())
                 .isEqualTo(200);
+    }
+
+    @Test
+    void unaUrlFirmadaAlteradaSeRechaza() throws Exception {
+        String clave = "hogares/h1/alertas/a4/e4";
+        Subida subida = almacenamiento.urlDeSubida(clave, "video/mp4", enDiezMinutos());
+        URI alterada = URI.create(subida.url().toString().replace(clave, "hogares/h2/alertas/a4/e4"));
+
+        HttpRequest.Builder put = HttpRequest.newBuilder(alterada).PUT(HttpRequest.BodyPublishers.ofString("clip"));
+        subida.cabeceras().forEach(put::header);
+
+        assertThat(HTTP.send(put.build(), HttpResponse.BodyHandlers.discarding())
+                        .statusCode())
+                .isEqualTo(403);
     }
 
     @Test

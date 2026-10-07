@@ -214,4 +214,60 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
                 .extracting(e -> e.aviso().habitacion())
                 .containsExactly("Cocina");
     }
+
+    private Boolean activo(String tokenPush) {
+        return jdbc.queryForObject("select activo from dispositivos where token_push = ?", Boolean.class, tokenPush);
+    }
+
+    private String referencia(String tokenPush) {
+        return jdbc.queryForObject(
+                "select referencia_push from dispositivos where token_push = ?", String.class, tokenPush);
+    }
+
+    @Test
+    void unTokenRechazadoPorElServicioDesactivaSuDispositivoHastaQueSeRegistreOtraVez() throws Exception {
+        push.rechazarToken("telefono-beto");
+        String alertaId = evento("caida", cuando);
+
+        assertThat(activo("telefono-beto")).isFalse();
+        assertThat(activo("telefono-ana")).isTrue();
+        assertThat(notificadaEn(alertaId)).isEqualTo(reloj.instant());
+
+        evento("caida_confirmada", cuando.plusSeconds(30));
+        assertThat(push.deTipo(TipoAviso.CAIDA_CONFIRMADA).getFirst().tokens()).containsExactly("telefono-ana");
+
+        registrarDispositivo(
+                        JwtDePrueba.token(invitado, UUID.fromString(campo(titular, "$.hogarId")), Rol.INVITADO),
+                        "telefono-beto",
+                        "IOS")
+                .andExpect(status().isCreated());
+        assertThat(activo("telefono-beto")).isTrue();
+    }
+
+    @Test
+    void siElServicioRechazaTodosLosTokensNoHayAQuienAvisarYNoSeReintenta() throws Exception {
+        push.rechazarToken("telefono-ana");
+        push.rechazarToken("telefono-beto");
+
+        String alertaId = evento("caida", cuando);
+
+        assertThat(notificadaEn(alertaId)).isNull();
+        assertThat(jdbc.queryForObject("select count(*) from avisos_pendientes", Integer.class))
+                .isZero();
+        evento("caida_confirmada", cuando.plusSeconds(30));
+        assertThat(push.deTipo(TipoAviso.CAIDA_CONFIRMADA)).isEmpty();
+    }
+
+    @Test
+    void laDireccionDelProveedorSeGuardaConElDispositivoYSeReusa() throws Exception {
+        evento("caida", cuando);
+        assertThat(referencia("telefono-ana")).isEqualTo("referencia-telefono-ana");
+        assertThat(push.deTipo(TipoAviso.ALERTA_CAIDA).getFirst().destinos())
+                .allSatisfy(d -> assertThat(d.referencia()).isNull());
+
+        evento("caida_confirmada", cuando.plusSeconds(30));
+        assertThat(push.deTipo(TipoAviso.CAIDA_CONFIRMADA).getFirst().destinos())
+                .extracting(d -> d.referencia())
+                .containsExactlyInAnyOrder("referencia-telefono-ana", "referencia-telefono-beto");
+    }
 }

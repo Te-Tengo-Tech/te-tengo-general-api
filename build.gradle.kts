@@ -55,6 +55,17 @@ dependencies {
 
   // Clips in Amazon S3 (or an S3-compatible store): pre-signed URLs with the AWS SDK v2
   implementation("software.amazon.awssdk:s3")
+  // E-mail through Amazon SES (API v2)
+  implementation("software.amazon.awssdk:sesv2")
+  // Push: Amazon SNS mobile push, or Firebase Cloud Messaging (HTTP v1) through the Admin SDK.
+  // Only messaging is used, so Firestore and Cloud Storage (and their gRPC stack) are left out.
+  implementation("software.amazon.awssdk:sns")
+  implementation("com.google.firebase:firebase-admin:9.9.0") {
+    exclude(group = "com.google.cloud", module = "google-cloud-firestore")
+    exclude(group = "com.google.cloud", module = "google-cloud-storage")
+  }
+  // FirebaseMessaging parses FCM answers with it; it used to come with the excluded modules.
+  implementation("com.google.http-client:google-http-client-jackson2:2.1.0")
 
   // Utilidades: UUID v7
   implementation("com.github.f4b6a3:uuid-creator:6.1.1")
@@ -99,7 +110,7 @@ tasks.withType<Test> {
 }
 
 // `./gradlew bootRun` uses the `local` profile unless another one is active:
-// clips go to the SeaweedFS service of compose.yaml (application-local.yml).
+// the AWS services run on Floci from compose.yaml (application-local.yml).
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
   systemProperty("spring.profiles.default", "local")
 }
