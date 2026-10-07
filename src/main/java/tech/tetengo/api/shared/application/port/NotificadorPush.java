@@ -33,8 +33,44 @@ public interface NotificadorPush {
         }
     }
 
-    /** Data payload of the API contract: {@code {tipo, alertaId?, camaraId?, habitacion?, ocurridaEn}}. */
-    record Aviso(TipoAviso tipo, UUID alertaId, UUID camaraId, String habitacion, Instant ocurridaEn) {}
+    /**
+     * A notice: the data payload of the API contract ({@code {tipo, alertaId?, camaraId?, habitacion?,
+     * ocurridaEn}}) plus the {@link Detalle} its title and body need.
+     */
+    record Aviso(TipoAviso tipo, UUID alertaId, UUID camaraId, String habitacion, Instant ocurridaEn, Detalle detalle) {
+
+        public Aviso {
+            detalle = detalle == null ? Detalle.NINGUNO : detalle;
+        }
+
+        public Aviso(TipoAviso tipo, UUID alertaId, UUID camaraId, String habitacion, Instant ocurridaEn) {
+            this(tipo, alertaId, camaraId, habitacion, ocurridaEn, Detalle.NINGUNO);
+        }
+
+        public Aviso conDetalle(Detalle nuevo) {
+            return new Aviso(tipo, alertaId, camaraId, habitacion, ocurridaEn, nuevo);
+        }
+    }
+
+    /**
+     * What the prototype's notice text needs beyond the data payload; it is never sent as data. Every
+     * value may be null when unknown or not needed by the notice type.
+     *
+     * @param adultoMayor first name of the older adult of the household («Rosa»)
+     * @param tipoDeAlerta type of the notice's alert, for its label and for «Caída en la Sala»
+     * @param desde when the alert started, for a fall that began as an unstable movement
+     * @param esperaMinutos the household's wait before escalating (US-10)
+     * @param quien first name of the member who attended the alert
+     */
+    record Detalle(String adultoMayor, TipoDeAlerta tipoDeAlerta, Instant desde, Integer esperaMinutos, String quien) {
+
+        public static final Detalle NINGUNO = new Detalle(null, null, null, null, null);
+    }
+
+    enum TipoDeAlerta {
+        CAIDA,
+        MOVIMIENTO_INESTABLE
+    }
 
     /**
      * What the service did with the destinations.

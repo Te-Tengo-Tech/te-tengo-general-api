@@ -18,6 +18,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Aviso;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Destino;
+import tech.tetengo.api.shared.application.port.NotificadorPush.Detalle;
 import tech.tetengo.api.shared.application.port.NotificadorPush.FallaDePush;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Plataforma;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Resultado;
@@ -32,7 +33,8 @@ class NotificadorPushFcmTest {
             UUID.randomUUID(),
             UUID.randomUUID(),
             "Sala",
-            Instant.parse("2026-10-07T15:42:31Z"));
+            Instant.parse("2026-10-07T15:42:31Z"),
+            new Detalle("Rosa", null, null, null, null));
 
     private static final List<Destino> DESTINOS =
             List.of(new Destino("token-ana", Plataforma.ANDROID), new Destino("token-beto", Plataforma.IOS));
@@ -75,6 +77,41 @@ class NotificadorPushFcmTest {
         Map<String, Object> esperado = new LinkedHashMap<>(CargasPush.mensajeFcm(ContenidoDelAviso.de(CAIDA)));
         esperado.put("token", "token-ana");
         assertThat(json(mensajeria.enviados.getFirst())).isEqualTo(normalizar(esperado));
+    }
+
+    @Test
+    void laEtiquetaVaComoSubtituloEnIosYEnLosDatos() {
+        mensajeria.respuestas = List.of(aceptada(), aceptada());
+
+        notificador.enviar(DESTINOS, CAIDA);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> mensaje = (Map<String, Object>) json(mensajeria.enviados.getFirst());
+        assertThat(mensaje)
+                .extractingByKey("notification")
+                .isEqualTo(Map.of(
+                        "title",
+                        "Posible caída de Rosa en la Sala",
+                        "body",
+                        "10:42 · Toca para ver qué hacer y llamarla."));
+        assertThat(mensaje)
+                .extractingByKey("data")
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .containsEntry("etiqueta", "URGENTE · CAÍDA");
+        assertThat(mensaje)
+                .extractingByKey("apns")
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .extractingByKey("payload")
+                .isEqualTo(Map.of(
+                        "aps",
+                        Map.of(
+                                "alert",
+                                Map.of(
+                                        "title", "Posible caída de Rosa en la Sala",
+                                        "subtitle", "URGENTE · CAÍDA",
+                                        "body", "10:42 · Toca para ver qué hacer y llamarla."),
+                                "sound",
+                                "default")));
     }
 
     @Test

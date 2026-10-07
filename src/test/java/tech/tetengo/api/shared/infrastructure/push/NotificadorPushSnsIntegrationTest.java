@@ -23,6 +23,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import software.amazon.awssdk.services.sns.SnsClient;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Aviso;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Destino;
+import tech.tetengo.api.shared.application.port.NotificadorPush.Detalle;
 import tech.tetengo.api.shared.application.port.NotificadorPush.FallaDePush;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Plataforma;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Resultado;
@@ -47,8 +48,13 @@ class NotificadorPushSnsIntegrationTest {
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private static final UUID ALERTA = UUID.randomUUID();
-    private static final Aviso CAIDA =
-            new Aviso(TipoAviso.ALERTA_CAIDA, ALERTA, UUID.randomUUID(), "Sala", Instant.parse("2026-10-07T15:42:31Z"));
+    private static final Aviso CAIDA = new Aviso(
+            TipoAviso.ALERTA_CAIDA,
+            ALERTA,
+            UUID.randomUUID(),
+            "Sala",
+            Instant.parse("2026-10-07T15:42:31Z"),
+            new Detalle("Rosa", null, null, null, null));
 
     private static URI endpoint;
     private static SnsClient sns;
@@ -119,13 +125,23 @@ class NotificadorPushSnsIntegrationTest {
         JsonNode mensaje = JSON.readTree(android.path("Payload").asString())
                 .path("fcmV1Message")
                 .path("message");
-        assertThat(mensaje.path("notification").path("title").asString()).isEqualTo("Posible caída en la Sala");
+        assertThat(mensaje.path("notification").path("title").asString()).isEqualTo("Posible caída de Rosa en la Sala");
+        assertThat(mensaje.path("data").path("etiqueta").asString()).isEqualTo("URGENTE · CAÍDA");
+        assertThat(mensaje.path("apns")
+                        .path("payload")
+                        .path("aps")
+                        .path("alert")
+                        .path("subtitle")
+                        .asString())
+                .isEqualTo("URGENTE · CAÍDA");
         assertThat(mensaje.path("data").path("tipo").asString()).isEqualTo("ALERTA_CAIDA");
         assertThat(mensaje.path("data").path("alertaId").asString()).isEqualTo(ALERTA.toString());
         assertThat(mensaje.path("android").path("priority").asString()).isEqualTo("high");
 
         JsonNode ios = JSON.readTree(capturaDe("apns-beto").path("Payload").asString());
-        assertThat(ios.path("aps").path("alert").path("body").asString()).isEqualTo("10:42 · Toca para ver qué hacer.");
+        assertThat(ios.path("aps").path("alert").path("body").asString())
+                .isEqualTo("10:42 · Toca para ver qué hacer y llamarla.");
+        assertThat(ios.path("aps").path("alert").path("subtitle").asString()).isEqualTo("URGENTE · CAÍDA");
         assertThat(ios.path("aps").path("sound").asString()).isEqualTo("default");
         assertThat(ios.path("gcm.message_id").asString()).isNotBlank();
         assertThat(ios.path("tipo").asString()).isEqualTo("ALERTA_CAIDA");

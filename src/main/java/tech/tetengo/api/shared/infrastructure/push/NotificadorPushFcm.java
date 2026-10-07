@@ -90,13 +90,18 @@ class NotificadorPushFcm implements NotificadorPush {
                 .setApnsConfig(ApnsConfig.builder()
                         .putHeader("apns-priority", "10")
                         .setAps(Aps.builder()
-                                .setAlert(ApsAlert.builder()
-                                        .setTitle(contenido.titulo())
-                                        .setBody(contenido.cuerpo())
-                                        .build())
+                                .setAlert(alertaApns(contenido))
                                 .setSound("default")
                                 .build())
                         .build())
                 .build();
+    }
+
+    private static ApsAlert alertaApns(ContenidoDelAviso contenido) {
+        ApsAlert.Builder alerta = ApsAlert.builder().setTitle(contenido.titulo());
+        if (contenido.etiqueta() != null) {
+            alerta.setSubtitle(contenido.etiqueta());
+        }
+        return alerta.setBody(contenido.cuerpo()).build();
     }
 }

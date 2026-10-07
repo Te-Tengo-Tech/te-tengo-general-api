@@ -5,7 +5,8 @@ import java.util.Map;
 
 /**
  * Wire payloads of a notice, the same for every provider: the FCM HTTP v1 message (FCM, and SNS
- * {@code GCM} endpoints) and the APNs payload (SNS {@code APNS} endpoints and the iOS simulator).
+ * {@code GCM} endpoints) and the APNs payload (SNS {@code APNS} endpoints and the iOS simulator). The
+ * label goes as the iOS subtitle and as {@code etiqueta} in the data, since Android has no subtitle.
  * Pushes go with high priority and the default sound: a fall must arrive in less than 10 s (CA-16.1).
  */
 final class CargasPush {
@@ -35,7 +36,14 @@ final class CargasPush {
         return carga;
     }
 
+    /** The notice's label, when it has one, is the iOS subtitle ({@code aps.alert.subtitle}). */
     private static Map<String, Object> aps(ContenidoDelAviso contenido) {
-        return Map.of("alert", Map.of("title", contenido.titulo(), "body", contenido.cuerpo()), "sound", "default");
+        Map<String, Object> alerta = new LinkedHashMap<>();
+        alerta.put("title", contenido.titulo());
+        if (contenido.etiqueta() != null) {
+            alerta.put("subtitle", contenido.etiqueta());
+        }
+        alerta.put("body", contenido.cuerpo());
+        return Map.of("alert", alerta, "sound", "default");
     }
 }

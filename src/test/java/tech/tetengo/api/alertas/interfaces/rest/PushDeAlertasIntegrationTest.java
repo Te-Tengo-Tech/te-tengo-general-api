@@ -23,8 +23,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import tech.tetengo.api.alertas.application.ReintentarAvisos;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Aviso;
+import tech.tetengo.api.shared.application.port.NotificadorPush.Detalle;
+import tech.tetengo.api.shared.application.port.NotificadorPush.TipoDeAlerta;
 import tech.tetengo.api.shared.application.port.TipoAviso;
 import tech.tetengo.api.shared.domain.model.Rol;
+import tech.tetengo.api.shared.infrastructure.push.ContenidoDelAviso;
 import tech.tetengo.api.support.AbstractIntegrationTest;
 import tech.tetengo.api.support.ApiDePrueba;
 import tech.tetengo.api.support.DatosDePrueba;
@@ -65,7 +68,17 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
                         "IOS")
                 .andExpect(status().isCreated());
         cuando = reloj.instant().truncatedTo(ChronoUnit.MILLIS);
+        nombrarAdultoMayor(titular, "Rosa Huamán");
     }
+
+    private void nombrarAdultoMayor(String sesion, String nombre) {
+        jdbc.update(
+                "update hogares set adulto_mayor_nombre = ? where id = ?",
+                nombre,
+                UUID.fromString(campo(sesion, "$.hogarId")));
+    }
+
+    private static final Detalle ROSA = new Detalle("Rosa", null, null, null, null);
 
     private ResultActions registrarDispositivo(String token, String tokenPush, String plataforma) throws Exception {
         return mvc.perform(post("/api/dispositivos")
@@ -98,7 +111,11 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
         Envio envio = push.deTipo(TipoAviso.ALERTA_CAIDA).getFirst();
         assertThat(envio.tokens()).containsExactlyInAnyOrder("telefono-ana", "telefono-beto");
         assertThat(envio.aviso())
-                .isEqualTo(new Aviso(TipoAviso.ALERTA_CAIDA, UUID.fromString(alertaId), camara, "Sala", cuando));
+                .isEqualTo(new Aviso(TipoAviso.ALERTA_CAIDA, UUID.fromString(alertaId), camara, "Sala", cuando, ROSA));
+        // The prototype's notice (screen 44), with the household's older adult.
+        assertThat(ContenidoDelAviso.de(envio.aviso()))
+                .extracting(ContenidoDelAviso::titulo, ContenidoDelAviso::etiqueta)
+                .containsExactly("Posible caída de Rosa en la Sala", "URGENTE · CAÍDA");
         assertThat(notificadaEn(alertaId)).isEqualTo(reloj.instant());
     }
 
@@ -117,6 +134,8 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
         Envio envio = push.deTipo(TipoAviso.ALERTA_ACTUALIZADA_A_CAIDA).getFirst();
         assertThat(envio.aviso().alertaId()).hasToString(alertaId);
         assertThat(envio.aviso().ocurridaEn()).isEqualTo(cuando.plusSeconds(2));
+        // «Empezó como movimiento inestable a las …» (screen 51): the time the alert began.
+        assertThat(envio.aviso().detalle()).isEqualTo(new Detalle("Rosa", TipoDeAlerta.CAIDA, cuando, null, null));
     }
 
     @Test
@@ -163,6 +182,7 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
         Envio envio = push.deTipo(TipoAviso.ALERTA_CAIDA).getFirst();
         assertThat(envio.tokens()).containsExactlyInAnyOrder("telefono-ana", "telefono-beto");
         assertThat(envio.aviso().alertaId()).hasToString(alertaId);
+        assertThat(envio.aviso().detalle()).isEqualTo(ROSA);
         assertThat(notificadaEn(alertaId)).isEqualTo(reloj.instant());
         assertThat(jdbc.queryForObject("select count(*) from avisos_pendientes", Integer.class))
                 .isZero();
@@ -199,6 +219,7 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
     @Test
     void lasAlertasDeUnHogarSoloLleganASusFamiliares() throws Exception {
         String otro = ApiDePrueba.titularConHogar(mvc, "carla@correo.pe", "Carla");
+        nombrarAdultoMayor(otro, "Juana Quispe");
         registrarDispositivo(campo(otro, "$.tokenAcceso"), "telefono-carla", "ANDROID");
         String agenteB = campo(ApiDePrueba.agenteConConsentimiento(mvc, jdbc, otro, "Cocina"), "$.token");
 
@@ -213,6 +234,14 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
                 .filteredOn(e -> e.tokens().contains("telefono-carla"))
                 .extracting(e -> e.aviso().habitacion())
                 .containsExactly("Cocina");
+        // Each household's notice names its own older adult.
+        assertThat(push.deTipo(TipoAviso.ALERTA_CAIDA))
+                .extracting(
+                        e -> e.tokens().contains("telefono-carla"),
+                        e -> e.aviso().detalle().adultoMayor())
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(false, "Rosa"),
+                        org.assertj.core.groups.Tuple.tuple(true, "Juana"));
     }
 
     private Boolean activo(String tokenPush) {

@@ -44,6 +44,14 @@ public class AdultoMayor {
         return nombre;
     }
 
+    /**
+     * The first word of the name, as the prototype and the app name the older adult in notices («Rosa»
+     * for «Rosa Huamán»).
+     */
+    public String nombreDePila() {
+        return nombre.strip().split("\\s+", 2)[0];
+    }
+
     public String getDireccion() {
         return direccion;
     }
