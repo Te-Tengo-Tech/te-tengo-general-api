@@ -28,4 +28,10 @@ class NotificadorPushConfig {
     NotificadorPush notificadorPushFcm(PropiedadesDeFcm propiedades) {
         return new NotificadorPushFcm(MensajeriaFirebase.crear(propiedades));
     }
+
+    @Bean
+    @ConditionalOnProperty(prefix = PREFIJO, name = PROVEEDOR, havingValue = "sns")
+    NotificadorPush notificadorPushSns(PropiedadesDeSns propiedades) {
+        return NotificadorPushSns.crear(propiedades);
+    }
 }

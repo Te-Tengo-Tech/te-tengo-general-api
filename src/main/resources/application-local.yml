@@ -23,3 +23,15 @@ tetengo:
       endpoint: http://localhost:4566
       access-key: test
       secret-key: test
+  push:
+    # Pushes go to Floci's SNS, which captures them at http://localhost:4566/_aws/sns/push-notifications
+    # (nothing reaches a phone). TT_PUSH_PROVEEDOR=simulador shows them on the booted iOS simulator,
+    # fcm sends them to real phones through Firebase, registro only logs. docs/NOTIFICATIONS.md
+    proveedor: ${TT_PUSH_PROVEEDOR:sns}
+    sns:
+      region: us-east-1
+      endpoint: http://localhost:4566
+      access-key: test
+      secret-key: test
+      # Creates te-tengo-android and te-tengo-ios (FCM applications) on Floci.
+      crear-aplicaciones: true

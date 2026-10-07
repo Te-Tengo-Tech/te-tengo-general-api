@@ -12,7 +12,7 @@ import tech.tetengo.api.shared.application.port.NotificadorPush;
 class NotificadorPushConfigTest {
 
     @Configuration(proxyBeanMethods = false)
-    @EnableConfigurationProperties(PropiedadesDeFcm.class)
+    @EnableConfigurationProperties({PropiedadesDeFcm.class, PropiedadesDeSns.class})
     static class Soporte {}
 
     private final ApplicationContextRunner contexto =
@@ -32,6 +32,25 @@ class NotificadorPushConfigTest {
                         .getFailure()
                         .rootCause()
                         .hasMessageContaining("TT_FCM_CREDENCIALES"));
+    }
+
+    @Test
+    void snsConSusAplicacionesUsaAmazonSns() {
+        contexto.withPropertyValues(
+                        "tetengo.push.proveedor=sns",
+                        "tetengo.push.sns.arn-android=arn:aws:sns:us-east-1:000000000000:app/GCM/android",
+                        "tetengo.push.sns.arn-ios=arn:aws:sns:us-east-1:000000000000:app/GCM/ios",
+                        "tetengo.push.sns.region=us-east-1",
+                        "tetengo.push.sns.access-key=test",
+                        "tetengo.push.sns.secret-key=test")
+                .run(ctx -> assertThat(ctx.getBean(NotificadorPush.class)).isInstanceOf(NotificadorPushSns.class));
+    }
+
+    @Test
+    void snsSinAplicacionesNoArranca() {
+        contexto.withPropertyValues("tetengo.push.proveedor=sns", "tetengo.push.sns.region=us-east-1")
+                .run(ctx ->
+                        assertThat(ctx).hasFailed().getFailure().rootCause().hasMessageContaining("TT_SNS_ARN_IOS"));
     }
 
     @Test

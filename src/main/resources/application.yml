@@ -60,6 +60,16 @@ tetengo:
     fcm:
       # Path of the Firebase service-account JSON key; never commit it.
       credenciales: ${TT_FCM_CREDENCIALES:}
+    sns:
+      # Platform applications (ARNs). iOS: an FCM application while the app registers FCM tokens on iOS
+      # (it may be the same ARN as Android), or APNS / APNS_SANDBOX for APNs device tokens.
+      arn-android: ${TT_SNS_ARN_ANDROID:}
+      arn-ios: ${TT_SNS_ARN_IOS:}
+      # Blank: the AWS SDK's default region chain.
+      region: ${TT_SNS_REGION:}
+      # Blank is AWS; locally Floci (application-local.yml).
+      endpoint: ${TT_SNS_ENDPOINT:}
+      crear-aplicaciones: false
   clips:
     # Pre-signed clip URLs are short-lived (implementation choice).
     vigencia-url-subida: 10m
