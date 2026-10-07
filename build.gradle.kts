@@ -31,6 +31,12 @@ extra["awsSdkVersion"] = "2.55.12"
 // authentication) and CVE-2026-65182 (access control), all critical; fixed in 11.0.25.
 extra["tomcat.version"] = "11.0.26"
 
+// Jackson 3.1.5 and 2.21.5: CVE-2026-91777, CVE-2026-91776 and CVE-2026-68497 (jackson-databind)
+// and CVE-2026-89425 and CVE-2026-89407 (jackson-core), all high; fixed in 3.1.7 and 2.21.7.
+extra["jackson-bom.version"] = "3.1.7"
+
+extra["jackson-2-bom.version"] = "2.21.7"
+
 dependencies {
   // Web, WebSocket (vista en vivo) y documentación OpenAPI
   implementation("org.springframework.boot:spring-boot-starter-webmvc")

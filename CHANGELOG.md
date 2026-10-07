@@ -47,6 +47,7 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 - Local runs use Floci, a local AWS emulator, instead of SeaweedFS: `compose.yaml` runs it on port 4566 and the `local` profile sends clips, e-mail and push to it (ADR 0005). Sent e-mails are listed at `/_aws/ses` and pushes at `/_aws/sns/push-notifications`.
 ### Security
 - Tomcat 11.0.24 → 11.0.26 (override of Spring Boot's `tomcat.version`): fixes the critical CVE-2026-65905, CVE-2026-68525 and CVE-2026-65182.
+- Jackson 3.1.5 → 3.1.7 and 2.21.5 → 2.21.7 (overrides of `jackson-bom.version` and `jackson-2-bom.version`): fixes the high CVE-2026-91777, CVE-2026-91776, CVE-2026-68497, CVE-2026-89425 and CVE-2026-89407, and the medium CVE-2026-83557 and CVE-2026-19032.
 
 ## [0.1.0] - 2026-10-07
 ### Added
