@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import tech.tetengo.api.hogares.ConsentimientoOtorgado;
+import tech.tetengo.api.hogares.ConsentimientoRevocado;
 import tech.tetengo.api.hogares.domain.HogarError;
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 import tech.tetengo.api.shared.domain.model.EntidadDelHogar;
@@ -65,6 +66,14 @@ public class Consentimiento extends EntidadDelHogar {
         Consentimiento consentimiento = new Consentimiento(otorgadoPor, registradoPor, ahora);
         consentimiento.registrarEvento(new ConsentimientoOtorgado(hogarId, ahora));
         return consentimiento;
+    }
+
+    /** US-09 / CA-09.1: the owner revokes it; capture stops and the recordings are deleted. */
+    public void revocar(Instant ahora) {
+        if (vigente()) {
+            revocadoEn = ahora;
+            registrarEvento(new ConsentimientoRevocado(getHogarId(), ahora));
+        }
     }
 
     /** A newer consent takes its place. */

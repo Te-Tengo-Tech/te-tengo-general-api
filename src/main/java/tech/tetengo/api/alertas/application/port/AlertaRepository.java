@@ -22,6 +22,9 @@ public interface AlertaRepository {
 
     record Pagina<T>(List<T> elementos, long total) {}
 
+    /** Alerts of the household in context whose clip has not been deleted. */
+    List<Alerta> conClip();
+
     /** The most recent active unstable-movement alert of the camera (CA-17.3). */
     Optional<Alerta> inestableActivaDe(UUID camaraId);
 
