@@ -60,7 +60,7 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 - [x] **T17 `alertas` — US-20 escalation.** Scheduled job, idempotent: `ALERTA_ESCALADA` or `SIN_CONTACTO_SECUNDARIO`. — *escalate unattended alerts (US-20)*
 - [x] **T18 `monitoreo` — US-22 pauses.** `POST` and `DELETE /api/camaras/{id}/pausa` with the contract durations (`HASTA_MANANA` = next 07:00 America/Lima); automatic resume with push `PAUSA_FINALIZADA`. — *pause and resume cameras with automatic resume (US-22)*
 - [x] **T19 `monitoreo` — US-23 live view sessions.** `POST /api/camaras/{id}/vista-en-vivo` (`409` when disconnected or paused) and `DELETE /api/vista-en-vivo/{sesionId}`. The WSS relay follows the contract proposal (see BLOCKERS). — *live view sessions and the WebSocket relay of the contract proposal (US-23)*
-- [ ] **T20 `monitoreo` — US-24 access log.** `GET /api/accesos-vista-en-vivo`, newest first.
+- [x] **T20 `monitoreo` — US-24 access log.** `GET /api/accesos-vista-en-vivo`, newest first. — *live view access log, newest first (US-24)*
 - [ ] **T21 `alertas` — US-21 recovery notice.** Push `SE_LEVANTO`; none when the fall is confirmed (CA-21.2).
 - [ ] **T22 `historial` — US-26 recordings.** Download disposition and the retention job.
 - [ ] **T23 `historial` — US-27 weekly summary.** `GET /api/resumen-semanal`: false alarms excluded from falls, trend against the previous week.
