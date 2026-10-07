@@ -30,7 +30,7 @@
 - `caida_confirmada` (30 s on the floor)
 - `movimiento_inestable`
 - `recuperacion`
-- `deteccion_no_confiable` (5 min without seeing the person)
+- `deteccion_no_confiable` (5 min without seeing the person); its `ocurridoEn` becomes the camera's `noConfiableDesde` (API contract)
 
 **Backend rules:**
 - **Disconnection:** if no heartbeat arrives in time, or a heartbeat reports `webcamConectada: false`, the camera becomes `DESCONECTADA` and push `CAMARA_DESCONECTADA` is sent (CA-07.2). The heartbeat timeout **[implementation choice]** is 3 missed heartbeats, with a heartbeat every 30 s.

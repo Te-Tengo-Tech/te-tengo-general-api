@@ -38,15 +38,18 @@
 ## 2. Household, older adult and consent (`hogares`) — US-04, US-05, US-09
 | Method and path | Auth | Body → response | Errors |
 |---|---|---|---|
-| `POST /api/hogar` | user without a household | `{adultoMayor: {nombre, direccion, convivencia}}` → `201 Sesion`. Creates the household with the caller as `TITULAR` and returns tokens that carry its `hogar_id` (CA-04.1) | `409 HOGAR_YA_REGISTRADO`: one older adult per account (CA-04.2) · `400 VALIDACION` (CA-04.3) |
+| `POST /api/hogar` | user without a household | `{adultoMayor: {nombre, edad, direccion, convivencia, telefono?}}` → `201 Sesion`. Creates the household with the caller as `TITULAR` and returns tokens that carry its `hogar_id` (CA-04.1) | `409 HOGAR_YA_REGISTRADO`: one older adult per account (CA-04.2) · `400 VALIDACION` (CA-04.3) |
 | `GET /api/hogar` | member | → `200 {hogarId, adultoMayor, rol, consentimiento: Consentimiento \| null}` | — |
-| `PUT /api/hogar/adulto-mayor` | owner | `{nombre, direccion, convivencia}` → `200 adultoMayor` | `400 VALIDACION` |
+| `PUT /api/hogar/adulto-mayor` | owner | `{nombre, edad, direccion, convivencia, telefono?}` → `200 adultoMayor`. Replaces the whole profile: an omitted `telefono` clears it | `400 VALIDACION` |
 | `GET /api/hogares` | user | → `200 [{hogarId, nombreAdultoMayor, rol}]`, the households the user belongs to | — |
 | `POST /api/sesiones/hogar` | user | `{hogarId}` → `200 Sesion` for that household | `403 SIN_MEMBRESIA` |
 | `POST /api/hogar/consentimiento` | owner | `{otorgadoPor, aceptadoPorAdultoMayor: true, vistaEnVivoAceptada: true}` → `201 Consentimiento`. Stores the date and time (CA-05.3); camera capture may start (CA-05.1) | `422 CONSENTIMIENTO_NO_ACEPTADO`: both flags must be true (CA-05.4) |
 | `GET /api/hogar/consentimiento` | member | → `200 Consentimiento` | `404 SIN_CONSENTIMIENTO` |
 | `DELETE /api/hogar/consentimiento` | owner | → `202 {eliminacionProgramada: true}`. Stops capture and schedules deletion of every recording (CA-09.1); a push `DATOS_ELIMINADOS` is sent when done (CA-09.3) | `404 SIN_CONSENTIMIENTO`: there is no current consent to revoke |
 
+`adultoMayor = {nombre, edad, direccion, convivencia, telefono | null}`
+- `edad`: whole years, required, from 50 to 120. The prototype's profile form asks for «Edad» and rejects other values with «Escribe una edad válida, en años.»; the app shows «Rosa Huamán, 78 años». Households registered before this field existed answer `edad: null` until the owner saves the profile again.
+- `telefono`: optional; the number that «Llamar a Rosa · 987 654 321» dials from the alert (prototype alert screen). Digits and spaces with an optional leading `+`, 6 to 20 characters **[implementation choice]**; a blank value is stored as null.
 - `convivencia` values, from the prototype's profile screen:
   - `SOLO`: «Vive solo(a)»;
   - `CON_FAMILIAR`: «Vive conmigo», the older adult lives with the account owner;
@@ -64,7 +67,9 @@
 | `PUT /api/hogar/aviso` | owner | `{principalId, secundarioId \| null, esperaMinutos: 3 \| 5 \| 10}` → `200` (CA-10.1, CA-10.2) | `422 ESPERA_INVALIDA` · `422 CONTACTO_NO_ES_FAMILIAR` |
 
 ## 4. Cameras and monitoring (`camaras`, `monitoreo`) — US-06, US-07, US-15, US-22, US-23, US-24
-`Camara = {id, nombreHabitacion, estadoConexion: "EN_LINEA" | "DESCONECTADA", ultimaSenal | null, pausadaHasta | null, deteccionConfiable: boolean}`
+`Camara = {id, nombreHabitacion, estadoConexion: "EN_LINEA" | "DESCONECTADA", ultimaSenal | null, pausadaHasta | null, deteccionConfiable: boolean, instaladaEn, noConfiableDesde | null}`
+- `instaladaEn`: when the project team installed the camera, that is, the agent's first registration (CA-06.1). The camera header shows it as «Instalada el».
+- `noConfiableDesde`: when detection stopped being reliable, the time of the agent's `deteccion_no_confiable` event (CA-15.3); null while `deteccionConfiable` is true. The camera detail shows «La detección no es confiable desde las 10:36».
 
 | Method and path | Auth | Body → response | Errors |
 |---|---|---|---|
