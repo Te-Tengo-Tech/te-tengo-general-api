@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -17,6 +18,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 
@@ -67,6 +70,30 @@ public class ManejadorDeErrores extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex, HttpHeaders headers, HttpStatusCode status, WebRequest peticion) {
         return handleExceptionInternal(ex, validacion(Map.of(), peticion), headers, HttpStatus.BAD_REQUEST, peticion);
+    }
+
+    /** Query and path parameters validated by Spring MVC's built-in method validation. */
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(
+            HandlerMethodValidationException ex, HttpHeaders headers, HttpStatusCode status, WebRequest peticion) {
+        Map<String, String> campos = new LinkedHashMap<>();
+        ex.getParameterValidationResults().forEach(resultado -> {
+            String nombre = resultado.getMethodParameter().getParameterName();
+            resultado
+                    .getResolvableErrors()
+                    .forEach(error ->
+                            campos.putIfAbsent(nombre == null ? "parametro" : nombre, error.getDefaultMessage()));
+        });
+        return handleExceptionInternal(ex, validacion(campos, peticion), headers, HttpStatus.BAD_REQUEST, peticion);
+    }
+
+    /** A value that does not parse (a malformed UUID or date) is a validation error of that field. */
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(
+            TypeMismatchException ex, HttpHeaders headers, HttpStatusCode status, WebRequest peticion) {
+        String nombre = ex instanceof MethodArgumentTypeMismatchException m ? m.getName() : ex.getPropertyName();
+        Map<String, String> campos = nombre == null ? Map.of() : Map.of(nombre, "El valor no tiene un formato válido.");
+        return handleExceptionInternal(ex, validacion(campos, peticion), headers, HttpStatus.BAD_REQUEST, peticion);
     }
 
     /** Framework errors (404, 405, type mismatches…) also carry a {@code codigo}. */

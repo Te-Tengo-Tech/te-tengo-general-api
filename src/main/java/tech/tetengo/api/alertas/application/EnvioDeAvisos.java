@@ -53,23 +53,23 @@ public class EnvioDeAvisos {
         this.reloj = reloj;
     }
 
-    /** To every member of the household. Returns whether the push service accepted it now. */
-    public boolean alHogar(Aviso aviso) {
+    /** To every member of the household. */
+    public ResultadoDeEnvio alHogar(Aviso aviso) {
         return enviar(aviso, null, null);
     }
 
     /** To every member except one (e.g. whoever attended the alert, CA-19.3). */
-    public boolean alHogarExcepto(UUID excluido, Aviso aviso) {
+    public ResultadoDeEnvio alHogarExcepto(UUID excluido, Aviso aviso) {
         return enviar(aviso, null, excluido);
     }
 
     /** To specific members (e.g. the secondary contact on escalation, CA-20.1). */
-    public boolean aUsuarios(Collection<UUID> usuarioIds, Aviso aviso) {
+    public ResultadoDeEnvio aUsuarios(Collection<UUID> usuarioIds, Aviso aviso) {
         return enviar(aviso, List.copyOf(usuarioIds), null);
     }
 
-    /** One more attempt for a queued notice; true if it was delivered. */
-    boolean reintentar(AvisoPendiente pendiente) {
+    /** One more attempt for a queued notice; it is never queued again from here. */
+    ResultadoDeEnvio reintentar(AvisoPendiente pendiente) {
         Aviso aviso = new Aviso(
                 TipoAviso.valueOf(pendiente.getTipo()),
                 pendiente.getAlertaId(),
@@ -79,9 +79,10 @@ public class EnvioDeAvisos {
         return entregar(aviso, destinos(pendiente.getDestinatarios(), pendiente.getExcluido()));
     }
 
-    private boolean enviar(Aviso aviso, List<UUID> destinatarios, UUID excluido) {
-        if (entregar(aviso, destinos(destinatarios, excluido))) {
-            return true;
+    private ResultadoDeEnvio enviar(Aviso aviso, List<UUID> destinatarios, UUID excluido) {
+        ResultadoDeEnvio resultado = entregar(aviso, destinos(destinatarios, excluido));
+        if (resultado.resuelto()) {
+            return resultado;
         }
         pendientes.guardar(new AvisoPendiente(
                 aviso.tipo().name(),
@@ -92,20 +93,20 @@ public class EnvioDeAvisos {
                 destinatarios,
                 excluido,
                 reloj.instant().plus(propiedades.reintentoCada())));
-        return false;
+        return ResultadoDeEnvio.PENDIENTE;
     }
 
-    private boolean entregar(Aviso aviso, List<Destino> destinos) {
+    private ResultadoDeEnvio entregar(Aviso aviso, List<Destino> destinos) {
         if (destinos.isEmpty()) {
             log.info("Push {} sin dispositivos registrados", aviso.tipo());
-            return true;
+            return ResultadoDeEnvio.SIN_DISPOSITIVOS;
         }
         try {
             notificador.enviar(destinos, aviso);
-            return true;
+            return ResultadoDeEnvio.ENTREGADO;
         } catch (RuntimeException e) {
             log.error("Falló el envío del push {}; se reintentará", aviso.tipo(), e);
-            return false;
+            return ResultadoDeEnvio.PENDIENTE;
         }
     }
 
