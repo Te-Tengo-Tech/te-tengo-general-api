@@ -19,6 +19,7 @@
   - `codigo`: a stable code the app branches on;
   - extra properties where stated.
   - Validation failures use `400 VALIDACION` with `campos: { "<field>": "<message>" }`, so the app can highlight the missing field (CA-01.3, CA-04.3).
+  - A missing, expired or invalid access token on any protected endpoint answers `401 SESION_EXPIRADA` (with the `WWW-Authenticate: Bearer` header); the app refreshes its tokens only on that code.
 
 ## 1. Accounts and sessions (`cuentas`) — US-01, US-02, US-03
 | Method and path | Auth | Body → response | Errors |
@@ -44,7 +45,7 @@
 | `POST /api/sesiones/hogar` | user | `{hogarId}` → `200 Sesion` for that household | `403 SIN_MEMBRESIA` |
 | `POST /api/hogar/consentimiento` | owner | `{otorgadoPor, aceptadoPorAdultoMayor: true, vistaEnVivoAceptada: true}` → `201 Consentimiento`. Stores the date and time (CA-05.3); camera capture may start (CA-05.1) | `422 CONSENTIMIENTO_NO_ACEPTADO`: both flags must be true (CA-05.4) |
 | `GET /api/hogar/consentimiento` | member | → `200 Consentimiento` | `404 SIN_CONSENTIMIENTO` |
-| `DELETE /api/hogar/consentimiento` | owner | → `202 {eliminacionProgramada: true}`. Stops capture and schedules deletion of every recording (CA-09.1); a push `DATOS_ELIMINADOS` is sent when done (CA-09.3) | — |
+| `DELETE /api/hogar/consentimiento` | owner | → `202 {eliminacionProgramada: true}`. Stops capture and schedules deletion of every recording (CA-09.1); a push `DATOS_ELIMINADOS` is sent when done (CA-09.3) | `404 SIN_CONSENTIMIENTO`: there is no current consent to revoke |
 
 - `convivencia` values, from the prototype's profile screen:
   - `SOLO`: «Vive solo(a)»;
@@ -71,7 +72,7 @@
 | `PATCH /api/camaras/{id}` | owner | `{nombreHabitacion}` (1–40 chars) → `200 Camara`; later alerts use the new name (CA-06.2) | `422 CAMARA_NOMBRE_VACIO` (CA-06.3) · `422 CAMARA_NOMBRE_MUY_LARGO` · `404 CAMARA_NO_ENCONTRADA` |
 | `POST /api/camaras/{id}/pausa` | member | `{duracion: "MIN_30" \| "HORA_1" \| "HORAS_2" \| "HASTA_MANANA"}`, the options of the prototype's pause screen; `HASTA_MANANA` means the next 07:00 in the household time zone, `America/Lima` **[implementation choice]**. → `200 Camara` with `pausadaHasta`. Stops capture and detection (CA-22.1); resumes automatically and sends push `PAUSA_FINALIZADA` (CA-22.3) | `422 DURACION_INVALIDA` |
 | `DELETE /api/camaras/{id}/pausa` | member | → `200 Camara` (resume now) | — |
-| `POST /api/camaras/{id}/vista-en-vivo` | member | `{alertaId \| null}` → `201 {sesionId, urlTransmision, expiraEn}` (CA-23.1, CA-23.2) | `409 CAMARA_DESCONECTADA` (CA-23.3) · `409 CAMARA_EN_PAUSA {pausadaHasta}` (CA-23.4) |
+| `POST /api/camaras/{id}/vista-en-vivo` | member | `{alertaId \| null}` → `201 {sesionId, urlTransmision, expiraEn}` (CA-23.1, CA-23.2) | `409 CAMARA_DESCONECTADA` (CA-23.3) · `409 CAMARA_EN_PAUSA {pausadaHasta}` (CA-23.4) · `409 SIN_CONSENTIMIENTO`: without a current consent the camera does not stream (CA-05.2) |
 | `DELETE /api/vista-en-vivo/{sesionId}` | member | → `204`. Records who watched, when it started and how long (CA-24.1) | — |
 | `GET /api/accesos-vista-en-vivo` | member | → `200 [{usuario: {id, nombre}, inicio, duracionSegundos, desdeAlerta: boolean}]`, newest first (CA-24.2). Empty list when none (CA-24.3) | — |
 

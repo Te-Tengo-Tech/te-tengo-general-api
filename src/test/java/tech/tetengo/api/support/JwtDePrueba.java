@@ -66,6 +66,17 @@ public class JwtDePrueba {
         return firmar(claims.build());
     }
 
+    /** A family member's token that expired ten minutes ago (beyond the decoder's clock skew). */
+    public static String tokenVencido(UUID usuarioId, UUID hogarId, Rol rol) {
+        return firmar(JwtClaimsSet.builder()
+                .subject(usuarioId.toString())
+                .issuedAt(Instant.now().minusSeconds(4200))
+                .expiresAt(Instant.now().minusSeconds(600))
+                .claim("hogar_id", hogarId.toString())
+                .claim("rol", rol.name())
+                .build());
+    }
+
     /** Per-camera token of the household agent. */
     public static String tokenDeAgente(UUID hogarId, UUID camaraId) {
         return firmar(JwtClaimsSet.builder()

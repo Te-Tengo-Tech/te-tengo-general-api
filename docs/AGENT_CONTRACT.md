@@ -76,7 +76,7 @@
 **Configuration** — `GET /api/agente/configuracion` → `200 {versionAgente, umbrales: {…}}`, where `umbrales` uses the field names of `Umbrales` in the detection package (`docs/classification-spec.md`); unknown or missing fields keep the agent's local values.
 - Both come from the backend configuration: `versionAgente` from `tetengo.agente.version-publicada` (`TT_AGENTE_VERSION_PUBLICADA`, default `0.2.0`, the current agent release; the agent only logs a difference) and `umbrales` from the `tetengo.agente.umbrales` map, **empty by default**, so every agent keeps the thresholds calibrated at installation until the team publishes calibrated values.
 
-**Token expiry:** any `401` other than `CREDENCIAL_INVALIDA` makes the agent register again with its installation credential. Agent tokens only open `/api/agente/**`; family members' tokens get `403` there.
+**Token expiry:** any `401` other than `CREDENCIAL_INVALIDA` makes the agent register again with its installation credential (an expired or invalid token answers `401 SESION_EXPIRADA`). Agent tokens only open `/api/agente/**`; family members' tokens get `403` there.
 
 **Live view stream** (`wss://…/api/agente/transmision`, proposal pending team confirmation, see `docs/BLOCKERS.md`): the agent keeps one WebSocket open with its bearer token in the handshake.
 - The backend sends the text message `{"transmitir":true}` when a family member opens the live view and `{"transmitir":false}` when the last one closes it.

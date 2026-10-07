@@ -29,7 +29,8 @@ import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
  * {@code spring.security.oauth2.resourceserver.jwt.public-key-location}. Public endpoints are the
  * ones the API contract marks as {@code public}. The {@code rol} claim becomes the authority
  * {@code ROLE_<rol>}: household agent tokens only open {@code /api/agente/**}, and family members'
- * tokens never do.
+ * tokens never do. A missing, expired or invalid token answers {@code 401 SESION_EXPIRADA}
+ * ({@link EntradaSinSesion}).
  */
 @Configuration
 public class SeguridadConfig {
@@ -40,6 +41,7 @@ public class SeguridadConfig {
     @Bean
     SecurityFilterChain cadenaDeSeguridad(HttpSecurity http, ObjectProvider<ComprobadorDeMembresia> membresias)
             throws Exception {
+        var sinSesion = new EntradaSinSesion();
         return http.csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.requestMatchers(
@@ -62,7 +64,9 @@ public class SeguridadConfig {
                         .hasRole(Rol.AGENTE.name())
                         .anyRequest()
                         .access(usuarioQueNoEsAgente()))
-                .oauth2ResourceServer(rs -> rs.jwt(jwt -> jwt.jwtAuthenticationConverter(convertidorDeRoles())))
+                .exceptionHandling(e -> e.authenticationEntryPoint(sinSesion))
+                .oauth2ResourceServer(rs -> rs.authenticationEntryPoint(sinSesion)
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(convertidorDeRoles())))
                 .addFilterAfter(
                         new FiltroHogarActual(membresias::getIfAvailable), BearerTokenAuthenticationFilter.class)
                 .build();

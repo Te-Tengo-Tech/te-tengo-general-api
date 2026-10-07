@@ -31,6 +31,7 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 - Shared API contract with the mobile app (`docs/API_CONTRACT.md`), the work plan with its autonomous loop (`docs/WORK_PLAN.md`) and the `/work` command.
 - `camaras`: `GET /api/agente/configuracion` publishes the agent version and classification thresholds from `tetengo.agente.*`; no thresholds by default, so agents keep their calibrated local values.
 ### Fixed
+- A missing, expired or invalid access token answers `401 application/problem+json` with `codigo: SESION_EXPIRADA` on every protected endpoint, keeping `WWW-Authenticate`, so the app knows when to refresh; the API contract also lists `409 SIN_CONSENTIMIENTO` on the live view and `404 SIN_CONSENTIMIENTO` on revoking a missing consent.
 - An unsupported `Api-Version` header answers `400 VALIDACION` with `codigo` like every other error.
 ### Changed
 - Agent endpoints follow the bodies of `docs/AGENT_CONTRACT.md` shared with `te-tengo-desktop-pywebview`: registration takes `credencialInstalacion` and answers `hogarId` and the stored `nombreHabitacion`; the capture state carries `motivo` (`SIN_CONSENTIMIENTO`, `EN_PAUSA`) and `nombreHabitacion`; the heartbeat takes `{webcamConectada, deteccionConfiable, versionAgente}`, answers the capture state and disconnects the camera at once when the webcam is unavailable; the clip upload answers `201 {urlSubida, cabeceras, expiraEn}`.
