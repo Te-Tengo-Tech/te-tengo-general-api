@@ -1,5 +1,6 @@
 package tech.tetengo.api.alertas.application;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,6 +14,7 @@ import tech.tetengo.api.alertas.domain.model.EventoDeAgente;
 import tech.tetengo.api.alertas.domain.model.TipoEvento;
 import tech.tetengo.api.camaras.CamarasDelHogar;
 import tech.tetengo.api.camaras.CamarasDelHogar.CamaraDelHogar;
+import tech.tetengo.api.shared.application.port.NotificadorPush.Aviso;
 import tech.tetengo.api.shared.application.port.TipoAviso;
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 
@@ -36,11 +38,20 @@ public class RecibirEventoDelAgente {
     private final EventoDeAgenteRepository eventos;
     private final AlertaRepository alertas;
     private final CamarasDelHogar camaras;
+    private final EnvioDeAvisos avisos;
+    private final Clock reloj;
 
-    public RecibirEventoDelAgente(EventoDeAgenteRepository eventos, AlertaRepository alertas, CamarasDelHogar camaras) {
+    public RecibirEventoDelAgente(
+            EventoDeAgenteRepository eventos,
+            AlertaRepository alertas,
+            CamarasDelHogar camaras,
+            EnvioDeAvisos avisos,
+            Clock reloj) {
         this.eventos = eventos;
         this.alertas = alertas;
         this.camaras = camaras;
+        this.avisos = avisos;
+        this.reloj = reloj;
     }
 
     @Transactional
@@ -59,8 +70,29 @@ public class RecibirEventoDelAgente {
             evento.asociarAlerta(efecto.alerta().getId());
         }
         eventos.guardar(evento);
+        if (efecto.aviso() != null) {
+            avisar(efecto, camara, ocurridoEn);
+        }
         return new ResultadoDeEvento(
                 eventoId, efecto.alerta() == null ? null : efecto.alerta().getId(), efecto.aviso());
+    }
+
+    /**
+     * US-16, US-17: the push goes out within this request, so it reaches the family in less than
+     * 10 s (CA-11.3, CA-16.1). If the push service fails, it is retried and the alert is still shown
+     * when the app opens (CA-16.4).
+     */
+    private void avisar(Efecto efecto, CamaraDelHogar camara, Instant ocurridoEn) {
+        Alerta alerta = efecto.alerta();
+        boolean entregado = avisos.alHogar(new Aviso(
+                efecto.aviso(),
+                alerta == null ? null : alerta.getId(),
+                camara.id(),
+                alerta == null ? camara.nombreHabitacion() : alerta.getHabitacion(),
+                ocurridoEn));
+        if (entregado && alerta != null) {
+            alerta.marcarNotificada(reloj.instant());
+        }
     }
 
     private Efecto aplicar(TipoEvento tipo, CamaraDelHogar camara, Instant ocurridoEn) {
