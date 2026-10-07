@@ -5,6 +5,7 @@ Tasks that cannot be finished without an outside decision or credential. Agents 
 | Task | What is missing | Who decides | Date |
 |---|---|---|---|
 | Push delivery in production | AWS account, SNS platform applications (FCM server key, APNs certificate) | Team | — |
+| Clip storage in production | Amazon S3 bucket and credentials for the pre-signed URLs; a fake `AlmacenamientoDeClips` adapter is used until then | Team | 2026-10-07 |
 | Email delivery in production | Amazon SES verified domain or sender | Team | — |
 | Live view transport | Team confirmation of the WebSocket JPEG relay proposed in the API contract | Team | — |
 | T09 Invitation validity | The backlog does not say how long an invitation link lasts. `tetengo.invitaciones.vigencia` uses 7 days as a placeholder | Team | 2026-10-07 |

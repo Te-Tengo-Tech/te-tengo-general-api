@@ -5,7 +5,10 @@ import tech.tetengo.api.shared.domain.exception.CodigoError;
 
 public enum AlertaError implements CodigoError {
     ALERTA_NO_ENCONTRADA("ALERTA_NO_ENCONTRADA", HttpStatus.NOT_FOUND, "La alerta no existe en este hogar."),
-    CAMARA_NO_ENCONTRADA("CAMARA_NO_ENCONTRADA", HttpStatus.NOT_FOUND, "La cámara no existe en este hogar.");
+    CAMARA_NO_ENCONTRADA("CAMARA_NO_ENCONTRADA", HttpStatus.NOT_FOUND, "La cámara no existe en este hogar."),
+    EVENTO_NO_ENCONTRADO("EVENTO_NO_ENCONTRADO", HttpStatus.NOT_FOUND, "El evento no existe o no generó una alerta."),
+    CLIP_NO_DISPONIBLE("CLIP_NO_DISPONIBLE", HttpStatus.NOT_FOUND, "El video de esta alerta no está disponible."),
+    CLIP_ELIMINADO("CLIP_ELIMINADO", HttpStatus.GONE, "La grabación ya no está disponible.");
 
     private final String codigo;
     private final HttpStatus estado;

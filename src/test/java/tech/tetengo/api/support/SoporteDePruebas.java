@@ -25,4 +25,10 @@ public class SoporteDePruebas {
     PushDePrueba pushDePrueba() {
         return new PushDePrueba();
     }
+
+    @Bean
+    @Primary
+    AlmacenamientoDePrueba almacenamientoDePrueba() {
+        return new AlmacenamientoDePrueba();
+    }
 }

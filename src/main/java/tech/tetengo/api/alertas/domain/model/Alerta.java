@@ -61,6 +61,17 @@ public class Alerta extends EntidadDelHogar {
     @Column(name = "escalada_en")
     private Instant escaladaEn;
 
+    /** Object storage key of the clip, once the agent asked to upload it. */
+    @Column(name = "clip_clave", length = 300)
+    private String clipClave;
+
+    /** The storage confirmed the upload. */
+    @Column(name = "clip_subido", nullable = false)
+    private boolean clipSubido;
+
+    @Column(name = "clip_eliminado_en")
+    private Instant clipEliminadoEn;
+
     protected Alerta() {}
 
     private Alerta(TipoAlerta tipo, UUID camaraId, String habitacion, Instant ocurridaEn) {
@@ -118,6 +129,40 @@ public class Alerta extends EntidadDelHogar {
         }
     }
 
+    /**
+     * US-18: the agent uploads the clip of the event (6 s before and 6 s after, CA-18.1). Returns the
+     * key it replaces, if any, so its object can be deleted.
+     */
+    public String asignarClip(String clave) {
+        String anterior = clipEliminadoEn == null ? clipClave : null;
+        clipClave = clave;
+        clipSubido = false;
+        clipEliminadoEn = null;
+        return anterior;
+    }
+
+    public void confirmarClipSubido() {
+        if (clipClave != null && clipEliminadoEn == null) {
+            clipSubido = true;
+        }
+    }
+
+    /** CA-09.1, CA-26.3: the recording was deleted (revocation or retention). */
+    public void marcarClipEliminado(Instant instante) {
+        if (clipClave != null && clipEliminadoEn == null) {
+            clipEliminadoEn = instante;
+            clipSubido = false;
+        }
+    }
+
+    /** CA-18.2, CA-26.3: what the app can show about the clip. */
+    public EstadoClip estadoClip() {
+        if (clipEliminadoEn != null) {
+            return EstadoClip.ELIMINADO;
+        }
+        return clipSubido ? EstadoClip.DISPONIBLE : EstadoClip.NO_DISPONIBLE;
+    }
+
     public boolean activa() {
         return estado == EstadoAlerta.ACTIVA;
     }
@@ -172,5 +217,17 @@ public class Alerta extends EntidadDelHogar {
 
     public Instant getEscaladaEn() {
         return escaladaEn;
+    }
+
+    public String getClipClave() {
+        return clipClave;
+    }
+
+    public boolean isClipSubido() {
+        return clipSubido;
+    }
+
+    public Instant getClipEliminadoEn() {
+        return clipEliminadoEn;
     }
 }
