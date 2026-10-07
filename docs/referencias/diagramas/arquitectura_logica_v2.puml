@@ -1,0 +1,157 @@
+@startuml logical-architecture-fall-detection-layers-v2
+
+' ─────────────────────────────────────────────────────────────
+' CONFIGURACIÓN VISUAL
+' ─────────────────────────────────────────────────────────────
+title Arquitectura Lógica -- Sistema basado en estimación de pose para la detección de caídas\n(Patrón de Arquitectura en Capas)
+
+top to bottom direction
+
+skinparam defaultFontName "Segoe UI"
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam wrapWidth 220
+skinparam maxMessageSize 180
+
+skinparam ArrowColor #3D2C5C
+skinparam ArrowFontColor #2E2440
+skinparam ArrowFontSize 11
+
+skinparam package {
+  BackgroundColor #F6F3FA
+  BorderColor #6B5B95
+  FontColor #2E2440
+  FontSize 12
+  FontStyle bold
+}
+
+skinparam component {
+  BackgroundColor #FFFFFF
+  BorderColor #6B5B95
+  FontColor #2E2440
+  FontSize 11
+}
+
+skinparam database {
+  BackgroundColor #B5543C
+  BorderColor #7A3624
+  FontColor #FFFFFF
+  FontSize 11
+}
+
+skinparam interface {
+  BackgroundColor #E8F5E9
+  BorderColor #43A047
+  FontColor #2E2440
+}
+
+' ─────────────────────────────────────────────────────────────
+' CAPA DE PRESENTACIÓN
+' ─────────────────────────────────────────────────────────────
+package "Capa de Presentación\n[Aplicación móvil]" as PresentationLayer {
+  component "Aplicación del familiar/cuidador\n\n- Cuenta, sesión y recuperación de acceso\n- Perfil del adulto mayor y consentimiento\n- Cámara: nombre de la habitación,\n  estado de conexión y pausas\n- Recepción y gestión de alertas\n- Clip del evento\n- Vista en vivo a demanda y\n  registro de accesos\n- Familiares, historial y resumen semanal\n- Cliente API REST" as MobileApp
+
+  database "Base de datos local del cliente\n[SQLite]\n\n- Últimas alertas e historial consultado\n- Estado de las cámaras\n- Preferencias de notificación" as ClientCache
+}
+
+' ─────────────────────────────────────────────────────────────
+' CAPA DE CAPTURA (en la vivienda, sin análisis local)
+' ─────────────────────────────────────────────────────────────
+package "Capa de Captura\n[PC de la vivienda]" as CaptureLayer {
+  component "Agente de captura\n[Aplicación de escritorio]\n\n- Configuración fija de la instalación\n  (vivienda, webcam y habitación)\n- Registro de la cámara al iniciar\n- Lectura de la webcam USB\n- Reducción a 480p y 5-10 fps\n- Cifrado y envío al servicio de ingesta\n- Reconexión automática\n- Envío solo con consentimiento\n  y sin pausa activa\n- Sin análisis local del video" as CaptureAgent
+}
+
+' ─────────────────────────────────────────────────────────────
+' CAPAS INTERMEDIAS
+' ─────────────────────────────────────────────────────────────
+together {
+
+  package "Capa de Procesamiento de Video\n[Módulo de detección]" as ProcessingLayer {
+    component "Servicio de ingesta de video\n\n- Recepción del video de la cámara\n- Control de calidad de los fotogramas\n- Detección de movimiento\n- Búfer del clip: 6 s antes\n  y 6 s después del evento" as VideoIngest
+
+    component "Servicio de estimación de pose\n\n- Detección de la persona en el fotograma\n- Extracción de landmarks corporales\n- Descarte de fotogramas sin persona\n  o sin puntos del cuerpo visibles\n- Secuencias temporales de pose" as PoseService
+
+    component "Servicio de clasificación cinemática\n\n- Cálculo de parámetros cinemáticos\n- Comparación con umbrales de referencia\n- Clasificación: caída, movimiento inestable,\n  recuperación o actividad normal\n- Caída confirmada tras 30 s en el suelo\n- Aviso de detección no confiable\n  (5 min solo con fotogramas descartados)" as ClassifierService
+
+    component "Servicio de transmisión en vivo\n\n- Retransmisión de la cámara a demanda\n  (desde el inicio o desde una alerta)\n- No disponible con la cámara en pausa\n- Sesión temporal autorizada\n- Entrega por WebRTC" as LiveStream
+  }
+
+  package "Capa de Servicios\n[Backend API del sistema]" as CloudServiceLayer {
+    component "Backend API del sistema\n[REST API]" as BackendApi
+
+    component "Servicios de Aplicación\n\n- Cuentas y autenticación\n- Perfil del adulto mayor y consentimiento\n- Cámaras: registro al iniciar el agente,\n  nombre de la habitación, estado de\n  conexión y pausas\n- Gestión de alertas y escalamiento\n- Vista en vivo y registro de accesos\n- Familiares y contactos principal/secundario\n- Historial, grabaciones y resumen semanal\n- Revocación y eliminación de datos" as AppServices
+  }
+
+}
+
+' ─────────────────────────────────────────────────────────────
+' CAPA DE PERSISTENCIA COMPARTIDA
+' ─────────────────────────────────────────────────────────────
+package "Capa de Persistencia Compartida" as PersistenceLayer {
+
+  component "Persistencia central\n\n- Usuarios y familiares vinculados\n- Adulto mayor y consentimientos\n- Cámaras, habitaciones y pausas\n- Alertas, estados y escalamientos\n- Eventos detectados\n- Registro de accesos a la vista en vivo" as CentralPersistence
+
+  database "Base de Datos Central\n[Base de datos relacional]" as CentralDatabase
+
+  component "Persistencia de clips de video\n\n- Clips de los eventos (cifrados,\n  6 s antes y 6 s después)\n- Política de retención\n- Eliminación por revocación" as ClipPersistence
+
+  database "Almacenamiento de clips\n[Almacenamiento de objetos]" as ClipStorage
+}
+
+' ─────────────────────────────────────────────────────────────
+' INTERFACES FÍSICAS Y SERVICIOS EXTERNOS
+' ─────────────────────────────────────────────────────────────
+package "Dispositivos e interfaces externas\n[Fuera de la arquitectura lógica de software]" as ExternalInterfaces {
+  component "Cámaras RGB estándar\n[Webcam USB]\n\n- Captura continua de video\n- Una webcam instalada por el equipo\n  del proyecto (piloto)\n- Conectada por USB al agente de captura\n- Sin procesamiento en el dispositivo" as RgbCamera
+
+  interface "Escena de la vivienda\n\n- Adulto mayor en sus actividades\n- Habitaciones monitoreadas" as SceneInterface
+
+  interface "Servicio de notificaciones push\n[Servicio externo]" as PushInterface
+}
+
+' ─────────────────────────────────────────────────────────────
+' RELACIONES PRINCIPALES
+' ─────────────────────────────────────────────────────────────
+MobileApp --> BackendApi : "HTTPS / REST\nconsulta, configuración\ny gestión de alertas"
+MobileApp --> ClientCache : "lectura / escritura local"
+
+BackendApi --> AppServices : "orquesta servicios"
+AppServices --> CentralPersistence : "lectura / escritura"
+CentralPersistence --> CentralDatabase : "persistencia central"
+
+SceneInterface -[norank]-> RgbCamera : "imagen de la escena"
+RgbCamera -[norank]-> CaptureAgent : "video por USB (UVC)"
+CaptureAgent --> VideoIngest : "video cifrado (TLS)\n480p · 5-10 fps"
+AppServices -[norank]-> CaptureAgent : "registro de la cámara al iniciar\ny estado de captura\n(consentimiento, pausa, revocación)"
+
+VideoIngest --> PoseService : "fotogramas válidos"
+PoseService --> ClassifierService : "secuencias de landmarks"
+ClassifierService --> AppServices : "eventos detectados\n(caída, movimiento inestable,\nrecuperación, detección\nno confiable)"
+
+VideoIngest --> ClipPersistence : "clip del evento"
+ClipPersistence --> ClipStorage : "persistencia de clips"
+AppServices --> ClipPersistence : "consulta y eliminación\nde grabaciones"
+
+VideoIngest -[norank]-> LiveStream : "video de la cámara\npara la vista en vivo"
+AppServices -[norank]-> LiveStream : "autoriza la sesión\nde vista en vivo"
+LiveStream -[norank]-> MobileApp : "WebRTC\nvista en vivo a demanda"
+
+AppServices -[norank]-> PushInterface : "envío de alertas"
+PushInterface -[norank]-> MobileApp : "notificación push"
+
+' ─────────────────────────────────────────────────────────────
+' LEYENDA
+' ─────────────────────────────────────────────────────────────
+legend bottom right
+|= Elemento |= Descripción |
+| Capa de Presentación | Aplicación móvil del familiar/cuidador, con base de datos local |
+| Capa de Captura | Aplicación de escritorio con configuración fija que registra la cámara al iniciar y envía su video cifrado, sin analizarlo |
+| Capa de Procesamiento de Video | Ingesta, estimación de pose, clasificación cinemática y vista en vivo a demanda |
+| Capa de Servicios | Backend API y lógica de aplicación expuesta por REST |
+| Capa de Persistencia Compartida | Base de datos relacional (incluye el registro de accesos a la vista en vivo) y almacenamiento de objetos para los clips cifrados |
+| Dispositivos e interfaces externas | Cámaras RGB (una webcam USB en el piloto) y servicio de notificaciones push |
+endlegend
+
+@enduml
