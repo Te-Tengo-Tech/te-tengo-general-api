@@ -70,6 +70,10 @@ tetengo:
       # Blank is AWS; locally Floci (application-local.yml).
       endpoint: ${TT_SNS_ENDPOINT:}
       crear-aplicaciones: false
+    simulador:
+      # Local only: `xcrun simctl push booted <bundle-id>`; the default is the bundle id of the app.
+      bundle-id: ${TT_SIMULADOR_BUNDLE_ID:tech.tetengo.teTengo}
+      dispositivo: booted
   clips:
     # Pre-signed clip URLs are short-lived (implementation choice).
     vigencia-url-subida: 10m

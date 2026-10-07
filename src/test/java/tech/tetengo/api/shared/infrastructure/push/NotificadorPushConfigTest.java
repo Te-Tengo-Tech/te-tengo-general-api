@@ -12,7 +12,7 @@ import tech.tetengo.api.shared.application.port.NotificadorPush;
 class NotificadorPushConfigTest {
 
     @Configuration(proxyBeanMethods = false)
-    @EnableConfigurationProperties({PropiedadesDeFcm.class, PropiedadesDeSns.class})
+    @EnableConfigurationProperties({PropiedadesDeFcm.class, PropiedadesDeSns.class, PropiedadesDelSimulador.class})
     static class Soporte {}
 
     private final ApplicationContextRunner contexto =
@@ -51,6 +51,13 @@ class NotificadorPushConfigTest {
         contexto.withPropertyValues("tetengo.push.proveedor=sns", "tetengo.push.sns.region=us-east-1")
                 .run(ctx ->
                         assertThat(ctx).hasFailed().getFailure().rootCause().hasMessageContaining("TT_SNS_ARN_IOS"));
+    }
+
+    @Test
+    void simuladorUsaElSimuladorDeIos() {
+        contexto.withPropertyValues("tetengo.push.proveedor=simulador")
+                .run(ctx ->
+                        assertThat(ctx.getBean(NotificadorPush.class)).isInstanceOf(NotificadorPushSimulador.class));
     }
 
     @Test

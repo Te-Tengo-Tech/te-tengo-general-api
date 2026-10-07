@@ -34,4 +34,10 @@ class NotificadorPushConfig {
     NotificadorPush notificadorPushSns(PropiedadesDeSns propiedades) {
         return NotificadorPushSns.crear(propiedades);
     }
+
+    @Bean
+    @ConditionalOnProperty(prefix = PREFIJO, name = PROVEEDOR, havingValue = "simulador")
+    NotificadorPush notificadorPushSimulador(PropiedadesDelSimulador propiedades) {
+        return new NotificadorPushSimulador(propiedades);
+    }
 }

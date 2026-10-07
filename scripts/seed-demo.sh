@@ -5,6 +5,7 @@
 #
 # Usage: scripts/seed-demo.sh [agent-config-output.toml]
 #   With an output path it writes a complete Te Tengo Captura configuration with the new credential.
+#   DEMO_DISPOSITIVO_SIMULADOR=1 also registers a device for the iOS simulator push provider.
 # Requires: the API on $TT_API (default http://localhost:8080) started with `./gradlew bootRun`, jq.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -43,6 +44,14 @@ if [ "$(estado "$r")" != 200 ]; then
   r=$(llamar POST /api/hogar/consentimiento "$(jq -nc --arg n "$NOMBRE" '{otorgadoPor:$n,aceptadoPorAdultoMayor:true,vistaEnVivoAceptada:true}')" "$TOKEN")
   [ "$(estado "$r")" = 201 ] || { cuerpo "$r"; exit 1; }
   echo "Consent registered"
+fi
+
+# Optional: a device for TT_PUSH_PROVEEDOR=simulador, which ignores tokens, when the app on the iOS
+# simulator registers none (docs/NOTIFICATIONS.md).
+if [ "${DEMO_DISPOSITIVO_SIMULADOR:-}" = 1 ]; then
+  r=$(llamar POST /api/dispositivos '{"tokenPush":"simulador-ios","plataforma":"IOS"}' "$TOKEN")
+  [ "$(estado "$r")" = 201 ] || { cuerpo "$r"; exit 1; }
+  echo "Simulator device registered"
 fi
 
 # Same insert as scripts/create-installation.sh, run inside the compose PostgreSQL container.
