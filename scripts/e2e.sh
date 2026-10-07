@@ -16,9 +16,8 @@
 # Environment (all optional):
 #   TT_E2E_ESCRITORIO   desktop agent repository           (default: ../te-tengo-desktop-pywebview)
 #   TT_E2E_VIDEO        URFD fall video, full depth+RGB frame (default: <desktop>/datos/urfd/fall-03-cam0.mp4,
-#                       downloaded from the URFD site when missing). fall-03: the agent finds the
-#                       person in every frame and classifies `caida` on the first pass; fall-01
-#                       gives too few poses after the agent's JPEG step.
+#                       downloaded from the URFD site when missing). fall-03: MediaPipe finds the
+#                       person in every frame, so `caida` comes on the first pass.
 #   TT_E2E_PUERTO_API   API port                           (default: 18080)
 #   TT_POSTGRES_PUERTO  PostgreSQL host port               (default: 15432)
 #   TT_FLOCI_PUERTO     Floci host port                    (default: 14566)
@@ -143,10 +142,11 @@ if [ ! -s "$VIDEO" ]; then
   curl -fsSL --retry 3 -o "$VIDEO" "$URFD_URL" || falla "download of the URFD fall clip"
 fi
 # URFD frames hold the depth image on the left and the RGB image on the right: the agent must see
-# only the RGB half (docs/INSTALLATION.md of the agent, section 12). The last frame (the person on the
+# only the RGB half (docs/INSTALLATION.md of the agent, section 12), written without loss (FFV1): a
+# lossy re-encode changes the pixels MediaPipe sees and can lose a fall. The last frame (the person on the
 # floor) is then held for 45 s, so the agent also confirms the fall (caida_confirmada after 30 s)
 # before the clip loops back to a standing person.
-CLIP="$WORK/caida-e2e.mp4"
+CLIP="$WORK/caida-e2e.avi"
 (cd "$ESCRITORIO" && uv run --quiet python - "$VIDEO" "$CLIP" 45) >"$WORK/video.log" 2>&1 <<'PY' || falla "fall clip preparation (see $WORK/video.log)"
 import sys
 
@@ -155,7 +155,7 @@ import cv2
 origen, destino, segundos = sys.argv[1], sys.argv[2], float(sys.argv[3])
 video = cv2.VideoCapture(origen)
 fps = video.get(cv2.CAP_PROP_FPS) or 30.0
-salida = cv2.VideoWriter(destino, cv2.VideoWriter_fourcc(*"mp4v"), fps, (320, 240))
+salida = cv2.VideoWriter(destino, cv2.VideoWriter_fourcc(*"FFV1"), fps, (320, 240))
 ultimo = None
 while True:
     leido, cuadro = video.read()
