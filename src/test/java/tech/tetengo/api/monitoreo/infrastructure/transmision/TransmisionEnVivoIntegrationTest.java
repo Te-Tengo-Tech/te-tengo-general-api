@@ -72,7 +72,7 @@ class TransmisionEnVivoIntegrationTest extends AbstractIntegrationTest {
         String registro = ApiDePrueba.agenteConConsentimiento(mvc, jdbc, titular, "Sala");
         String agente = campo(registro, "$.token");
         mvc.perform(post("/api/agente/senal").header("Authorization", bearer(agente)))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk());
 
         var cliente = new StandardWebSocketClient();
         var cabeceras = new WebSocketHttpHeaders();

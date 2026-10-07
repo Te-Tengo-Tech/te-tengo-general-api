@@ -37,4 +37,20 @@ class CamaraConexionTest {
         Camara camara = new Camara("Sala");
         assertThat(camara.desconectarSiNoHaySenalDesde(ahora, ahora)).isFalse();
     }
+
+    @Test
+    void ca07_2_laWebcamDesconectadaDesconectaEnseguidaUnaSolaVez() {
+        Camara camara = new Camara("Sala");
+        camara.registrarSenal(ahora);
+
+        assertThat(camara.desconectar(ahora.plusSeconds(5))).isTrue();
+        assertThat(camara.getEstadoConexion()).isEqualTo(EstadoConexion.DESCONECTADA);
+        assertThat(camara.getUltimaSenal()).isEqualTo(ahora);
+        assertThat(camara.desconectar(ahora.plusSeconds(35))).isFalse();
+    }
+
+    @Test
+    void unaCamaraQueNuncaEstuvoEnLineaNoSeDesconectaDeNuevo() {
+        assertThat(new Camara("Sala").desconectar(ahora)).isFalse();
+    }
 }

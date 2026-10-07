@@ -40,8 +40,11 @@ public class PrepararSubidaDeClip {
         this.reloj = reloj;
     }
 
+    /** The clips are MP4 (AGENT_CONTRACT.md) unless the agent says otherwise. */
+    public static final String CONTENT_TYPE_POR_DEFECTO = "video/mp4";
+
     @Transactional
-    public UrlDeClip ejecutar(UUID camaraId, UUID eventoId) {
+    public SubidaDeClip ejecutar(UUID camaraId, UUID eventoId, String contentType) {
         EventoDeAgente evento = eventos.buscarPorEventoId(eventoId)
                 .filter(e -> e.getCamaraId().equals(camaraId) && e.getAlertaId() != null)
                 .orElseThrow(() -> new ErrorDeNegocio(AlertaError.EVENTO_NO_ENCONTRADO));
@@ -54,6 +57,8 @@ public class PrepararSubidaDeClip {
             almacenamiento.eliminar(anterior);
         }
         Instant expira = reloj.instant().plus(propiedades.vigenciaUrlSubida());
-        return new UrlDeClip(almacenamiento.urlDeSubida(clave, expira), expira);
+        var subida =
+                almacenamiento.urlDeSubida(clave, contentType == null ? CONTENT_TYPE_POR_DEFECTO : contentType, expira);
+        return new SubidaDeClip(subida.url(), subida.cabeceras(), expira);
     }
 }

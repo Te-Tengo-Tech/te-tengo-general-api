@@ -77,8 +77,9 @@ public final class ApiDePrueba {
     public static String registrarAgente(MockMvc mvc, String credencial, String habitacion) throws Exception {
         return mvc.perform(post("/api/agente/camaras/registro")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"credencial\":\"%s\",\"nombreHabitacion\":\"%s\"}"
-                                .formatted(credencial, habitacion)))
+                        .content(
+                                "{\"credencialInstalacion\":\"%s\",\"nombreHabitacion\":\"%s\",\"versionAgente\":\"1.0.0\"}"
+                                        .formatted(credencial, habitacion)))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()

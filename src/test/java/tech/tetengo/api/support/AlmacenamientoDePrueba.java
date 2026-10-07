@@ -3,6 +3,7 @@ package tech.tetengo.api.support;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -19,9 +20,10 @@ public class AlmacenamientoDePrueba implements AlmacenamientoDeClips {
     private final List<Lectura> lecturas = new CopyOnWriteArrayList<>();
 
     @Override
-    public URI urlDeSubida(String clave, Instant expiraEn) {
+    public Subida urlDeSubida(String clave, String contentType, Instant expiraEn) {
         pedidas.add(clave);
-        return URI.create("https://s3.prueba/" + clave + "?metodo=PUT");
+        return new Subida(
+                URI.create("https://s3.prueba/" + clave + "?metodo=PUT"), Map.of("Content-Type", contentType));
     }
 
     @Override

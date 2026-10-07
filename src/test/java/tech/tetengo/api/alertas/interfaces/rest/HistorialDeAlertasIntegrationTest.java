@@ -170,7 +170,7 @@ class HistorialDeAlertasIntegrationTest extends AbstractIntegrationTest {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
                                 "/api/agente/eventos/" + evento + "/clip")
                         .header("Authorization", bearer(agente)))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
         almacenamiento.completarSubidas();
 
         mvc.perform(get("/api/alertas/" + alertaId).header("Authorization", bearer(token)))

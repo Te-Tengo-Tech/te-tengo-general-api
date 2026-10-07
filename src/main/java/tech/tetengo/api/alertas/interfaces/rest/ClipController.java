@@ -2,14 +2,19 @@ package tech.tetengo.api.alertas.interfaces.rest;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import tech.tetengo.api.alertas.application.ObtenerClip;
 import tech.tetengo.api.alertas.application.PrepararSubidaDeClip;
+import tech.tetengo.api.alertas.application.SubidaDeClip;
 import tech.tetengo.api.alertas.application.UrlDeClip;
 import tech.tetengo.api.shared.infrastructure.security.UsuarioActual;
 import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
@@ -29,13 +34,18 @@ class ClipController {
         this.obtenerClip = obtenerClip;
     }
 
-    /** Household agent: pre-signed PUT URL for the clip of the event. */
+    /** Household agent: pre-signed PUT URL for the clip of the event, and the headers the PUT carries. */
     @Operation(
             summary = "Get the clip upload URL (agent, US-18)",
-            description = "Pre-signed PUT URL for the 6 s + 6 s clip. Errors: 404 EVENTO_NO_ENCONTRADO.")
+            description =
+                    "Pre-signed PUT URL for the 6 s + 6 s clip and the headers the PUT must carry. Errors: 404 EVENTO_NO_ENCONTRADO.")
     @PostMapping(path = API + "/agente/eventos/{eventoId}/clip", version = ApiVersioning.V1)
-    UrlDeClipResponse subir(@PathVariable UUID eventoId) {
-        return aRespuesta(prepararSubida.ejecutar(UsuarioActual.camaraId().orElseThrow(), eventoId));
+    @ResponseStatus(HttpStatus.CREATED)
+    SubidaDeClipResponse subir(
+            @PathVariable UUID eventoId, @Valid @RequestBody(required = false) SolicitudDeClipRequest pedido) {
+        SubidaDeClip subida = prepararSubida.ejecutar(
+                UsuarioActual.camaraId().orElseThrow(), eventoId, pedido == null ? null : pedido.contentType());
+        return new SubidaDeClipResponse(subida.urlSubida(), subida.cabeceras(), subida.expiraEn());
     }
 
     /** US-18 / US-26: watch the clip, or download it with {@code descarga=true} (CA-26.2). */

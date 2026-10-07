@@ -57,7 +57,7 @@ class GrabacionesIntegrationTest extends AbstractIntegrationTest {
         // An alert that happened long ago may already have been attended; a new fall should not join it.
         jdbc.update("update alertas set estado = 'ATENDIDA' where id = ?", UUID.fromString(alerta));
         mvc.perform(post("/api/agente/eventos/" + evento + "/clip").header("Authorization", bearer(tokenAgente)))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
         almacenamiento.completarSubidas();
         return alerta;
     }

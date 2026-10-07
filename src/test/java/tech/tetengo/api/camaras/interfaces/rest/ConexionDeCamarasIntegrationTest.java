@@ -15,8 +15,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import tech.tetengo.api.camaras.application.DetectarCamarasDesconectadas;
 import tech.tetengo.api.shared.application.port.TipoAviso;
 import tech.tetengo.api.support.AbstractIntegrationTest;
@@ -52,7 +54,25 @@ class ConexionDeCamarasIntegrationTest extends AbstractIntegrationTest {
 
     private void senal(String tokenAgente) throws Exception {
         mvc.perform(post("/api/agente/senal").header("Authorization", bearer(tokenAgente)))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk());
+    }
+
+    private ResultActions senal(String tokenAgente, boolean webcamConectada) throws Exception {
+        return mvc.perform(post("/api/agente/senal")
+                        .header("Authorization", bearer(tokenAgente))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"webcamConectada\":%s,\"deteccionConfiable\":true,\"versionAgente\":\"1.0.0\"}"
+                                .formatted(webcamConectada)))
+                .andExpect(status().isOk());
+    }
+
+    private String estadoConexion(String sesion) throws Exception {
+        return campo(
+                mvc.perform(get("/api/camaras").header("Authorization", bearer(campo(sesion, "$.tokenAcceso"))))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString(),
+                "$[0].estadoConexion");
     }
 
     private List<Envio> esperarPush(TipoAviso tipo, int cantidad) {
@@ -69,6 +89,67 @@ class ConexionDeCamarasIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$[0].ultimaSenal").value(reloj.instant().toString()));
         // A brand-new camera coming online is not a "monitoring restored" notice.
         assertThat(push.deTipo(TipoAviso.CAMARA_RECONECTADA)).isEmpty();
+    }
+
+    @Test
+    void laSenalRespondeElEstadoDeCaptura() throws Exception {
+        senal(agenteA, true)
+                .andExpect(jsonPath("$.capturaPermitida").value(false))
+                .andExpect(jsonPath("$.motivo").value("SIN_CONSENTIMIENTO"))
+                .andExpect(jsonPath("$.nombreHabitacion").value("Sala"));
+        mvc.perform(post("/api/agente/senal").header("Authorization", bearer(agenteA)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.motivo").value("SIN_CONSENTIMIENTO"));
+    }
+
+    @Test
+    void ca07_2_siLaWebcamNoEstaConectadaSeDesconectaEnseguidaYAvisaUnaVez() throws Exception {
+        senal(agenteA, true);
+
+        senal(agenteA, false);
+        assertThat(estadoConexion(sesionA)).isEqualTo("DESCONECTADA");
+        Envio aviso = esperarPush(TipoAviso.CAMARA_DESCONECTADA, 1).getFirst();
+        assertThat(aviso.tokens()).containsExactly("telefono-ana");
+        assertThat(aviso.aviso().habitacion()).isEqualTo("Sala");
+
+        senal(agenteA, false);
+        reloj.avanzar(Duration.ofMinutes(5));
+        detectarDesconectadas.ejecutar();
+        Thread.sleep(300);
+        assertThat(push.deTipo(TipoAviso.CAMARA_DESCONECTADA)).hasSize(1);
+
+        senal(agenteA, true);
+        assertThat(estadoConexion(sesionA)).isEqualTo("EN_LINEA");
+        esperarPush(TipoAviso.CAMARA_RECONECTADA, 1);
+    }
+
+    @Test
+    void unaCamaraQueNuncaEstuvoEnLineaNoAvisaDesconexion() throws Exception {
+        senal(agenteA, false);
+        assertThat(estadoConexion(sesionA)).isEqualTo("DESCONECTADA");
+        Thread.sleep(300);
+        assertThat(push.enviados()).isEmpty();
+    }
+
+    @Test
+    void laWebcamDesconectadaDeUnHogarNoAfectaAOtro() throws Exception {
+        String sesionB = ApiDePrueba.titularConHogar(mvc, "beto@correo.pe", "Beto");
+        DatosDePrueba.dispositivo(jdbc, UUID.fromString(campo(sesionB, "$.usuario.id")), "telefono-beto");
+        String agenteB = campo(
+                ApiDePrueba.registrarAgente(
+                        mvc, DatosDePrueba.instalacion(jdbc, UUID.fromString(campo(sesionB, "$.hogarId"))), "Cocina"),
+                "$.token");
+        senal(agenteA, true);
+        senal(agenteB, true);
+
+        senal(agenteA, false);
+
+        assertThat(estadoConexion(sesionA)).isEqualTo("DESCONECTADA");
+        assertThat(estadoConexion(sesionB)).isEqualTo("EN_LINEA");
+        Envio aviso = esperarPush(TipoAviso.CAMARA_DESCONECTADA, 1).getFirst();
+        assertThat(aviso.tokens()).containsExactly("telefono-ana");
+        Thread.sleep(300);
+        assertThat(push.enviados()).hasSize(1);
     }
 
     @Test

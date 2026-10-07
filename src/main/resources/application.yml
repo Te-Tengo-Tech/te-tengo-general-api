@@ -32,6 +32,14 @@ tetengo:
     # Heartbeat every 30 s; 3 missed heartbeats mean the camera is disconnected (AGENT_CONTRACT.md).
     intervalo-senal: 30s
     senales-perdidas: 3
+    # GET /api/agente/configuracion (AGENT_CONTRACT.md). The agent only logs a different version.
+    # Default: the current release of te-tengo-desktop-pywebview.
+    version-publicada: ${TT_AGENTE_VERSION_PUBLICADA:0.2.0}
+    # Classification thresholds by the field names of the agent's `Umbrales`. Empty by default, so
+    # every agent keeps the thresholds calibrated at installation; never set values that were not
+    # calibrated (docs/BLOCKERS.md). Example:
+    # umbrales:
+    #   "[velocidad_descenso_min]": 0.5
   push:
     # CA-16.4: a push the service did not accept is retried every 15 s, up to 20 attempts
     # (implementation choice: the backlog only says "retries").

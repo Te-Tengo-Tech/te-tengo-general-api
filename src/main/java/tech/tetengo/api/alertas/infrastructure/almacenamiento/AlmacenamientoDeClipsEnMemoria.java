@@ -2,6 +2,7 @@ package tech.tetengo.api.alertas.infrastructure.almacenamiento;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
@@ -23,10 +24,12 @@ class AlmacenamientoDeClipsEnMemoria implements AlmacenamientoDeClips {
     private final Set<String> claves = ConcurrentHashMap.newKeySet();
 
     @Override
-    public URI urlDeSubida(String clave, Instant expiraEn) {
+    public Subida urlDeSubida(String clave, String contentType, Instant expiraEn) {
         claves.add(clave);
         log.info("URL de subida falsa (falta Amazon S3) para {}", clave);
-        return URI.create(BASE + clave + "?subida&expira=" + expiraEn.getEpochSecond());
+        return new Subida(
+                URI.create(BASE + clave + "?subida&expira=" + expiraEn.getEpochSecond()),
+                Map.of("Content-Type", contentType));
     }
 
     @Override

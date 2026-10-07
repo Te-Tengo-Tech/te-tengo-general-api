@@ -48,7 +48,7 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         agente = campo(registro, "$.token");
         camara = campo(registro, "$.camaraId");
         mvc.perform(post("/api/agente/senal").header("Authorization", bearer(agente)))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk());
     }
 
     private ResultActions abrir(String token, String camara, String cuerpo) throws Exception {

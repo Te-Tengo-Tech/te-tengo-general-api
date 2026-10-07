@@ -36,6 +36,9 @@ public class ConsultarEstadoDeCaptura {
                 estados.actual().map(EstadoDeCaptura::isConsentimientoVigente).orElse(false);
         Instant ahora = reloj.instant();
         Instant pausadaHasta = camara.estaPausada(ahora) ? camara.getPausadaHasta() : null;
-        return new EstadoDeCapturaDeCamara(consentimiento && pausadaHasta == null, consentimiento, pausadaHasta);
+        MotivoSinCaptura motivo = !consentimiento
+                ? MotivoSinCaptura.SIN_CONSENTIMIENTO
+                : pausadaHasta != null ? MotivoSinCaptura.EN_PAUSA : null;
+        return new EstadoDeCapturaDeCamara(motivo == null, motivo, pausadaHasta, camara.getNombreHabitacion());
     }
 }

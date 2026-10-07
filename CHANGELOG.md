@@ -29,9 +29,11 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 - `historial`: `GET /api/resumen-semanal?semana=2026-W41` (current ISO week by default, in America/Lima) counts falls, unstable movements and false alarms, excludes false alarms from falls and compares each type with the previous week (US-27).
 - Hardening: OpenAPI annotations and a bearer-JWT scheme on every endpoint, a JaCoCo gate of 80 % line coverage on `domain` and `application`, and a test that checks every endpoint of both contracts exists; row-level security evaluated and deferred (ADR 0002).
 - Shared API contract with the mobile app (`docs/API_CONTRACT.md`), the work plan with its autonomous loop (`docs/WORK_PLAN.md`) and the `/work` command.
+- `camaras`: `GET /api/agente/configuracion` publishes the agent version and classification thresholds from `tetengo.agente.*`; no thresholds by default, so agents keep their calibrated local values.
 ### Fixed
 - An unsupported `Api-Version` header answers `400 VALIDACION` with `codigo` like every other error.
 ### Changed
+- Agent endpoints follow the bodies of `docs/AGENT_CONTRACT.md` shared with `te-tengo-desktop-pywebview`: registration takes `credencialInstalacion` and answers `hogarId` and the stored `nombreHabitacion`; the capture state carries `motivo` (`SIN_CONSENTIMIENTO`, `EN_PAUSA`) and `nombreHabitacion`; the heartbeat takes `{webcamConectada, deteccionConfiable, versionAgente}`, answers the capture state and disconnects the camera at once when the webcam is unavailable; the clip upload answers `201 {urlSubida, cabeceras, expiraEn}`.
 - Documentation translated to English, with English file names.
 
 ## [0.1.0] - 2026-10-07

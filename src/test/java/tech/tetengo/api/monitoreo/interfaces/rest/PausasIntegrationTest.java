@@ -80,6 +80,7 @@ class PausasIntegrationTest extends AbstractIntegrationTest {
 
         String estado = estadoDeCaptura();
         assertThat(campo(estado, "$.capturaPermitida")).isEqualTo("false");
+        assertThat(campo(estado, "$.motivo")).isEqualTo("EN_PAUSA");
         assertThat(campo(estado, "$.pausadaHasta")).isEqualTo(hasta);
         enviarEvento(mvc, agente, UUID.randomUUID(), "caida", reloj.instant())
                 .andExpect(jsonPath("$.alertaId").isEmpty());
@@ -104,7 +105,10 @@ class PausasIntegrationTest extends AbstractIntegrationTest {
         reloj.avanzar(Duration.ofMinutes(1));
         finalizarPausas.ejecutar();
 
-        assertThat(campo(estadoDeCaptura(), "$.capturaPermitida")).isEqualTo("true");
+        String estado = estadoDeCaptura();
+        assertThat(campo(estado, "$.capturaPermitida")).isEqualTo("true");
+        assertThat(campo(estado, "$.motivo")).isNull();
+        assertThat(campo(estado, "$.pausadaHasta")).isNull();
         mvc.perform(get("/api/camaras").header("Authorization", bearer(token)))
                 .andExpect(jsonPath("$[0].pausadaHasta").isEmpty());
         await().atMost(Duration.ofSeconds(5))

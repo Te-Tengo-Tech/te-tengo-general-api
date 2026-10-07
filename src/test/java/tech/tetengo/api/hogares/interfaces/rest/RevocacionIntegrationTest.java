@@ -62,7 +62,7 @@ class RevocacionIntegrationTest extends AbstractIntegrationTest {
                         .getContentAsString(),
                 "$.alertaId");
         mvc.perform(post("/api/agente/eventos/" + evento + "/clip").header("Authorization", bearer(tokenAgente)))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
         almacenamiento.completarSubidas();
         return alerta;
     }

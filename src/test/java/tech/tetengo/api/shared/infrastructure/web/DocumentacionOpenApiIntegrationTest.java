@@ -30,7 +30,7 @@ class DocumentacionOpenApiIntegrationTest extends AbstractIntegrationTest {
     private static final Pattern ENDPOINT = Pattern.compile("`(GET|POST|PUT|PATCH|DELETE) (/api/[^ `?]+)");
 
     /** Contract endpoints that are knowingly missing, each recorded in docs/BLOCKERS.md. */
-    private static final Set<String> PENDIENTES = Set.of("GET /api/agente/configuracion");
+    private static final Set<String> PENDIENTES = Set.of();
 
     private static final Set<String> PUBLICOS = Set.of(
             "POST /api/cuentas",

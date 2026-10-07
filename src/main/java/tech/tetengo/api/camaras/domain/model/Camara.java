@@ -72,7 +72,19 @@ public class Camara extends EntidadDelHogar {
      * changed, so running the job twice does nothing the second time.
      */
     public boolean desconectarSiNoHaySenalDesde(Instant limite, Instant ahora) {
-        if (estadoConexion != EstadoConexion.EN_LINEA || ultimaSenal == null || !ultimaSenal.isBefore(limite)) {
+        if (ultimaSenal == null || !ultimaSenal.isBefore(limite)) {
+            return false;
+        }
+        return desconectar(ahora);
+    }
+
+    /**
+     * CA-07.2: the agent reports that its webcam is not available, so the camera is disconnected right
+     * away. Returns whether it changed: an already disconnected camera (or one that never came online)
+     * sends no new notice.
+     */
+    public boolean desconectar(Instant ahora) {
+        if (estadoConexion != EstadoConexion.EN_LINEA) {
             return false;
         }
         estadoConexion = EstadoConexion.DESCONECTADA;

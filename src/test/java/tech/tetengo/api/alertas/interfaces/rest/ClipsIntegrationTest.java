@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -56,15 +57,23 @@ class ClipsIntegrationTest extends AbstractIntegrationTest {
                 post("/api/agente/eventos/" + evento + "/clip").header("Authorization", bearer(tokenAgente)));
     }
 
+    private ResultActions pedirSubida(String tokenAgente, UUID evento, String cuerpo) throws Exception {
+        return mvc.perform(post("/api/agente/eventos/" + evento + "/clip")
+                .header("Authorization", bearer(tokenAgente))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(cuerpo));
+    }
+
     private ResultActions verClip(String token, String alerta) throws Exception {
         return mvc.perform(get("/api/alertas/" + alerta + "/clip").header("Authorization", bearer(token)));
     }
 
     @Test
     void ca18_1_elAgenteSubeElClipYLaFamiliaLoVeConUnEnlaceTemporal() throws Exception {
-        pedirSubida(agente, eventoId)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.url").value(org.hamcrest.Matchers.containsString("metodo=PUT")))
+        pedirSubida(agente, eventoId, "{\"contentType\":\"video/mp4\",\"tamanoBytes\":734003}")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.urlSubida").value(org.hamcrest.Matchers.containsString("metodo=PUT")))
+                .andExpect(jsonPath("$.cabeceras['Content-Type']").value("video/mp4"))
                 .andExpect(jsonPath("$.expiraEn")
                         .value(reloj.instant().plus(Duration.ofMinutes(10)).toString()));
         almacenamiento.completarSubidas();
@@ -81,8 +90,23 @@ class ClipsIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void sinCuerpoElClipEsMp4() throws Exception {
+        pedirSubida(agente, eventoId)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.cabeceras['Content-Type']").value("video/mp4"));
+    }
+
+    @Test
+    void unTipoDeContenidoQueNoEsVideoSeRechaza() throws Exception {
+        pedirSubida(agente, eventoId, "{\"contentType\":\"text/html\",\"tamanoBytes\":10}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("VALIDACION"))
+                .andExpect(jsonPath("$.campos.contentType").isNotEmpty());
+    }
+
+    @Test
     void ca08_4_elInvitadoTambienVeElClip() throws Exception {
-        pedirSubida(agente, eventoId).andExpect(status().isOk());
+        pedirSubida(agente, eventoId).andExpect(status().isCreated());
         almacenamiento.completarSubidas();
         UUID invitado = UUID.randomUUID();
         UUID hogar = UUID.fromString(campo(titular, "$.hogarId"));
@@ -98,7 +122,7 @@ class ClipsIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.codigo").value("CLIP_NO_DISPONIBLE"));
 
         // The agent got a URL but the upload failed.
-        pedirSubida(agente, eventoId).andExpect(status().isOk());
+        pedirSubida(agente, eventoId).andExpect(status().isCreated());
         verClip(campo(titular, "$.tokenAcceso"), alertaId)
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.codigo").value("CLIP_NO_DISPONIBLE"));
@@ -106,7 +130,7 @@ class ClipsIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void ca26_3_unClipEliminadoYaNoEstaDisponible() throws Exception {
-        pedirSubida(agente, eventoId).andExpect(status().isOk());
+        pedirSubida(agente, eventoId).andExpect(status().isCreated());
         jdbc.update(
                 "update alertas set clip_eliminado_en = ? where id = ?",
                 Timestamp.from(reloj.instant()),
@@ -131,7 +155,7 @@ class ClipsIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void unHogarNoVeNiSubeClipsDeOtro() throws Exception {
-        pedirSubida(agente, eventoId).andExpect(status().isOk());
+        pedirSubida(agente, eventoId).andExpect(status().isCreated());
         almacenamiento.completarSubidas();
         String otro = ApiDePrueba.titularConHogar(mvc, "beto@correo.pe", "Beto");
         String agenteB = campo(ApiDePrueba.agenteConConsentimiento(mvc, jdbc, otro, "Cocina"), "$.token");

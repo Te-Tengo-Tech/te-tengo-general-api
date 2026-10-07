@@ -68,7 +68,8 @@ public class RegistrarCamaraDelAgente {
             claims.put(ClaimsDelToken.CAMARA, camara.getId());
             claims.put(ClaimsDelToken.ROL, Rol.AGENTE);
             TokenEmitido token = emisor.emitir(camara.getId().toString(), claims, propiedades.vigenciaToken());
-            return new RegistroDeCamara(camara.getId(), token.valor(), token.expiraEn());
+            return new RegistroDeCamara(
+                    camara.getId(), hogarId, token.valor(), token.expiraEn(), camara.getNombreHabitacion());
         });
     }
 }
