@@ -1,0 +1,61 @@
+name: OSV-Scanner
+
+# Scans the resolved Gradle dependencies (all configurations) against the OSV database
+# (GitHub Advisory Database, Maven advisories and more). It does not need an API key.
+# Scheduled and manual runs fail on high or critical findings; pull request runs only report.
+on:
+  schedule:
+    - cron: "0 8 * * 1" # Mondays 08:00 UTC
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - build.gradle.kts
+      - settings.gradle.kts
+      - gradle/**
+      - .github/workflows/osv-scanner.yml
+      - .github/scripts/osv_summary.py
+      - .github/scripts/gradle-lockfile.init.gradle
+
+permissions:
+  contents: read
+
+concurrency:
+  group: osv-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: OSV-Scanner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Resolve dependencies into gradle.lockfile
+        run: ./gradlew --init-script .github/scripts/gradle-lockfile.init.gradle dependencies --write-locks --quiet > /dev/null
+      - name: Run OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v2.6.0
+        continue-on-error: true # exits non-zero when it finds vulnerabilities; the next step decides
+        with:
+          scan-args: |-
+            --lockfile=gradle.lockfile
+            --format=json
+            --output=osv-results.json
+      - name: Summary and gate
+        run: |
+          gate=""
+          if [ "${{ github.event_name }}" != "pull_request" ]; then gate="--fail-on-high"; fi
+          python3 .github/scripts/osv_summary.py osv-results.json $gate >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: osv-scanner-report
+          path: |
+            osv-results.json
+            gradle.lockfile
+          if-no-files-found: warn
+          retention-days: 30

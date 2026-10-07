@@ -1,0 +1,57 @@
+name: Feature / user story
+description: Propose a feature or implement a user story of the product backlog
+title: "feat: <short description>"
+labels: ["enhancement"]
+body:
+  - type: input
+    id: story
+    attributes:
+      label: User story
+      description: ID in docs/references/PRODUCT_BACKLOG.md, if any.
+      placeholder: US-07
+    validations:
+      required: false
+  - type: textarea
+    id: narrative
+    attributes:
+      label: Story
+      placeholder: |
+        As a <family member | caregiver | household agent>,
+        I want <capability>,
+        so that <benefit>.
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - cuentas
+        - hogares
+        - camaras
+        - alertas
+        - monitoreo
+        - historial
+        - shared
+        - build / ci
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: One Given/When/Then scenario per criterion; each one becomes a test.
+      placeholder: |
+        CA-07.1
+        Given ...
+        When ...
+        Then ...
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: API contract impact
+      description: Endpoints, fields or error codes added or changed in docs/API_CONTRACT.md or docs/AGENT_CONTRACT.md.
+    validations:
+      required: false
