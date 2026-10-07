@@ -56,8 +56,9 @@ public class ReintentarAvisos {
     }
 
     private void reintentar(AvisoPendiente pendiente, Instant ahora) {
-        if (envio.reintentar(pendiente)) {
-            if (pendiente.getAlertaId() != null) {
+        ResultadoDeEnvio resultado = envio.reintentar(pendiente);
+        if (resultado.resuelto()) {
+            if (resultado == ResultadoDeEnvio.ENTREGADO && pendiente.getAlertaId() != null) {
                 alertas.buscar(pendiente.getAlertaId()).ifPresent(alerta -> alerta.marcarNotificada(ahora));
             }
             pendientes.eliminar(pendiente);

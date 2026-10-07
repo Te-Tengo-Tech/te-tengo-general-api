@@ -84,13 +84,13 @@ public class RecibirEventoDelAgente {
      */
     private void avisar(Efecto efecto, CamaraDelHogar camara, Instant ocurridoEn) {
         Alerta alerta = efecto.alerta();
-        boolean entregado = avisos.alHogar(new Aviso(
+        ResultadoDeEnvio resultado = avisos.alHogar(new Aviso(
                 efecto.aviso(),
                 alerta == null ? null : alerta.getId(),
                 camara.id(),
                 alerta == null ? camara.nombreHabitacion() : alerta.getHabitacion(),
                 ocurridoEn));
-        if (entregado && alerta != null) {
+        if (resultado == ResultadoDeEnvio.ENTREGADO && alerta != null) {
             alerta.marcarNotificada(reloj.instant());
         }
     }

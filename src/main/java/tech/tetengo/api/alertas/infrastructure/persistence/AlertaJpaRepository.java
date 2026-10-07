@@ -3,11 +3,12 @@ package tech.tetengo.api.alertas.infrastructure.persistence;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import tech.tetengo.api.alertas.domain.model.Alerta;
 import tech.tetengo.api.alertas.domain.model.EstadoAlerta;
 import tech.tetengo.api.alertas.domain.model.TipoAlerta;
 
-interface AlertaJpaRepository extends JpaRepository<Alerta, UUID> {
+interface AlertaJpaRepository extends JpaRepository<Alerta, UUID>, JpaSpecificationExecutor<Alerta> {
 
     Optional<Alerta> findFirstByCamaraIdAndTipoAndEstadoOrderByOcurridaEnDesc(
             UUID camaraId, TipoAlerta tipo, EstadoAlerta estado);

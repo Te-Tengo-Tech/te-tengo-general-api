@@ -51,7 +51,7 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
   - It creates or updates alerts: fall, unstable movement, unstable becoming a fall (CA-17.3), confirmation after 30 s (CA-13.1), recovery (CA-13.2) and unreliable detection (CA-15.3).
 - [x] **T11 `alertas` — US-16 and US-17 push alerts.** Push to every member device (`POST` and `DELETE /api/dispositivos`) with the payload types of the contract; retry on failure (CA-16.4). Add a test asserting the push is requested synchronously when the event is received (the less-than-10 s requirement). — *push alerts to every member device with retries (US-16, US-17)*
 - [x] **T12 `alertas` — US-18 clips.** The agent uploads through `POST /api/agente/eventos/{id}/clip` (pre-signed PUT). The app reads through `GET /api/alertas/{id}/clip`, returning `404 CLIP_NO_DISPONIBLE` or `410 CLIP_ELIMINADO`. Object storage goes through a port with a fake adapter. — *event clips through pre-signed URLs (US-18)*
-- [ ] **T13 `alertas` — list and detail.** `GET /api/alertas` with filters and paging, and `GET /api/alertas/{id}` (CA-16.4 visibility, CA-25.1 to CA-25.3).
+- [x] **T13 `alertas` — list and detail.** `GET /api/alertas` with filters and paging, and `GET /api/alertas/{id}` (CA-16.4 visibility, CA-25.1 to CA-25.3). — *alert list with filters and paging, and detail (US-25)*
 
 ### Sprint 4
 - [ ] **T14 `hogares` — US-09 revocation.** `DELETE /api/hogar/consentimiento`: stop capture, schedule clip deletion, push `DATOS_ELIMINADOS` when done.
