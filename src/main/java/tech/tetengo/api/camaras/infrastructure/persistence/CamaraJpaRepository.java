@@ -4,5 +4,5 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import tech.tetengo.api.camaras.domain.model.Camara;
 
-/** Interno a la infraestructura: los casos de uso usan el puerto {@code CamaraRepository}. */
+/** Internal to infrastructure: use cases depend on the {@code CamaraRepository} port. */
 interface CamaraJpaRepository extends JpaRepository<Camara, UUID> {}

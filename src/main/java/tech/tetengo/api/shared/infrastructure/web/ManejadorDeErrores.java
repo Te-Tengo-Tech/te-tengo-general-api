@@ -12,8 +12,8 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 
 /**
- * Todas las respuestas de error siguen RFC 9457 ({@link ProblemDetail}) con la propiedad {@code codigo}.
- * Los errores internos nunca exponen su mensaje al cliente.
+ * Every error response follows RFC 9457 ({@link ProblemDetail}) with a {@code codigo} property.
+ * Internal errors never expose their message to the client.
  */
 @RestControllerAdvice
 public class ManejadorDeErrores extends ResponseEntityExceptionHandler {

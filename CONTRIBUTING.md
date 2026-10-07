@@ -1,9 +1,9 @@
-# Cómo contribuir
+# Contributing
 
-1. **Rama desde `main`:** `feat/<modulo>-<tema>`, `fix/...` o `docs/...`.
-2. **Hooks:** `lefthook install`, una vez. Formatea el código antes de cada commit.
-3. **Antes de subir:** `./gradlew spotlessApply test` debe pasar completo.
-4. **Commits** en [Conventional Commits 1.0.0](https://www.conventionalcommits.org/es/v1.0.0/) y en español, **sin línea de coautor**. Por ejemplo: `feat(alertas): recibir eventos del agente de la vivienda`.
-5. **Pull request** hacia `main`; la CI repite las pruebas.
+1. **Branch from `main`:** `feat/<module>-<topic>`, `fix/...` or `docs/...`.
+2. **Hooks:** run `lefthook install` once. It formats code before each commit and checks the message format.
+3. **Before pushing:** `./gradlew spotlessApply test` must pass.
+4. **Commits:** [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) in English, **no co-author line**. Example: `feat(alertas): receive events from the household agent`.
+5. **Pull request** to `main`; CI runs the full test suite.
 
-Para agregar funcionalidad, sigue [docs/GUIA_CASOS_DE_USO.md](docs/GUIA_CASOS_DE_USO.md).
+To add a feature, follow [docs/USE_CASE_GUIDE.md](docs/USE_CASE_GUIDE.md).

@@ -36,5 +36,5 @@ out/
 ### VS Code ###
 .vscode/
 
-# Claves locales de JWT
+# Local JWT keys
 .claves/

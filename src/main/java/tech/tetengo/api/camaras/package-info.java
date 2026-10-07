@@ -1,8 +1,8 @@
 /**
- * Cámaras del hogar: registro al iniciar el agente, nombre de la habitación y estado de conexión.
+ * Household cameras: registration when the agent starts, room name and connection status.
  *
- * <p>Historias: US-06 (nombre de la habitación) y US-07 (estado de conexión). Es el <b>slice de
- * referencia</b>: copiar su estructura para los demás módulos.
+ * <p>Stories: US-06 (room name) and US-07 (connection status). This is the <b>reference
+ * slice</b>: copy its structure for the other modules.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Cámaras")
 package tech.tetengo.api.camaras;

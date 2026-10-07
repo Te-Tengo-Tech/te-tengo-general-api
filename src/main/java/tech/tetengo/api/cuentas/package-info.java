@@ -1,8 +1,8 @@
 /**
- * Registro, inicio de sesión con bloqueo tras 5 intentos y recuperación de contraseña; emite los JWT con el claim hogar_id. Historias US-01 a US-03.
+ * Accounts: registration, sign-in with lockout after 5 attempts and password recovery; issues JWTs with the hogar_id claim. Stories US-01 to US-03.
  *
- * <p>Pendiente de implementar: seguir el slice de referencia {@code tech.tetengo.api.camaras} y
- * {@code docs/GUIA_CASOS_DE_USO.md}.
+ * <p>Not implemented yet: follow the reference slice {@code tech.tetengo.api.camaras},
+ * {@code docs/USE_CASE_GUIDE.md} and {@code docs/WORK_PLAN.md}.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Cuentas y acceso")
 package tech.tetengo.api.cuentas;

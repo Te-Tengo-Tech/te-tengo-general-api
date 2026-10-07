@@ -1,50 +1,52 @@
 # te-tengo-general-api
 
-**Backend API del sistema Te Tengo**, el sistema basado en estimación de pose para la detección de caídas en adultos mayores en su vivienda.
+**Backend API of Te Tengo**, a pose-estimation system that detects falls of older adults at home.
 
-Recibe los eventos que detecta el agente de la vivienda y atiende a la app móvil del familiar/cuidador. Gestiona cuentas, hogares, cámaras, consentimiento, alertas, escalamiento, vista en vivo e historial.
+It receives the events detected by the household agent and serves the family member's mobile app: accounts, households, cameras, consent, alerts, escalation, live view and history.
 
-| Stack | Versión |
+| Stack | Version |
 |---|---|
 | Java | 25 (Temurin) |
 | Spring Boot | 4.1 · Spring Modulith 2.1 |
 | PostgreSQL | 18 · Flyway |
-| Gradle | 9.7 (wrapper incluido) |
+| Gradle | 9.7 (wrapper included) |
 
-## Puesta en marcha
+## Getting started
 ```bash
-./scripts/generar-claves.sh   # claves RS256 locales para los JWT (.claves/, no se versiona)
-./gradlew bootRun             # arranca la API y levanta PostgreSQL con compose.yaml
+./scripts/generate-keys.sh   # local RS256 keys for JWTs (.claves/, not versioned)
+./gradlew bootRun            # runs the API and starts PostgreSQL via compose.yaml
 ```
 - Swagger UI: http://localhost:8080/swagger-ui.html
-- Salud: http://localhost:8080/actuator/health
+- Health: http://localhost:8080/actuator/health
 
-## Pruebas
+## Tests
 ```bash
-./gradlew test               # unitarias + integración (Testcontainers, requiere Docker) + arquitectura
-./gradlew unitTest           # solo las rápidas
-./gradlew integrationTest    # solo integración
-./gradlew architectureTest   # Spring Modulith y ArchUnit
-./gradlew spotlessApply      # formatear
+./gradlew test               # unit + integration (Testcontainers, needs Docker) + architecture
+./gradlew unitTest           # fast lane only
+./gradlew spotlessApply      # format
 ```
 
-## Documentación
-| Documento | Contenido |
+## Documentation
+| Document | Content |
 |---|---|
-| [AGENTS.md](AGENTS.md) | Reglas del repositorio, para personas y agentes de IA |
-| [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | Módulos, slice de referencia y relación con la arquitectura del sistema |
-| [docs/MULTITENANCY.md](docs/MULTITENANCY.md) | Aislamiento por hogar con `@TenantId` |
-| [docs/GUIA_CASOS_DE_USO.md](docs/GUIA_CASOS_DE_USO.md) | Cómo agregar un caso de uso |
-| [docs/CONTRATO_AGENTE.md](docs/CONTRATO_AGENTE.md) | API para el agente de la vivienda |
-| [docs/adr/](docs/adr/) | Decisiones de arquitectura |
-| [docs/referencias/](docs/referencias/) | Copia del product backlog y de la arquitectura del sistema |
+| [AGENTS.md](AGENTS.md) | Repository rules for people and AI agents |
+| [docs/WORK_PLAN.md](docs/WORK_PLAN.md) | Ordered task checklist and autonomous loop |
+| [docs/API_CONTRACT.md](docs/API_CONTRACT.md) | HTTP API shared with the mobile app |
+| [docs/AGENT_CONTRACT.md](docs/AGENT_CONTRACT.md) | API for the household agent |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Modules and their mapping to the system architecture |
+| [docs/MULTITENANCY.md](docs/MULTITENANCY.md) | Per-household isolation with `@TenantId` |
+| [docs/USE_CASE_GUIDE.md](docs/USE_CASE_GUIDE.md) | How to add a use case |
+| [docs/adr/](docs/adr/) | Architecture decision records |
+| [docs/references/](docs/references/) | Product backlog and system architecture (Spanish source documents) |
 
-## Trabajar con Claude Code en la nube
-El repositorio está preparado:
-- `CLAUDE.md` importa `AGENTS.md`.
-- El hook `SessionStart` (`scripts/cloud/preparar-entorno.sh`) instala el JDK 25, porque la imagen trae Java 21, y arranca Docker para Testcontainers.
-- El backlog está copiado en `docs/referencias/`.
+## Claude Code in the cloud
+The repository is ready for autonomous cloud sessions:
+- `CLAUDE.md` imports `AGENTS.md`;
+- a `SessionStart` hook installs JDK 25 and starts Docker;
+- the `/work` command runs the work-plan loop.
+
+Open a cloud session on this repository and type `/work`.
 
 ---
 
-Proyecto de tesis, Ingeniería de Software, UPC. Autores: Jhosepmyr Gutierrez Soto y Elmer Riva Rodriguez.
+Thesis project, Software Engineering, Universidad Peruana de Ciencias Aplicadas (UPC). Authors: Jhosepmyr Gutierrez Soto and Elmer Riva Rodriguez.

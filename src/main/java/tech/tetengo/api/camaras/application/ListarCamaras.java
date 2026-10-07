@@ -6,7 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tech.tetengo.api.camaras.application.port.CamaraRepository;
 import tech.tetengo.api.camaras.domain.model.Camara;
 
-/** US-06 / CA-06.1: el familiar ve las cámaras de su hogar. */
+/** US-06 / CA-06.1: the family member sees the household cameras. */
 @Service
 public class ListarCamaras {
 

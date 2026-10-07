@@ -17,7 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import tech.tetengo.api.support.AbstractIntegrationTest;
 import tech.tetengo.api.support.JwtDePrueba;
 
-/** La prueba clave del multi-tenancy: un hogar nunca ve ni modifica datos de otro. */
+/** The key multi-tenancy test: a household never sees or changes another household's data. */
 class CamarasMultitenancyIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired

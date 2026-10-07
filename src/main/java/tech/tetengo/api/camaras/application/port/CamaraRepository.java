@@ -5,7 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 import tech.tetengo.api.camaras.domain.model.Camara;
 
-/** Puerto de persistencia. Las consultas ya vienen filtradas por el hogar actual (multi-tenancy). */
+/** Persistence port. Queries are already filtered by the current household (multi-tenancy). */
 public interface CamaraRepository {
 
     Camara guardar(Camara camara);

@@ -1,8 +1,8 @@
 /**
- * Eventos que envía el agente de la vivienda, alertas, estado (atendida o falsa alarma), escalamiento y avisos push. Historias US-11 a US-21.
+ * Events sent by the household agent, alerts, alert state (attended or false alarm), escalation and push notices. Stories US-11 to US-21.
  *
- * <p>Pendiente de implementar: seguir el slice de referencia {@code tech.tetengo.api.camaras} y
- * {@code docs/GUIA_CASOS_DE_USO.md}.
+ * <p>Not implemented yet: follow the reference slice {@code tech.tetengo.api.camaras},
+ * {@code docs/USE_CASE_GUIDE.md} and {@code docs/WORK_PLAN.md}.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Alertas")
 package tech.tetengo.api.alertas;

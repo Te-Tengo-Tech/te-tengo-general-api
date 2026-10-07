@@ -9,14 +9,14 @@ import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCusto
 import org.springframework.stereotype.Component;
 
 /**
- * Le dice a Hibernate a qué hogar pertenece la sesión. Sin hogar en el contexto devuelve
- * {@link #SIN_HOGAR}: las consultas a datos del hogar no devuelven nada en lugar de devolver datos de
- * todos los hogares (falla cerrada).
+ * Tells Hibernate which household the session belongs to. With no household in context it returns
+ * {@link #SIN_HOGAR}: household queries return nothing instead of every household's data (fail
+ * closed).
  */
 @Component
 public class ResolvedorDeHogar implements CurrentTenantIdentifierResolver<UUID>, HibernatePropertiesCustomizer {
 
-    /** Hogar inexistente usado cuando la petición no tiene hogar. */
+    /** Non-existent household used when the request has none. */
     public static final UUID SIN_HOGAR = new UUID(0L, 0L);
 
     @Override

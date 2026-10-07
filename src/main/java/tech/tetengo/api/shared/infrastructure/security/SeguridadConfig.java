@@ -10,7 +10,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import tech.tetengo.api.shared.infrastructure.multitenancy.FiltroHogarActual;
 
 /**
- * API sin sesión: cada petición trae un JWT (RS256). La clave pública se configura con
+ * Stateless API: every request carries a JWT (RS256). The public key is configured with
  * {@code spring.security.oauth2.resourceserver.jwt.public-key-location}.
  */
 @Configuration

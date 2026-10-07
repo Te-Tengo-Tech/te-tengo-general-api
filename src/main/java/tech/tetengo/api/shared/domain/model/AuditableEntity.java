@@ -13,8 +13,8 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * Identidad y auditoría comunes. El identificador es un UUID v7 (ordenable por tiempo) generado en el
- * constructor, nunca por la base de datos.
+ * Common identity and auditing. The id is a time-ordered UUID v7 generated in the constructor, never
+ * by the database.
  */
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)

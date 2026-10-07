@@ -11,8 +11,8 @@ import org.springframework.data.domain.AfterDomainEventPublication;
 import org.springframework.data.domain.DomainEvents;
 
 /**
- * Raíz de agregado: frontera de consistencia y punto de entrada de los repositorios. Los eventos
- * registrados con {@link #registrarEvento} se publican al guardar y otros módulos los escuchan con
+ * Aggregate root: consistency boundary and repository entry point. Events registered with
+ * {@link #registrarEvento} are published on save, and other modules listen with
  * {@code @ApplicationModuleListener}.
  */
 @MappedSuperclass

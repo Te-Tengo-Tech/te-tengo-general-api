@@ -1,8 +1,8 @@
 /**
- * Hogar (tenant), perfil del adulto mayor, consentimiento y su revocación, familiares y orden de contacto. Historias US-04, US-05 y US-08 a US-10.
+ * Households (tenants): older adult profile, consent and its revocation, family members and alert routing. Stories US-04, US-05 and US-08 to US-10.
  *
- * <p>Pendiente de implementar: seguir el slice de referencia {@code tech.tetengo.api.camaras} y
- * {@code docs/GUIA_CASOS_DE_USO.md}.
+ * <p>Not implemented yet: follow the reference slice {@code tech.tetengo.api.camaras},
+ * {@code docs/USE_CASE_GUIDE.md} and {@code docs/WORK_PLAN.md}.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Hogares")
 package tech.tetengo.api.hogares;

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Prepara una sesión de Claude Code en la nube: la imagen trae Java 21 y el proyecto usa Java 25.
-# Se ejecuta desde el hook SessionStart de .claude/settings.json y solo actúa en la nube.
+# Prepares a Claude Code cloud session: the image ships Java 21 and this project uses Java 25.
+# Runs from the SessionStart hook in .claude/settings.json and only acts in the cloud.
 set -euo pipefail
 [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
 
@@ -12,13 +12,13 @@ if [ ! -x "$JDK_DIR/bin/java" ]; then
   curl -fsSL "$URL" | tar -xz -C "$JDK_DIR" --strip-components=1
 fi
 
-# Gradle sigue corriendo con el Java de la imagen y usa este JDK como toolchain del proyecto.
+# Gradle keeps running on the image Java and uses this JDK as the project toolchain.
 mkdir -p "$HOME/.gradle"
 grep -q "org.gradle.java.installations.paths" "$HOME/.gradle/gradle.properties" 2>/dev/null \
   || echo "org.gradle.java.installations.paths=$JDK_DIR" >> "$HOME/.gradle/gradle.properties"
 
-# Docker para Testcontainers (las pruebas de integración).
+# Docker for Testcontainers (integration tests).
 if ! docker info >/dev/null 2>&1; then
   (dockerd >/tmp/dockerd.log 2>&1 &) ; sleep 3
 fi
-echo "Entorno listo: JDK 25 en $JDK_DIR, Docker $(docker info --format '{{.ServerVersion}}' 2>/dev/null || echo 'no disponible')."
+echo "Environment ready: JDK 25 at $JDK_DIR, Docker $(docker info --format '{{.ServerVersion}}' 2>/dev/null || echo 'not available')."

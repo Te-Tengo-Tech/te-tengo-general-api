@@ -1,34 +1,34 @@
-# Multi-tenancy por hogar
+# Per-household multi-tenancy
 
-## Qué es el tenant
-El **hogar** reúne:
-- la vivienda donde está la cámara;
-- el adulto mayor (uno por cuenta, CA-04.2);
-- los familiares vinculados (US-08).
+## The tenant
+A **household** (`hogar`) groups:
+- the home where the camera is installed;
+- its older adult (one per account, CA-04.2);
+- the linked family members (US-08).
 
-Una persona puede pertenecer a más de un hogar; por ejemplo, alguien que cuida a sus padres en dos casas. Por eso la membresía hogar-usuario es una tabla global.
+One person can belong to several households, for example someone caring for both parents in two homes. That is why the household–user membership is a global table.
 
-## Por qué una columna y no un esquema por tenant
-`reqsai-api` usa un esquema por organización: son pocas empresas, con muchos datos cada una. Te Tengo tendrá **muchos hogares con pocos datos cada uno**. Un esquema por hogar multiplicaría las migraciones y las conexiones sin beneficio, así que se usa la estrategia de **datos particionados por discriminador** de Hibernate (*Hibernate ORM User Guide*, cap. 23, «Multitenancy», secciones 23.2.3 y 23.3.1).
+## Why a column instead of a schema per tenant
+`reqsai-api` uses one schema per organization: few organizations, lots of data each. Te Tengo will have **many households with little data each**. A schema per household would multiply migrations and connections for no benefit, so this project uses Hibernate's **partitioned (discriminator) data** strategy (*Hibernate ORM User Guide*, ch. 23 "Multitenancy", sections 23.2.3 and 23.3.1).
 
-## Cómo funciona
-1. **El token trae el hogar:** el familiar o el agente envían un JWT con el claim `hogar_id`.
-2. **El filtro lo fija:** `FiltroHogarActual`, que corre después de validar el JWT, lo guarda en `HogarActual` (ThreadLocal) y lo **limpia en `finally`**.
-3. **Hibernate lo lee:** `ResolvedorDeHogar` (`CurrentTenantIdentifierResolver<UUID>`) entrega ese hogar a cada sesión.
-4. **El filtrado es automático:** en las entidades que extienden `EntidadDelHogar`, el campo `hogarId` lleva `@TenantId`. Hibernate:
-   - rellena `hogar_id` al insertar;
-   - agrega `hogar_id = ?` a **todas** las consultas, incluidas `findById` y `findAll`.
-5. **Falla cerrada:** sin hogar en el contexto se usa un UUID inexistente (`ResolvedorDeHogar.SIN_HOGAR`) y las consultas no devuelven nada.
+## How it works
+1. **The token carries the household:** the family member or the agent sends a JWT with the `hogar_id` claim.
+2. **The filter binds it:** `FiltroHogarActual`, which runs after JWT validation, stores it in `HogarActual` (a ThreadLocal) and **clears it in `finally`**.
+3. **Hibernate reads it:** `ResolvedorDeHogar` (`CurrentTenantIdentifierResolver<UUID>`) hands that household to every session.
+4. **Filtering is automatic:** in entities extending `EntidadDelHogar`, the `hogarId` field carries `@TenantId`. Hibernate:
+   - fills `hogar_id` on insert;
+   - adds `hogar_id = ?` to **every** query, including `findById` and `findAll`.
+5. **Fail closed:** with no household in context, a non-existent UUID (`ResolvedorDeHogar.SIN_HOGAR`) is used, so queries return nothing.
 
-## Reglas
-- **Toda tabla del hogar tiene** `hogar_id uuid not null references hogares(id)` y un índice que empieza por `hogar_id`.
-- **Nunca se recibe el hogar** por parámetro, ni en la URL ni en el cuerpo, y nunca se filtra a mano.
-- **Las tablas globales** (`hogares`, cuentas y membresías) no extienden `EntidadDelHogar`.
-- **Prueba obligatoria por funcionalidad:** dos hogares, y se comprueba que uno no ve ni modifica lo del otro (`CamarasMultitenancyIntegrationTest`).
-- **Defensa adicional (opcional):** *Row Level Security* de PostgreSQL con `set_config('app.hogar_id', ...)`. Aunque una consulta nativa olvide el filtro, la base no devolvería filas de otro hogar.
+## Rules
+- **Every household table has** `hogar_id uuid not null references hogares(id)` and an index starting with `hogar_id`.
+- **Never accept the household** as a parameter (path or body), and never filter by hand.
+- **Global tables** (`hogares`, accounts, memberships) do not extend `EntidadDelHogar`.
+- **Mandatory test per feature:** two households, proving neither sees nor changes the other's data (`CamarasMultitenancyIntegrationTest`).
+- **Optional defense in depth:** PostgreSQL row-level security with `set_config('app.hogar_id', ...)`, so even a native query that forgets the filter returns no rows from another household.
 
-## El agente de la vivienda
-El agente recibe un **token por cámara** al registrarla. Ese token incluye `hogar_id` y `camara_id`, así que sus eventos solo pueden escribir en su hogar. Ver [CONTRATO_AGENTE.md](CONTRATO_AGENTE.md).
+## The household agent
+The agent receives a **per-camera token** when it registers. That token carries `hogar_id` and `camara_id`, so its events can only write to its own household. See [AGENT_CONTRACT.md](AGENT_CONTRACT.md).
 
-## Referencia
-Hibernate. (s.f.). *Hibernate ORM User Guide*, cap. 23 «Multitenancy». https://docs.jboss.org/hibernate/orm/6.6/userguide/html_single/Hibernate_User_Guide.html
+## Reference
+Hibernate. (n.d.). *Hibernate ORM User Guide*, ch. 23 "Multitenancy". https://docs.jboss.org/hibernate/orm/6.6/userguide/html_single/Hibernate_User_Guide.html

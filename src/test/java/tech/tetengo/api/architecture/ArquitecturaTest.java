@@ -8,7 +8,7 @@ import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 import org.junit.jupiter.api.Tag;
 
-/** Capas hexagonales dentro de cada módulo. */
+/** Hexagonal layers inside each module. */
 @Tag("architecture")
 @AnalyzeClasses(packages = "tech.tetengo.api", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArquitecturaTest {

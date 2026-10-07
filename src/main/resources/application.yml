@@ -14,7 +14,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          # Clave pública RS256 de los tokens. En local: scripts/generar-claves.sh
+          # RS256 public key of the tokens. Locally: scripts/generate-keys.sh
           public-key-location: ${TT_JWT_CLAVE_PUBLICA:file:.claves/publica.pem}
 
 server:

@@ -1,8 +1,8 @@
 package tech.tetengo.api.shared.infrastructure.web;
 
 /**
- * Versionado nativo de Spring Framework 7 por cabecera, igual que en reqsai-api: rutas limpias
- * ({@code /api/...}) y el cliente elige la versión con {@code Api-Version: 1} (sin cabecera, la 1).
+ * Spring Framework 7 native header versioning, as in reqsai-api: clean paths ({@code /api/...})
+ * and the client picks the version with {@code Api-Version: 1} (defaults to 1).
  */
 public final class ApiVersioning {
 

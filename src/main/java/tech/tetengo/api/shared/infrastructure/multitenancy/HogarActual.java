@@ -4,8 +4,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Hogar (tenant) de la petición en curso. Lo fija {@link FiltroHogarActual} a partir del JWT y se limpia
- * siempre al terminar la petición, para que no se filtre a otra petición atendida por el mismo hilo.
+ * Household (tenant) of the current request. {@link FiltroHogarActual} sets it from the JWT and it is
+ * always cleared when the request ends, so it never leaks into another request on the same thread.
  */
 public final class HogarActual {
 

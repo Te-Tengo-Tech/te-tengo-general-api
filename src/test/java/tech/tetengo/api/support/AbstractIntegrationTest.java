@@ -5,7 +5,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 
-/** Base de las pruebas de integración: contexto completo, PostgreSQL real y JWT de prueba. */
+/** Base for integration tests: full context, real PostgreSQL and test JWTs. */
 @Tag("integration")
 @SpringBootTest(properties = "spring.security.oauth2.resourceserver.jwt.public-key-location=")
 @AutoConfigureMockMvc

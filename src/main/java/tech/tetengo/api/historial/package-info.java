@@ -1,8 +1,8 @@
 /**
- * Historial de alertas, grabaciones y resumen semanal. Historias US-25 a US-27.
+ * Alert history, recordings and weekly summary. Stories US-25 to US-27.
  *
- * <p>Pendiente de implementar: seguir el slice de referencia {@code tech.tetengo.api.camaras} y
- * {@code docs/GUIA_CASOS_DE_USO.md}.
+ * <p>Not implemented yet: follow the reference slice {@code tech.tetengo.api.camaras},
+ * {@code docs/USE_CASE_GUIDE.md} and {@code docs/WORK_PLAN.md}.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Historial")
 package tech.tetengo.api.historial;

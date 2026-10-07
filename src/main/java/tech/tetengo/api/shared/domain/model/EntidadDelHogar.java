@@ -6,11 +6,11 @@ import java.util.UUID;
 import org.hibernate.annotations.TenantId;
 
 /**
- * Base de todo dato que pertenece a un hogar (el tenant): cámaras, alertas, eventos, consentimientos…
+ * Base for all data that belongs to a household (the tenant): cameras, alerts, events, consents…
  *
- * <p>{@link TenantId} hace que Hibernate rellene {@code hogar_id} al guardar con el hogar del contexto
- * y que filtre cada consulta por ese hogar. Ningún caso de uso debe escribir el {@code WHERE hogar_id}
- * a mano. Ver {@code docs/MULTITENANCY.md}.
+ * <p>{@link TenantId} makes Hibernate fill {@code hogar_id} on save with the household in context and
+ * filter every query by it. No use case may write {@code WHERE hogar_id} by hand. See
+ * {@code docs/MULTITENANCY.md}.
  */
 @MappedSuperclass
 public abstract class EntidadDelHogar extends AggregateRoot {

@@ -18,7 +18,7 @@ jobs:
           distribution: temurin
           java-version: "25"
       - uses: gradle/actions/setup-gradle@v6
-      - name: Formato
+      - name: Format
         run: ./gradlew spotlessCheck
-      - name: Pruebas (unitarias, integración con Testcontainers y arquitectura)
+      - name: Tests (unit, Testcontainers integration and architecture)
         run: ./gradlew test jacocoTestReport

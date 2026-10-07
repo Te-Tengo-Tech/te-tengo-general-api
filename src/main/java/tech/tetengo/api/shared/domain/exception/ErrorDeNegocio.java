@@ -1,6 +1,6 @@
 package tech.tetengo.api.shared.domain.exception;
 
-/** Regla de negocio incumplida. Se responde como {@code ProblemDetail} con el código del catálogo. */
+/** Violated business rule. Rendered as a {@code ProblemDetail} with the catalog code. */
 public class ErrorDeNegocio extends RuntimeException {
 
     private final transient CodigoError error;

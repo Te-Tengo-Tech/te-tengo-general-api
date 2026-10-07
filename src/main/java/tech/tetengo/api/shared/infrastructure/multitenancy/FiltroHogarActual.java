@@ -11,8 +11,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Lee el claim {@value #CLAIM_HOGAR} del JWT ya validado y fija el hogar de la petición. Lo usan tanto
- * los tokens del familiar como el token de cada cámara (el agente de la vivienda).
+ * Reads the {@value #CLAIM_HOGAR} claim of the validated JWT and sets the request household. Both
+ * family-member tokens and per-camera tokens (the household agent) carry it.
  */
 public class FiltroHogarActual extends OncePerRequestFilter {
 

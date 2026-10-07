@@ -6,7 +6,7 @@ import org.springframework.modulith.core.ApplicationModules;
 import org.springframework.modulith.docs.Documenter;
 import tech.tetengo.api.TeTengoGeneralApiApplication;
 
-/** Los módulos solo se comunican por su API pública, eventos o UUID; nada de dependencias cíclicas. */
+/** Modules only talk through their public API, events or UUIDs; no cyclic dependencies. */
 @Tag("architecture")
 class ModularidadTest {
 

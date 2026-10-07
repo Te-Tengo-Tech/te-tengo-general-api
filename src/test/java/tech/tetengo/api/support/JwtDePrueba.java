@@ -17,7 +17,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 
-/** Firma JWT de prueba con un par de claves RSA generado en memoria (nunca se guarda en el repo). */
+/** Signs test JWTs with an in-memory RSA key pair (never stored in the repository). */
 @TestConfiguration(proxyBeanMethods = false)
 public class JwtDePrueba {
 
@@ -37,7 +37,7 @@ public class JwtDePrueba {
         return NimbusJwtDecoder.withPublicKey(CLAVE.toRSAPublicKey()).build();
     }
 
-    /** Token de un familiar del hogar indicado. */
+    /** Token of a family member of the given household. */
     public static String tokenDeFamiliar(UUID hogarId) {
         try {
             var claims = JwtClaimsSet.builder()

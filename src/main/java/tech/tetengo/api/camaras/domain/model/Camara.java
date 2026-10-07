@@ -10,7 +10,7 @@ import tech.tetengo.api.camaras.domain.CamaraError;
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 import tech.tetengo.api.shared.domain.model.EntidadDelHogar;
 
-/** Cámara instalada en el hogar. Las reglas viven aquí, no en los controladores. */
+/** Camera installed in the household. Rules live here, not in controllers. */
 @Entity
 @Table(name = "camaras")
 public class Camara extends EntidadDelHogar {
@@ -34,7 +34,7 @@ public class Camara extends EntidadDelHogar {
         this.estadoConexion = EstadoConexion.DESCONECTADA;
     }
 
-    /** CA-06.2 y CA-06.3: el nombre no puede quedar vacío. */
+    /** CA-06.2 and CA-06.3: the name cannot be empty. */
     public void renombrar(String nombre) {
         if (nombre == null || nombre.isBlank()) {
             throw new ErrorDeNegocio(CamaraError.NOMBRE_VACIO);
@@ -45,7 +45,7 @@ public class Camara extends EntidadDelHogar {
         this.nombreHabitacion = nombre.strip();
     }
 
-    /** CA-07.1: el agente reporta señal; la cámara queda en línea con la hora de la última señal. */
+    /** CA-07.1: the agent reports a heartbeat; the camera goes online with the time of the last signal. */
     public void registrarSenal(Instant instante) {
         this.ultimaSenal = instante;
         this.estadoConexion = EstadoConexion.EN_LINEA;

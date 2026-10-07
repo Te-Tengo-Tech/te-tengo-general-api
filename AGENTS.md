@@ -1,69 +1,65 @@
 # AGENTS.md
 
-## Propósito
-Backend API del sistema **Te Tengo**, que detecta caídas de adultos mayores en su vivienda. Es el contenedor «Backend API del sistema» del modelo C4. Recibe:
-- los **eventos** que envía el agente de la vivienda (Te Tengo Captura), que procesa el video en la PC;
-- las peticiones de la **app móvil** del familiar/cuidador.
+## Purpose
+Backend API of **Te Tengo**, a system that detects falls of older adults at home. This repository is the "Backend API del sistema" container of the C4 model. It serves two clients:
+- **the household agent** (Te Tengo Captura, `te-tengo-desktop-pywebview`), which processes video on the household PC and sends **events**;
+- **the mobile app** of the family member or caregiver (`te-tengo-mobile-flutter`).
 
-Guarda los datos en PostgreSQL y los clips en S3, y envía las alertas push con Amazon SNS.
+It stores data in PostgreSQL and clips in S3, and sends push alerts through Amazon SNS.
 
-Lee antes de cambiar algo:
-- [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md): módulos y su relación con la arquitectura del sistema.
-- [docs/MULTITENANCY.md](docs/MULTITENANCY.md): la regla más importante.
-- [docs/GUIA_CASOS_DE_USO.md](docs/GUIA_CASOS_DE_USO.md): cómo agregar un caso de uso.
-- [docs/CONTRATO_AGENTE.md](docs/CONTRATO_AGENTE.md): lo que envía el agente de la vivienda.
-- [docs/referencias/PRODUCT_BACKLOG.md](docs/referencias/PRODUCT_BACKLOG.md): las 27 historias, sus criterios y sus sprints. **Todo valor de negocio sale de aquí** (10 s, 30 s, 5 min, 5 intentos / 15 min, enlace de 30 min, clip de 6 s + 6 s, espera de 3/5/10 min); no inventes otros.
-
-## Dónde guiarte
-- **Qué hacer y en qué orden:** [docs/PLAN_DE_TRABAJO.md](docs/PLAN_DE_TRABAJO.md), por sprint y módulo.
-- **Cómo debe funcionar cada flujo:** `docs/referencias/diagramas/integracion.puml`, la secuencia completa entre el agente, el backend, la base de datos, el almacenamiento de clips, el push y la app.
-- **Cómo debe comportarse:** los criterios de aceptación en `docs/referencias/PRODUCT_BACKLOG.md`.
-
-## Visión general
-- **Monolito modular:** Java 25 + Spring Boot 4.1 + Spring Modulith 2.1 + PostgreSQL 18 + Flyway. El paquete base es `tech.tetengo.api`.
-- **Módulos** (uno por épica del backlog): `cuentas`, `hogares`, `camaras`, `alertas`, `monitoreo` e `historial`, más `shared`, que es el único del que los demás pueden depender.
-- **`camaras` es el slice de referencia:** está completo, con dominio, caso de uso, adaptador, controlador y pruebas. Copia su estructura.
-- **Capas hexagonales en cada módulo:** `domain` (modelo y reglas), `application` (casos de uso y puertos), `infrastructure` (adaptadores) e `interfaces/rest` (controladores, DTO y mappers).
-- **Límites verificados:** las pruebas `ModularidadTest` (Spring Modulith) y `ArquitecturaTest` (ArchUnit) hacen cumplir los límites. Entre módulos se usan eventos de dominio o UUID, nunca claves foráneas ni imports de paquetes internos.
-
-## Multi-tenancy (lo más importante)
-- **El tenant es el hogar:** la vivienda, su adulto mayor y la familia vinculada.
-- **Discriminador por columna:** toda tabla del hogar tiene `hogar_id`, y su entidad extiende `EntidadDelHogar`, que lo marca con `@TenantId` de Hibernate.
-- **Hibernate filtra solo:** rellena y filtra `hogar_id` en cada operación. **Nunca escribas `WHERE hogar_id = ...` ni recibas el `hogarId` por parámetro en un caso de uso.**
-- **De dónde sale el hogar:** del claim `hogar_id` del JWT, que lee `FiltroHogarActual` y guarda en `HogarActual` (ThreadLocal que se limpia en `finally`).
-- **Falla cerrada:** sin hogar en el contexto, `ResolvedorDeHogar` devuelve un hogar inexistente y las consultas no devuelven nada.
-- **Tablas globales,** sin `hogar_id`: `hogares`, cuentas de usuario y membresías hogar-usuario. Sus entidades extienden `AggregateRoot`, no `EntidadDelHogar`.
-- **Toda funcionalidad nueva que lea o escriba datos del hogar necesita una prueba de integración con dos hogares** que demuestre que uno no ve ni modifica los datos del otro. El modelo es `CamarasMultitenancyIntegrationTest`.
-
-## API, seguridad y errores
-- **Rutas** bajo `/api/...` (`ApiVersioning.BASE`). La versión se elige con la cabecera `Api-Version: 1` (versionado nativo de Spring Framework 7); cada mapping declara `version = ApiVersioning.V1`.
-- **JWT RS256:** la API es un *resource server*. La clave pública se configura en `spring.security.oauth2.resourceserver.jwt.public-key-location`; en local, `scripts/generar-claves.sh`. Emitir tokens (inicio de sesión, US-02) es tarea del módulo `cuentas`.
-- **Errores en RFC 9457 `ProblemDetail`** con la propiedad `codigo`. Cada módulo tiene un `enum` que implementa `CodigoError`, y las reglas lanzan `ErrorDeNegocio`. Los errores internos nunca exponen su mensaje.
-- **DTO** como `record` planos y mappers estáticos (`*Mapper`). Nada de MapStruct.
-
-## Patrones de código
-- **Identificadores:** UUID v7, generados en el constructor de `AuditableEntity` (nunca `@GeneratedValue`).
-- **Las reglas viven en el dominio,** como `Camara.renombrar`. Los casos de uso orquestan y siguen siendo delgados.
-- **Persistencia:** los puertos están en `application/port`; los adaptadores, en `infrastructure/persistence`, y los `JpaRepository` son internos (*package-private*). No inyectes `JpaRepository` en casos de uso ni en controladores.
-- **Migraciones Flyway** en `src/main/resources/db/migration` como `V<n>__descripcion.sql`, en minúsculas y en español. Nunca edites una migración ya publicada.
-- **Nombres en español,** igual que la arquitectura (por ejemplo, «Servicios de Aplicación», «Persistencia central»).
-
-## Pruebas y flujo de trabajo
-| Comando | Qué hace |
+## Where to look
+| Question | Source |
 |---|---|
-| `./gradlew bootRun` | Arranca la API y levanta `compose.yaml` (PostgreSQL) |
-| `./gradlew test` | Todas las pruebas: unitarias, de integración (Testcontainers) y de arquitectura |
-| `./gradlew unitTest` | Solo las rápidas, sin Docker |
-| `./gradlew integrationTest` | Solo las de integración (`@Tag("integration")`, extienden `AbstractIntegrationTest`) |
-| `./gradlew architectureTest` | Spring Modulith y ArchUnit |
-| `./gradlew spotlessApply` | Formatea el código (Palantir Java Format) |
+| What to build, and in which order | [docs/WORK_PLAN.md](docs/WORK_PLAN.md) — a checklist; follow the autonomous loop described there |
+| Exact HTTP API (paths, bodies, error codes, push types) | [docs/API_CONTRACT.md](docs/API_CONTRACT.md) — **shared with the mobile app; implement it exactly** |
+| What the household agent sends | [docs/AGENT_CONTRACT.md](docs/AGENT_CONTRACT.md) |
+| Acceptance criteria (Given/When/Then) | [docs/references/PRODUCT_BACKLOG.md](docs/references/PRODUCT_BACKLOG.md) — Spanish source document; every business value comes from here |
+| How each flow moves through the components | `docs/references/diagrams/integracion.puml` (sequence per flow), `arquitectura_logica_v2.puml`, `c4.dsl` |
+| Module layout and patterns | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/USE_CASE_GUIDE.md](docs/USE_CASE_GUIDE.md), and the reference slice `tech.tetengo.api.camaras` |
+| Multi-tenancy | [docs/MULTITENANCY.md](docs/MULTITENANCY.md) — the most important rule |
 
-- **Pirámide:** pruebas de dominio primero, luego de caso de uso con puertos falsos, luego de integración HTTP con el hogar del token y, al final, las de arquitectura en verde.
-- **Base de datos en las pruebas:** PostgreSQL real con Testcontainers, nunca H2.
-- **JWT en las pruebas:** `JwtDePrueba.tokenDeFamiliar(hogarId)`.
+## Big picture
+- **Modular monolith:** Java 25, Spring Boot 4.1, Spring Modulith 2.1, PostgreSQL 18 and Flyway. The base package is `tech.tetengo.api`.
+- **Modules** (one per backlog epic): `cuentas`, `hogares`, `camaras`, `alertas`, `monitoreo` and `historial`, plus `shared`, the only module others may depend on.
+- **Hexagonal layers inside each module:** `domain`, `application` (use cases and ports), `infrastructure` (adapters) and `interfaces/rest`.
+- **Enforced boundaries:** `ModularidadTest` (Spring Modulith) and `ArquitecturaTest` (ArchUnit) fail the build when a boundary is broken. Modules talk through domain events or UUIDs: no cross-module foreign keys, no imports of another module's internals.
 
-## Acuerdos para agentes
-- **Antes de un caso de uso nuevo,** abre el slice `camaras` y copia su ubicación de carpetas, la forma de los DTO, el mapper y las pruebas.
-- **Un caso de uso por historia de usuario,** citando la historia y el criterio en el Javadoc (por ejemplo, `US-06 / CA-06.2`).
-- **Commits en Conventional Commits y en español,** sin línea de coautor. Un commit por cambio coherente.
-- **Si la documentación y el código discrepan,** confía en el código y corrige la documentación en el mismo cambio.
+## Multi-tenancy (the most important rule)
+- **The tenant is the household** (`hogar`): the home, its older adult and the linked family members.
+- **Discriminator column:** every household table has `hogar_id`, and its entity extends `EntidadDelHogar`, whose `@TenantId` makes Hibernate fill and filter it automatically.
+- **Never write `WHERE hogar_id = ...` and never accept a household id as a parameter.**
+- **Where the household comes from:** the `hogar_id` JWT claim, set by `FiltroHogarActual`.
+- **Fail closed:** with no household in context, queries return nothing.
+- **Global tables** (`hogares`, accounts, memberships) extend `AggregateRoot` instead.
+- **Every feature that reads or writes household data needs an integration test with two households,** proving isolation. Model it on `CamarasMultitenancyIntegrationTest`.
+
+## API, security and errors
+- **Routes and versioning:** routes live under `/api` (`ApiVersioning.BASE`), and every mapping declares `version = ApiVersioning.V1` (header `Api-Version`).
+- **JWT RS256 resource server:** the public key comes from `spring.security.oauth2.resourceserver.jwt.public-key-location`. The `cuentas` module issues tokens (claims `sub`, `hogar_id`, `rol`). For local development, run `scripts/generate-keys.sh`.
+- **Roles:** `TITULAR` (owner) and `INVITADO` (invited member). Owner-only endpoints return `403 SOLO_TITULAR` (see the API contract).
+- **Errors:** RFC 9457 `ProblemDetail` with a `codigo` property. Each module has an `enum` implementing `CodigoError`, and business rules throw `ErrorDeNegocio`. Validation errors use `400 VALIDACION` with `campos`.
+- **DTOs and mappers:** DTOs are `record`s; mappers are static `*Mapper` classes.
+
+## Code conventions
+- **Language:** domain identifiers, resource paths and JSON fields are **Spanish** (the ubiquitous language of the thesis architecture: `Camara`, `hogar`, `nombreHabitacion`). Code comments, Javadoc, documentation and commit messages are **English**.
+- **IDs:** UUID v7, generated in `AuditableEntity` constructors; never `@GeneratedValue`.
+- **Rules live in aggregates;** use cases stay thin.
+- **Ports and adapters:** ports go in `application/port`; adapters in `infrastructure/...`; `JpaRepository` interfaces are package-private.
+- **External services sit behind ports with a fake adapter for tests and local runs:** email (Amazon SES), push (Amazon SNS), object storage (S3). Never call AWS from tests.
+- **Migrations:** Flyway `src/main/resources/db/migration/V<n>__<snake_case>.sql`. Never edit a published migration.
+- **Scheduled jobs** (escalation, pause end, disconnection, deletion) use `@Scheduled` and must be idempotent.
+
+## Commands
+| Command | Purpose |
+|---|---|
+| `./gradlew bootRun` | Run the API (starts PostgreSQL from `compose.yaml`) |
+| `./gradlew test` | Everything: unit, integration (Testcontainers) and architecture tests |
+| `./gradlew unitTest` / `integrationTest` / `architectureTest` | Single test lanes |
+| `./gradlew spotlessApply` | Format (Palantir Java Format) |
+
+## Definition of done (every task)
+1. **Every acceptance criterion of the story is covered by a test.**
+2. **The endpoints match `docs/API_CONTRACT.md` exactly:** paths, fields and error codes.
+3. **A two-household isolation test exists** when the feature touches household data.
+4. **`./gradlew spotlessApply test` passes,** including the architecture tests.
+5. **One Conventional Commit per task,** in English and with no co-author line (e.g. `feat(cuentas): register accounts (US-01)`), and the task is checked off in `docs/WORK_PLAN.md`.

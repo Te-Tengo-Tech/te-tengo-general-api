@@ -8,7 +8,7 @@ import tech.tetengo.api.camaras.domain.CamaraError;
 import tech.tetengo.api.camaras.domain.model.Camara;
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 
-/** US-06 / CA-06.2: el familiar cambia el nombre de la habitación. */
+/** US-06 / CA-06.2: the family member renames the room. */
 @Service
 public class RenombrarCamara {
 

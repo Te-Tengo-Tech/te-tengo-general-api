@@ -1,4 +1,4 @@
-# Infraestructura local. Spring Boot la levanta sola con `./gradlew bootRun` (spring-boot-docker-compose).
+# Local infrastructure. Spring Boot starts it with `./gradlew bootRun` (spring-boot-docker-compose).
 services:
   postgres:
     image: postgres:18

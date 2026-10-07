@@ -1,4 +1,4 @@
-# Instalar una vez con: lefthook install
+# Install once with: lefthook install
 pre-commit:
   commands:
     spotless:
@@ -9,4 +9,4 @@ commit-msg:
     conventional:
       run: |
         head -1 {1} | grep -qE '^(feat|fix|docs|test|refactor|build|ci|chore|perf|style|revert)(\([a-z0-9-]+\))?!?: .+' \
-          || { echo "El mensaje debe seguir Conventional Commits: tipo(ámbito): descripción"; exit 1; }
+          || { echo "The message must follow Conventional Commits: type(scope): description"; exit 1; }
