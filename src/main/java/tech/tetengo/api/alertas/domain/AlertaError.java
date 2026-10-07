@@ -8,7 +8,8 @@ public enum AlertaError implements CodigoError {
     CAMARA_NO_ENCONTRADA("CAMARA_NO_ENCONTRADA", HttpStatus.NOT_FOUND, "La cámara no existe en este hogar."),
     EVENTO_NO_ENCONTRADO("EVENTO_NO_ENCONTRADO", HttpStatus.NOT_FOUND, "El evento no existe o no generó una alerta."),
     CLIP_NO_DISPONIBLE("CLIP_NO_DISPONIBLE", HttpStatus.NOT_FOUND, "El video de esta alerta no está disponible."),
-    CLIP_ELIMINADO("CLIP_ELIMINADO", HttpStatus.GONE, "La grabación ya no está disponible.");
+    CLIP_ELIMINADO("CLIP_ELIMINADO", HttpStatus.GONE, "La grabación ya no está disponible."),
+    ALERTA_CERRADA("ALERTA_CERRADA", HttpStatus.CONFLICT, "La alerta ya fue atendida o marcada como falsa alarma.");
 
     private final String codigo;
     private final HttpStatus estado;
