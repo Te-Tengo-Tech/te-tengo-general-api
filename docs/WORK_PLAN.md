@@ -36,7 +36,7 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 - [x] **T03 `cuentas` — US-03 password recovery.** `POST /api/recuperaciones` (always `202`) and `.../confirmacion`. Links are valid for 30 min (`410 ENLACE_VENCIDO`). Email goes through a `NotificadorCorreo` port with a logging/fake adapter (SES later; see BLOCKERS). — *password recovery links valid for 30 min (US-03)*
 - [x] **T04 `hogares` — US-04 household and older adult.** `POST /api/hogar` creates the household with the caller as `TITULAR` and returns a `Sesion` with `hogar_id`. One per account (`409 HOGAR_YA_REGISTRADO`). Also `GET /api/hogar`, `PUT /api/hogar/adulto-mayor`, `GET /api/hogares` and `POST /api/sesiones/hogar`. Owner-only checks return `403 SOLO_TITULAR`. — *household, older adult and household switching (US-04)*
 - [x] **T05 `hogares` — US-05 consent.** `POST` and `GET /api/hogar/consentimiento`, storing the date and time. Publish a domain event that `camaras` listens to for the capture state. — *register the older adult's consent and enable capture (US-05)*
-- [ ] **T06 `camaras` — align with the contract.**
+- [x] **T06 `camaras` — align with the contract.** — *owner-only rename, pausadaHasta and deteccionConfiable*
   - Renaming becomes owner-only.
   - Add `pausadaHasta` and `deteccionConfiable` to `Camara`.
   - Keep `CamarasMultitenancyIntegrationTest` green.

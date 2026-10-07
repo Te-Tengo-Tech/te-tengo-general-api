@@ -27,6 +27,12 @@ public class Camara extends EntidadDelHogar {
     @Column(name = "ultima_senal")
     private Instant ultimaSenal;
 
+    @Column(name = "pausada_hasta")
+    private Instant pausadaHasta;
+
+    @Column(name = "deteccion_confiable", nullable = false)
+    private boolean deteccionConfiable = true;
+
     protected Camara() {}
 
     public Camara(String nombreHabitacion) {
@@ -61,5 +67,13 @@ public class Camara extends EntidadDelHogar {
 
     public Instant getUltimaSenal() {
         return ultimaSenal;
+    }
+
+    public Instant getPausadaHasta() {
+        return pausadaHasta;
+    }
+
+    public boolean isDeteccionConfiable() {
+        return deteccionConfiable;
     }
 }
