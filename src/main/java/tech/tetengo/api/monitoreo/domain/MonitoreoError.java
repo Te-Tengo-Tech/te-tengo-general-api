@@ -8,7 +8,17 @@ public enum MonitoreoError implements CodigoError {
             "DURACION_INVALIDA",
             HttpStatus.UNPROCESSABLE_CONTENT,
             "Elige una duración de pausa: 30 minutos, 1 hora, 2 horas o hasta mañana."),
-    CAMARA_NO_ENCONTRADA("CAMARA_NO_ENCONTRADA", HttpStatus.NOT_FOUND, "La cámara no existe en este hogar.");
+    CAMARA_NO_ENCONTRADA("CAMARA_NO_ENCONTRADA", HttpStatus.NOT_FOUND, "La cámara no existe en este hogar."),
+    CAMARA_DESCONECTADA(
+            "CAMARA_DESCONECTADA",
+            HttpStatus.CONFLICT,
+            "La cámara está desconectada; la vista en vivo no está disponible."),
+    CAMARA_EN_PAUSA(
+            "CAMARA_EN_PAUSA", HttpStatus.CONFLICT, "La cámara está en pausa; la vista en vivo no está disponible."),
+    SIN_CONSENTIMIENTO(
+            "SIN_CONSENTIMIENTO",
+            HttpStatus.CONFLICT,
+            "Sin el consentimiento del adulto mayor la cámara no transmite.");
 
     private final String codigo;
     private final HttpStatus estado;

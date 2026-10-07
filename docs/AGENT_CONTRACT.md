@@ -31,6 +31,10 @@ The bodies below are not in the backlog; the backend defines them and the agent 
   - `alertaId` is null when the event creates or updates no alert: `deteccion_no_confiable`, a recovery with no open fall, or an event received without a current consent or during a pause (it is stored, but ignored).
   - An unknown `tipo` answers `400 VALIDACION`.
 - **`POST /api/agente/eventos/{eventoId}/clip`**: no body → `200 {url, expiraEn}`, a pre-signed PUT URL valid for 10 minutes. The clip belongs to the alert the event created or updated; `404 EVENTO_NO_ENCONTRADO` if the event is unknown or created no alert. The app sees the clip once the storage has the object.
+- **Live view stream** (`wss://…/api/agente/transmision`, proposal pending team confirmation, see `docs/BLOCKERS.md`): the agent keeps one WebSocket open with its bearer token in the handshake.
+  - The backend sends the text message `{"transmitir":true}` when a family member opens the live view and `{"transmitir":false}` when the last one closes it.
+  - While streaming, the agent sends binary frames `[8-byte big-endian ms timestamp][JPEG]`, the format of its ingestion protocol; the backend relays them unchanged to the app's `urlTransmision`.
+  - A new connection of the same camera replaces the previous one.
 - Agent tokens only open `/api/agente/**`; family members' tokens get `403` there.
 
 ## Detected event
