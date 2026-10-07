@@ -1,5 +1,6 @@
 # Profile `local`, the default of `./gradlew bootRun`: the AWS services run on Floci, the local AWS
-# emulator of compose.yaml, at http://localhost:4566 (ADR 0005). The keys are Floci's built-in
+# emulator of compose.yaml, at http://localhost:4566 (ADR 0005); TT_FLOCI_PUERTO moves it, as it
+# moves the published port in compose.yaml (scripts/e2e.sh). The keys are Floci's built-in
 # test/test pair: compose.yaml turns on signature verification, which only accepts known keys.
 tetengo:
   clips:
@@ -8,7 +9,7 @@ tetengo:
     s3:
       bucket: te-tengo-clips
       region: us-east-1
-      endpoint: http://localhost:4566
+      endpoint: http://localhost:${TT_FLOCI_PUERTO:4566}
       path-style: true
       access-key: test
       secret-key: test
@@ -20,7 +21,7 @@ tetengo:
     ses:
       remitente: Te Tengo <no-responder@tetengo.test>
       region: us-east-1
-      endpoint: http://localhost:4566
+      endpoint: http://localhost:${TT_FLOCI_PUERTO:4566}
       access-key: test
       secret-key: test
   push:
@@ -30,7 +31,7 @@ tetengo:
     proveedor: ${TT_PUSH_PROVEEDOR:sns}
     sns:
       region: us-east-1
-      endpoint: http://localhost:4566
+      endpoint: http://localhost:${TT_FLOCI_PUERTO:4566}
       access-key: test
       secret-key: test
       # Creates te-tengo-android and te-tengo-ios (FCM applications) on Floci.
