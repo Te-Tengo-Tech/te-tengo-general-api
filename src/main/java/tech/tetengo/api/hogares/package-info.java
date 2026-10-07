@@ -3,7 +3,8 @@
  * routing. Stories US-04, US-05 and US-08 to US-10.
  *
  * <p>Public API: the events {@code ConsentimientoOtorgado}, {@code ConsentimientoRevocado} and
- * {@code FamiliarRetirado}, and {@code MiembrosDelHogar} and {@code OrdenDeAviso}.
+ * {@code FamiliarRetirado}, and {@code MiembrosDelHogar}, {@code OrdenDeAviso} and
+ * {@code AdultoMayorDelHogar}.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Hogares")
 package tech.tetengo.api.hogares;

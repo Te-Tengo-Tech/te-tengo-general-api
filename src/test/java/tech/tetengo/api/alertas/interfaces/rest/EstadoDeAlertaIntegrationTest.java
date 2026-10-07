@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import tech.tetengo.api.shared.application.port.NotificadorPush.Detalle;
+import tech.tetengo.api.shared.application.port.NotificadorPush.TipoDeAlerta;
 import tech.tetengo.api.shared.application.port.TipoAviso;
 import tech.tetengo.api.shared.domain.model.Rol;
 import tech.tetengo.api.support.AbstractIntegrationTest;
@@ -85,6 +87,10 @@ class EstadoDeAlertaIntegrationTest extends AbstractIntegrationTest {
         assertThat(avisos.getFirst().tokens()).containsExactly("telefono-ana");
         assertThat(avisos.getFirst().aviso().alertaId()).hasToString(alerta);
         assertThat(avisos.getFirst().aviso().habitacion()).isEqualTo("Sala");
+        // «Beto atendió la alerta» / «… · Caída en la Sala.»
+        assertThat(avisos.getFirst().aviso().detalle())
+                .extracting(Detalle::quien, Detalle::tipoDeAlerta)
+                .containsExactly("Beto", TipoDeAlerta.CAIDA);
 
         mvc.perform(get("/api/alertas/" + alerta).header("Authorization", bearer(tokenTitular)))
                 .andExpect(jsonPath("$.atendidaPor.nombre").value("Beto"))

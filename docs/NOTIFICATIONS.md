@@ -20,9 +20,31 @@ A SES failure is logged and not propagated [implementation choice]: password rec
 ## Push
 ### What every provider sends
 `ContenidoDelAviso` builds one content per notice, and every provider sends the same:
-- **Title and body** (`notification` in FCM, `aps.alert` in APNs). The operating system shows them when the app is closed or in the background (CA-16.2), with the room and the time of the household, America/Lima (CA-16.1). The copy follows the prototype and the app's in-app notices [implementation choice: neither the backlog nor the API contract defines push text]; it does not name the older adult because the notice does not carry the name (see [BLOCKERS.md](BLOCKERS.md)).
-- **Data payload** of the API contract, all strings: `tipo`, `alertaId`, `camaraId`, `habitacion`, `ocurridaEn` (ISO-8601 UTC); absent values are left out. The app (`lib/core/notificaciones/mensaje_push.dart`, `lib/app/push.dart`) routes on exactly these keys.
+- **Title and body** (`notification` in FCM, `aps.alert` in APNs). The operating system shows them when the app is closed or in the background (CA-16.2). The copy is the prototype's, word for word (see [Copy](#copy)), with the older adult's first name, the room with its article and the time of the household, America/Lima (CA-16.1).
+- **Label** (`URGENTE · CAÍDA`, `SEVERIDAD MEDIA`, `SEGUIMIENTO`), when the prototype's notice shows one: the iOS subtitle (`aps.alert.subtitle`; in FCM `apns.payload.aps.alert.subtitle`) and the data key `etiqueta`, since Android notifications have no subtitle.
+- **Data payload** of the API contract, all strings: `tipo`, `alertaId`, `camaraId`, `habitacion`, `ocurridaEn` (ISO-8601 UTC), plus `etiqueta` when the notice has a label; absent values are left out. The app (`lib/core/notificaciones/mensaje_push.dart`, `lib/app/push.dart`) routes on these keys and ignores the others.
 - **High priority and the default sound** (`android.priority: high`, `apns-priority: 10`): a fall must arrive in less than 10 s (CA-16.1).
+
+### Copy
+Sources are in `te-tengo-mobile-flutter/docs/references/`: the screen PNGs (`screens/`) and the interactive prototype (`prototype/prototipo.html`, function named in brackets). The example values are the prototype's: Rosa, the Sala, 10:42. `EnvioDeAvisos` reads, for the household in context and right before each attempt (`DetalleDeAvisos`), what the text needs beyond the data payload: the older adult's first name (`hogares` public API `AdultoMayorDelHogar`, the first word of the registered name, as the app's `nombrePila`), the alert's type and start, the household's escalation wait (US-10) and the first name of whoever attended the alert (`cuentas`). Queued notices store nothing more, and none of this goes in the data payload.
+
+| `tipo` | Title | Body | Label | Source |
+|---|---|---|---|---|
+| `ALERTA_CAIDA` | Posible caída de Rosa en la Sala | 10:42 · Toca para ver qué hacer y llamarla. | URGENTE · CAÍDA | screen 44 (lock screen) |
+| `ALERTA_MOVIMIENTO_INESTABLE` | Rosa tuvo un movimiento inestable en la Sala | 10:39 · No es una caída. Revisa cómo está. | SEVERIDAD MEDIA | screen 49 (lock screen) |
+| `ALERTA_ACTUALIZADA_A_CAIDA` | Ahora: posible caída de Rosa en la Sala | 10:41 · Empezó como movimiento inestable a las 10:39. | URGENTE · CAÍDA | screen 51 (lock screen); the second time is when the alert began |
+| `CAIDA_CONFIRMADA` | Rosa sigue en el suelo | Caída confirmada a las 10:43. La alerta sigue activa. | — | prototipo.html [`confirmar`], in-app notice |
+| `SE_LEVANTO` | Rosa se levantó | 10:45 · Se puso de pie en la Sala. Confirma cómo está. | SEGUIMIENTO | screen 57 (banner); label from prototipo.html [`levanta`], lock screen |
+| `ALERTA_ATENDIDA` | Carmen atendió la alerta | 10:46 · Caída en la Sala. | — | prototipo.html [`otroAtiende`], in-app notice; it also quotes the member's note, which the API does not take, so the body ends at the room |
+| `ALERTA_ESCALADA` | Nadie atendió la alerta: te toca | Pasaron 5 min sin respuesta. Eres el contacto secundario. | the alert's: URGENTE · CAÍDA or SEVERIDAD MEDIA | prototipo.html [`escalar`], lock screen, the secondary contact's notice |
+| `SIN_CONTACTO_SECUNDARIO` | No hay a quién escalar | Pasaron 5 min y no hay contacto secundario. | the alert's | prototipo.html [`escalar`], lock screen |
+| `CAMARA_DESCONECTADA` | La cámara de la Sala se desconectó | Revisa el cable de la cámara, que la PC esté encendida y el internet de la casa. | — | screen 28 (banner); prototipo.html [`desconectar`], lock screen |
+| `CAMARA_RECONECTADA` | La cámara de la Sala volvió a estar en línea | El monitoreo se restableció a las 10:52. | — | screen 29 (in-app toast) |
+| `DETECCION_NO_CONFIABLE` | La detección no es confiable en la Sala | Hace más de 5 minutos que la cámara no ve bien a Rosa. Revisa la luz y el encuadre. | — | screen 36 (banner); prototipo.html [`noConfiable`], lock screen |
+| `PAUSA_FINALIZADA` | La cámara de la Sala se reactivó | Terminó la pausa a las 11:42. | — | prototipo.html [`finPausa`], in-app toast; screen 35 adds the length («de 1 hora»), see [BLOCKERS.md](BLOCKERS.md) |
+| `DATOS_ELIMINADOS` | Se eliminaron las grabaciones | Se borraron las grabaciones al revocar el consentimiento. | — | **no prototype source** [implementation choice], see [BLOCKERS.md](BLOCKERS.md) |
+
+Rooms outside the app's list (`Sala`, `Sala comedor`, `Dormitorio`, `Cocina`, `Pasillo`, `Comedor`) go without an article («en Cuarto de Rosa»). If a value cannot be read, the text leaves it out («Posible caída en la Sala»); a notice is never held back for it. The `registro` provider logs the data payload at `INFO` and the title and body, which name the older adult, only at `DEBUG`.
 
 ### Providers
 | Provider | Sends to | Configuration |

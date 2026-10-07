@@ -25,8 +25,9 @@ import tech.tetengo.api.shared.infrastructure.multitenancy.HogarActual;
  * Delivers push notices to the active devices of the members of the household in context (API
  * contract §7), right away. If the push service does not respond, the error is logged and the notice
  * is queued for retry (CA-16.4). Devices whose token the service rejects are deactivated, and new
- * provider addresses are stored with their device. Callers outside a request bind the household with
- * {@code EjecutorEnHogar}.
+ * provider addresses are stored with their device. The text of each attempt names the older adult
+ * and the alert as the prototype does ({@link DetalleDeAvisos}). Callers outside a request bind the
+ * household with {@code EjecutorEnHogar}.
  */
 @Service
 public class EnvioDeAvisos {
@@ -38,6 +39,7 @@ public class EnvioDeAvisos {
     private final NotificadorPush notificador;
     private final AvisoPendienteRepository pendientes;
     private final PropiedadesDePush propiedades;
+    private final DetalleDeAvisos detalles;
     private final Clock reloj;
 
     public EnvioDeAvisos(
@@ -46,12 +48,14 @@ public class EnvioDeAvisos {
             NotificadorPush notificador,
             AvisoPendienteRepository pendientes,
             PropiedadesDePush propiedades,
+            DetalleDeAvisos detalles,
             Clock reloj) {
         this.miembros = miembros;
         this.dispositivos = dispositivos;
         this.notificador = notificador;
         this.pendientes = pendientes;
         this.propiedades = propiedades;
+        this.detalles = detalles;
         this.reloj = reloj;
     }
 
@@ -105,7 +109,7 @@ public class EnvioDeAvisos {
         }
         Resultado resultado;
         try {
-            resultado = notificador.enviar(destinos, aviso);
+            resultado = notificador.enviar(destinos, detalles.completar(aviso));
         } catch (RuntimeException e) {
             log.error("Falló el envío del push {}; se reintentará", aviso.tipo(), e);
             return ResultadoDeEnvio.PENDIENTE;

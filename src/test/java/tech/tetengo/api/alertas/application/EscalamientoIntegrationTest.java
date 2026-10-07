@@ -18,6 +18,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import tech.tetengo.api.shared.application.port.NotificadorPush.Detalle;
+import tech.tetengo.api.shared.application.port.NotificadorPush.TipoDeAlerta;
 import tech.tetengo.api.shared.application.port.TipoAviso;
 import tech.tetengo.api.shared.domain.model.Rol;
 import tech.tetengo.api.support.AbstractIntegrationTest;
@@ -90,6 +92,10 @@ class EscalamientoIntegrationTest extends AbstractIntegrationTest {
         assertThat(escaladas.getFirst().tokens()).containsExactly("telefono-beto");
         assertThat(escaladas.getFirst().aviso().alertaId()).hasToString(alerta);
         assertThat(escaladas.getFirst().aviso().habitacion()).isEqualTo("Sala");
+        // «Pasaron 3 min sin respuesta», labelled as the fall it is.
+        assertThat(escaladas.getFirst().aviso().detalle())
+                .extracting(Detalle::esperaMinutos, Detalle::tipoDeAlerta)
+                .containsExactly(3, TipoDeAlerta.CAIDA);
         mvc.perform(get("/api/alertas/" + alerta).header("Authorization", bearer(tokenAna)))
                 .andExpect(jsonPath("$.escaladaEn").value(reloj.instant().toString()))
                 .andExpect(jsonPath("$.estado").value("ACTIVA"));
@@ -124,6 +130,7 @@ class EscalamientoIntegrationTest extends AbstractIntegrationTest {
         var avisos = push.deTipo(TipoAviso.SIN_CONTACTO_SECUNDARIO);
         assertThat(avisos).hasSize(1);
         assertThat(avisos.getFirst().tokens()).containsExactly("telefono-ana");
+        assertThat(avisos.getFirst().aviso().detalle().esperaMinutos()).isEqualTo(3);
         assertThat(push.deTipo(TipoAviso.ALERTA_ESCALADA)).isEmpty();
     }
 
@@ -155,5 +162,6 @@ class EscalamientoIntegrationTest extends AbstractIntegrationTest {
         assertThat(aviso.aviso().tipo()).isEqualTo(TipoAviso.SIN_CONTACTO_SECUNDARIO);
         assertThat(aviso.tokens()).containsExactly("telefono-carla");
         assertThat(aviso.aviso().habitacion()).isEqualTo("Cocina");
+        assertThat(aviso.aviso().detalle().esperaMinutos()).isEqualTo(5);
     }
 }

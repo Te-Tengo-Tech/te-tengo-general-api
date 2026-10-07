@@ -61,6 +61,8 @@ class AvisoDeRecuperacionIntegrationTest extends AbstractIntegrationTest {
         assertThat(avisos.getFirst().aviso().alertaId()).hasToString(alerta);
         assertThat(avisos.getFirst().aviso().habitacion()).isEqualTo("Sala");
         assertThat(avisos.getFirst().aviso().ocurridaEn()).isEqualTo(cuando.plusSeconds(15));
+        // «Adulto se levantó»: the first name of «Adulto de Ana», the household's older adult.
+        assertThat(avisos.getFirst().aviso().detalle().adultoMayor()).isEqualTo("Adulto");
         mvc.perform(get("/api/alertas/" + alerta).header("Authorization", bearer(campo(titular, "$.tokenAcceso"))))
                 .andExpect(
                         jsonPath("$.recuperadaEn").value(cuando.plusSeconds(15).toString()));

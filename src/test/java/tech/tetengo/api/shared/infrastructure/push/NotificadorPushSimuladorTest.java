@@ -11,6 +11,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Aviso;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Destino;
+import tech.tetengo.api.shared.application.port.NotificadorPush.Detalle;
 import tech.tetengo.api.shared.application.port.NotificadorPush.FallaDePush;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Plataforma;
 import tech.tetengo.api.shared.application.port.TipoAviso;
@@ -21,8 +22,9 @@ class NotificadorPushSimuladorTest {
 
     private static final UUID ALERTA = UUID.randomUUID();
     private static final UUID CAMARA = UUID.randomUUID();
+    private static final Detalle ROSA = new Detalle("Rosa", null, null, null, null);
     private static final Aviso CAIDA =
-            new Aviso(TipoAviso.ALERTA_CAIDA, ALERTA, CAMARA, "Sala", Instant.parse("2026-10-07T15:42:31Z"));
+            new Aviso(TipoAviso.ALERTA_CAIDA, ALERTA, CAMARA, "Sala", Instant.parse("2026-10-07T15:42:31Z"), ROSA);
     private static final List<Destino> DESTINOS = List.of(new Destino("simulador", Plataforma.IOS));
     private static final PropiedadesDelSimulador PROPIEDADES =
             new PropiedadesDelSimulador("tech.tetengo.teTengo", "booted");
@@ -39,14 +41,17 @@ class NotificadorPushSimuladorTest {
     }
 
     @Test
-    void laCargaApnsTieneAlertaSonidoGcmMessageIdYLosDatosDelContrato() {
+    void laCargaApnsTieneAlertaConSubtituloSonidoGcmMessageIdYLosDatosDelContrato() {
         JsonNode carga = JsonMapper.builder()
                 .build()
                 .readTree(NotificadorPushSimulador.carga(ContenidoDelAviso.de(CAIDA), "id-1"));
 
-        assertThat(carga.path("aps").path("alert").path("title").asString()).isEqualTo("Posible caída en la Sala");
+        assertThat(carga.path("aps").path("alert").path("title").asString())
+                .isEqualTo("Posible caída de Rosa en la Sala");
+        assertThat(carga.path("aps").path("alert").path("subtitle").asString()).isEqualTo("URGENTE · CAÍDA");
         assertThat(carga.path("aps").path("alert").path("body").asString())
-                .isEqualTo("10:42 · Toca para ver qué hacer.");
+                .isEqualTo("10:42 · Toca para ver qué hacer y llamarla.");
+        assertThat(carga.path("etiqueta").asString()).isEqualTo("URGENTE · CAÍDA");
         assertThat(carga.path("aps").path("sound").asString()).isEqualTo("default");
         assertThat(carga.path("gcm.message_id").asString()).isEqualTo("id-1");
         assertThat(carga.path("tipo").asString()).isEqualTo("ALERTA_CAIDA");
