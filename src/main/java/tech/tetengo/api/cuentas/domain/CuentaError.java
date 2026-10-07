@@ -4,7 +4,14 @@ import org.springframework.http.HttpStatus;
 import tech.tetengo.api.shared.domain.exception.CodigoError;
 
 public enum CuentaError implements CodigoError {
-    CORREO_EN_USO("CORREO_EN_USO", HttpStatus.CONFLICT, "Ya existe una cuenta con ese correo.");
+    CORREO_EN_USO("CORREO_EN_USO", HttpStatus.CONFLICT, "Ya existe una cuenta con ese correo."),
+    CREDENCIALES_INVALIDAS(
+            "CREDENCIALES_INVALIDAS", HttpStatus.UNAUTHORIZED, "El correo o la contraseña no son correctos."),
+    CUENTA_BLOQUEADA(
+            "CUENTA_BLOQUEADA",
+            HttpStatus.LOCKED,
+            "La cuenta está bloqueada por varios intentos fallidos. Vuelve a intentarlo más tarde."),
+    SESION_EXPIRADA("SESION_EXPIRADA", HttpStatus.UNAUTHORIZED, "La sesión expiró. Vuelve a iniciar sesión.");
 
     private final String codigo;
     private final HttpStatus estado;

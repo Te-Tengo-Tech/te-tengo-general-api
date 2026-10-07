@@ -13,11 +13,16 @@ import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import tech.tetengo.api.shared.domain.model.Rol;
 
-/** Signs test JWTs with an in-memory RSA key pair (never stored in the repository). */
+/**
+ * Signs test JWTs with an in-memory RSA key pair (never stored in the repository). The application
+ * signs its own tokens with the same key, so tokens issued by the API are valid in tests too.
+ */
 @TestConfiguration(proxyBeanMethods = false)
 public class JwtDePrueba {
 
@@ -37,20 +42,54 @@ public class JwtDePrueba {
         return NimbusJwtDecoder.withPublicKey(CLAVE.toRSAPublicKey()).build();
     }
 
-    /** Token of a family member of the given household. */
+    @Bean
+    @Primary
+    JwtEncoder codificadorDePrueba() {
+        return codificador();
+    }
+
+    /** Token of the owner ({@code TITULAR}) of the given household, with a random user id. */
     public static String tokenDeFamiliar(UUID hogarId) {
-        try {
-            var claims = JwtClaimsSet.builder()
-                    .subject(UUID.randomUUID().toString())
-                    .issuedAt(Instant.now())
-                    .expiresAt(Instant.now().plusSeconds(600))
-                    .claim("hogar_id", hogarId.toString())
-                    .build();
-            var encoder = new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(CLAVE)));
-            var cabecera = JwsHeader.with(SignatureAlgorithm.RS256).build();
-            return encoder.encode(JwtEncoderParameters.from(cabecera, claims)).getTokenValue();
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
+        return token(UUID.randomUUID(), hogarId, Rol.TITULAR);
+    }
+
+    /** Token of an invited member ({@code INVITADO}) of the given household. */
+    public static String tokenDeInvitado(UUID hogarId) {
+        return token(UUID.randomUUID(), hogarId, Rol.INVITADO);
+    }
+
+    public static String token(UUID usuarioId, UUID hogarId, Rol rol) {
+        var claims = JwtClaimsSet.builder()
+                .subject(usuarioId.toString())
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(600));
+        if (hogarId != null) {
+            claims.claim("hogar_id", hogarId.toString());
         }
+        if (rol != null) {
+            claims.claim("rol", rol.name());
+        }
+        return firmar(claims.build());
+    }
+
+    /** Per-camera token of the household agent. */
+    public static String tokenDeAgente(UUID hogarId, UUID camaraId) {
+        return firmar(JwtClaimsSet.builder()
+                .subject(camaraId.toString())
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(600))
+                .claim("hogar_id", hogarId.toString())
+                .claim("camara_id", camaraId.toString())
+                .claim("rol", Rol.AGENTE.name())
+                .build());
+    }
+
+    private static String firmar(JwtClaimsSet claims) {
+        var cabecera = JwsHeader.with(SignatureAlgorithm.RS256).build();
+        return codificador().encode(JwtEncoderParameters.from(cabecera, claims)).getTokenValue();
+    }
+
+    private static JwtEncoder codificador() {
+        return new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(CLAVE)));
     }
 }
