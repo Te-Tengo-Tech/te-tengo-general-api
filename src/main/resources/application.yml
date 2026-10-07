@@ -17,6 +17,15 @@ spring:
           # RS256 public key of the tokens. Locally: scripts/generate-keys.sh
           public-key-location: ${TT_JWT_CLAVE_PUBLICA:file:.claves/publica.pem}
 
+tetengo:
+  jwt:
+    # RS256 private key that signs the tokens this API issues (PKCS#8 PEM). Locally: scripts/generate-keys.sh
+    clave-privada-location: ${TT_JWT_CLAVE_PRIVADA:file:.claves/privada.pem}
+  sesiones:
+    # API contract, implementation choice: access token 60 min, refresh token 30 days.
+    vigencia-acceso: 60m
+    vigencia-refresco: 30d
+
 server:
   error:
     include-message: never

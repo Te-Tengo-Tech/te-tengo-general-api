@@ -19,6 +19,12 @@ It receives the events detected by the household agent and serves the family mem
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - Health: http://localhost:8080/actuator/health
 
+## Configuration
+| Variable | Purpose | Default |
+|---|---|---|
+| `TT_JWT_CLAVE_PUBLICA` | RS256 public key (X.509 PEM) that validates every token | `file:.claves/publica.pem` |
+| `TT_JWT_CLAVE_PRIVADA` | RS256 private key (PKCS#8 PEM) that signs the tokens the API issues | `file:.claves/privada.pem` |
+
 ## Tests
 ```bash
 ./gradlew test               # unit + integration (Testcontainers, needs Docker) + architecture
