@@ -75,6 +75,16 @@ class AlertaRepositoryAdapter implements AlertaRepository {
     }
 
     @Override
+    public List<Alerta> conClipAnteriorA(Instant limite) {
+        return jpa.findByClipClaveIsNotNullAndClipEliminadoEnIsNullAndOcurridaEnBefore(limite);
+    }
+
+    @Override
+    public List<UUID> hogaresConClipsAnterioresA(Instant limite) {
+        return jpa.hogaresConClipsAnterioresA(limite);
+    }
+
+    @Override
     public Optional<Alerta> inestableActivaDe(UUID camaraId) {
         return jpa.findFirstByCamaraIdAndTipoAndEstadoOrderByOcurridaEnDesc(
                 camaraId, TipoAlerta.MOVIMIENTO_INESTABLE, EstadoAlerta.ACTIVA);

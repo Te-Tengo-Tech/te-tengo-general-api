@@ -15,6 +15,15 @@ interface AlertaJpaRepository extends JpaRepository<Alerta, UUID>, JpaSpecificat
 
     List<Alerta> findByClipClaveIsNotNullAndClipEliminadoEnIsNull();
 
+    List<Alerta> findByClipClaveIsNotNullAndClipEliminadoEnIsNullAndOcurridaEnBefore(Instant limite);
+
+    /** Native, so not filtered by household: only for the retention policy. */
+    @Query(
+            value = "select distinct hogar_id from alertas"
+                    + " where clip_clave is not null and clip_eliminado_en is null and ocurrida_en < :limite",
+            nativeQuery = true)
+    List<UUID> hogaresConClipsAnterioresA(Instant limite);
+
     List<Alerta> findByEstadoAndEscaladaEnIsNull(EstadoAlerta estado);
 
     /** Native, so not filtered by household: only for the escalation job. */

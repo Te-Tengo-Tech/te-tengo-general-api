@@ -34,6 +34,12 @@ public interface AlertaRepository {
     /** Alerts of the household in context whose clip has not been deleted. */
     List<Alerta> conClip();
 
+    /** Same, only for alerts that happened before {@code limite}. */
+    List<Alerta> conClipAnteriorA(Instant limite);
+
+    /** Households with clips of alerts older than {@code limite}: a native query, only for retention. */
+    List<UUID> hogaresConClipsAnterioresA(Instant limite);
+
     /** The most recent active unstable-movement alert of the camera (CA-17.3). */
     Optional<Alerta> inestableActivaDe(UUID camaraId);
 

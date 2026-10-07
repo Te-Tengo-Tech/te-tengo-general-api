@@ -46,6 +46,10 @@ tetengo:
     # (implementation choice; the transport is a proposal pending team confirmation).
     url-base: ${TT_URL_TRANSMISION:ws://localhost:8080}
     vigencia: 5m
+  historial:
+    # Retention of the recordings (CA-26.3): not defined in the backlog, so unset (clips are kept) until
+    # the team decides (docs/BLOCKERS.md). Example: TT_RETENCION_CLIPS=30d
+    retencion-de-clips: ${TT_RETENCION_CLIPS:}
   enlaces:
     # Link e-mailed to reset a password; {token} is the one-time token. The app's deep-link format is
     # pending (docs/BLOCKERS.md).
