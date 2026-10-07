@@ -10,7 +10,7 @@
 ## Decision
 - `NotificadorPush` stays the only port; `tetengo.push.proveedor` (`TT_PUSH_PROVEEDOR`) picks one adapter: `registro` (default, logs), `fcm` (Firebase Admin SDK, FCM HTTP v1), `sns` (SNS mobile push) or `simulador` (`xcrun simctl push`, local only).
 - **Every adapter sends the same content** (`ContenidoDelAviso`, `CargasPush`): title and body for the operating system, the data payload of the API contract, high priority. The FCM adapter's message is tested to serialize exactly like the `GCM` payload SNS sends.
-- The port **reports what the service did** (`Resultado`): accepted devices, tokens no longer valid and new provider addresses. `alertas` deactivates rejected devices and stores the SNS endpoint ARN with the device (`V18`). The retry semantics of CA-16.4 do not change: a provider throws `FallaDePush` when the service does not respond or accepts no device.
+- The port **reports what the service did** (`Resultado`): accepted devices, tokens no longer valid and new provider addresses. `alertas` deactivates rejected devices and stores the SNS endpoint ARN with the device (`V19`). The retry semantics of CA-16.4 do not change: a provider throws `FallaDePush` when the service does not respond or accepts no device.
 - With SNS, endpoints are created lazily on a device's first push, so devices registered under Firebase move to SNS without registering again.
 
 ## Consequences
