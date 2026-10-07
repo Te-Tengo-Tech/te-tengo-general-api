@@ -13,6 +13,8 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.accept.InvalidApiVersionException;
+import org.springframework.web.accept.MissingApiVersionException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -20,6 +22,7 @@ import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 
@@ -41,6 +44,17 @@ public class ManejadorDeErrores extends ResponseEntityExceptionHandler {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(error.estado(), error.mensaje());
         problema.setProperty("codigo", error.codigo());
         ex.propiedades().forEach(problema::setProperty);
+        problema.setInstance(URI.create(peticion.getRequestURI()));
+        return problema;
+    }
+
+    /** A missing or unsupported {@code Api-Version} header is a validation error of that header. */
+    @ExceptionHandler({InvalidApiVersionException.class, MissingApiVersionException.class})
+    public ProblemDetail versionNoSoportada(ResponseStatusException ex, HttpServletRequest peticion) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "Versión de la API no soportada. Usa la cabecera Api-Version: 1.");
+        problema.setProperty("codigo", VALIDACION);
+        problema.setProperty("campos", Map.of(ApiVersioning.CABECERA, "Usa la versión " + ApiVersioning.V1 + "."));
         problema.setInstance(URI.create(peticion.getRequestURI()));
         return problema;
     }
