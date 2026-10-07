@@ -1,5 +1,7 @@
 package tech.tetengo.api.alertas.interfaces.rest;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
@@ -22,6 +24,7 @@ import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
 /** US-25: alert history and detail; US-19: alert state. */
 @RestController
 @RequestMapping(ApiVersioning.BASE + "/alertas")
+@Tag(name = "Alertas", description = "Alerts, their history and their state (US-16 to US-21, US-25).")
 class AlertaController {
 
     private final ConsultarAlertas consultarAlertas;
@@ -33,6 +36,10 @@ class AlertaController {
     }
 
     /** Newest first. {@code pagina} starts at 0; {@code tamano} defaults to 20, at most 100. */
+    @Operation(
+            summary = "List alerts (US-25)",
+            description =
+                    "Filters tipo, estado, desde, hasta; paging pagina, tamano; newest first (CA-25.1 to CA-25.3). Active alerts are listed even if their push failed (CA-16.4).")
     @GetMapping(version = ApiVersioning.V1)
     PaginaDeAlertasResponse listar(
             @RequestParam(required = false)
@@ -58,18 +65,26 @@ class AlertaController {
                 resultado.elementos().stream().map(AlertaMapper::aRespuesta).toList(), resultado.total());
     }
 
+    @Operation(summary = "Read an alert", description = "Errors: 404 ALERTA_NO_ENCONTRADA.")
     @GetMapping(path = "/{id}", version = ApiVersioning.V1)
     AlertaResponse detalle(@PathVariable UUID id) {
         return AlertaMapper.aRespuesta(consultarAlertas.detalle(id));
     }
 
     /** US-19 / CA-19.1: any member, invited ones too. */
+    @Operation(
+            summary = "Mark as attended (US-19)",
+            description =
+                    "Records who and when (CA-19.1) and pushes ALERTA_ATENDIDA to the other members (CA-19.3). Errors: 409 ALERTA_CERRADA.")
     @PostMapping(path = "/{id}/atencion", version = ApiVersioning.V1)
     AlertaResponse atender(@PathVariable UUID id) {
         return AlertaMapper.aRespuesta(cambiarEstado.atender(id, UsuarioActual.id()));
     }
 
     /** US-19 / CA-19.2. */
+    @Operation(
+            summary = "Mark as a false alarm (US-19)",
+            description = "Excluded from the fall count (CA-19.2). Errors: 409 ALERTA_CERRADA.")
     @PostMapping(path = "/{id}/falsa-alarma", version = ApiVersioning.V1)
     AlertaResponse marcarFalsaAlarma(@PathVariable UUID id) {
         return AlertaMapper.aRespuesta(cambiarEstado.marcarFalsaAlarma(id, UsuarioActual.id()));

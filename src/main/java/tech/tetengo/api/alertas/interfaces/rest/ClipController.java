@@ -1,5 +1,7 @@
 package tech.tetengo.api.alertas.interfaces.rest;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,6 +16,7 @@ import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
 
 /** US-18: clips of the events, uploaded by the agent and watched in the app. */
 @RestController
+@Tag(name = "Clips", description = "Clips of the events (US-18, US-26).")
 class ClipController {
 
     private static final String API = ApiVersioning.BASE;
@@ -27,12 +30,19 @@ class ClipController {
     }
 
     /** Household agent: pre-signed PUT URL for the clip of the event. */
+    @Operation(
+            summary = "Get the clip upload URL (agent, US-18)",
+            description = "Pre-signed PUT URL for the 6 s + 6 s clip. Errors: 404 EVENTO_NO_ENCONTRADO.")
     @PostMapping(path = API + "/agente/eventos/{eventoId}/clip", version = ApiVersioning.V1)
     UrlDeClipResponse subir(@PathVariable UUID eventoId) {
         return aRespuesta(prepararSubida.ejecutar(UsuarioActual.camaraId().orElseThrow(), eventoId));
     }
 
     /** US-18 / US-26: watch the clip, or download it with {@code descarga=true} (CA-26.2). */
+    @Operation(
+            summary = "Watch or download the clip (US-18, US-26)",
+            description =
+                    "Short-lived pre-signed URL (CA-18.1, CA-26.1); descarga=true for a download (CA-26.2). Errors: 404 CLIP_NO_DISPONIBLE (CA-18.2), 410 CLIP_ELIMINADO (CA-26.3), 404 ALERTA_NO_ENCONTRADA.")
     @GetMapping(path = API + "/alertas/{id}/clip", version = ApiVersioning.V1)
     UrlDeClipResponse ver(@PathVariable UUID id, @RequestParam(defaultValue = "false") boolean descarga) {
         return aRespuesta(obtenerClip.ejecutar(id, descarga));

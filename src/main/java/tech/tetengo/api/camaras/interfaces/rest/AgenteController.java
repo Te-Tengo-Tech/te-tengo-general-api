@@ -1,5 +1,8 @@
 package tech.tetengo.api.camaras.interfaces.rest;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +21,7 @@ import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
 /** Household agent endpoints of {@code camaras} (AGENT_CONTRACT.md). */
 @RestController
 @RequestMapping(ApiVersioning.BASE + "/agente")
+@Tag(name = "Agente del hogar", description = "Endpoints of the household agent (AGENT_CONTRACT.md).")
 class AgenteController {
 
     private final RegistrarCamaraDelAgente registrarCamara;
@@ -34,18 +38,31 @@ class AgenteController {
     }
 
     /** US-07: periodic heartbeat; updates the time of the last signal. */
+    @Operation(
+            summary = "Heartbeat (agent, US-07)",
+            description =
+                    "Updates the time of the last signal and brings a disconnected camera back (CA-07.1, CA-07.3).")
     @PostMapping(path = "/senal", version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void senal() {
         registrarSenal.ejecutar(UsuarioActual.camaraId().orElseThrow());
     }
 
+    @Operation(
+            summary = "Register the camera (agent, US-06)",
+            description =
+                    "Trades the installation credential for a per-camera token (CA-06.1). Errors: 401 CREDENCIAL_INVALIDA.")
+    @SecurityRequirements
     @PostMapping(path = "/camaras/registro", version = ApiVersioning.V1)
     RegistroDeCamaraResponse registrar(@Valid @RequestBody RegistrarCamaraRequest pedido) {
         RegistroDeCamara registro = registrarCamara.ejecutar(pedido.credencial(), pedido.nombreHabitacion());
         return new RegistroDeCamaraResponse(registro.camaraId(), registro.token(), registro.expiraEn());
     }
 
+    @Operation(
+            summary = "Capture state (agent, US-05, US-22)",
+            description =
+                    "Whether the agent may process video: a current consent (CA-05.2) and no active pause (CA-22.1).")
     @GetMapping(path = "/estado-captura", version = ApiVersioning.V1)
     EstadoDeCapturaResponse estadoDeCaptura() {
         var estado = consultarEstadoDeCaptura.ejecutar(UsuarioActual.camaraId().orElseThrow());

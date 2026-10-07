@@ -1,5 +1,8 @@
 package tech.tetengo.api.hogares.interfaces.rest;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -28,6 +31,7 @@ import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
 
 /** US-08: invitations and family members. */
 @RestController
+@Tag(name = "Familia", description = "Invitations and family members (US-08).")
 class FamiliaController {
 
     private static final String API = ApiVersioning.BASE;
@@ -51,6 +55,9 @@ class FamiliaController {
         this.validador = validador;
     }
 
+    @Operation(
+            summary = "Invite a family member (owner, US-08)",
+            description = "E-mails a link to create access (CA-08.1). Errors: 409 YA_ES_FAMILIAR, 403 SOLO_TITULAR.")
     @PostMapping(path = API + "/invitaciones", version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.CREATED)
     InvitacionResponse invitar(@Valid @RequestBody InvitarFamiliarRequest pedido) {
@@ -63,6 +70,11 @@ class FamiliaController {
      * Public: a new account sends {@code {nombre, contrasena}}; an existing account sends its bearer
      * token instead.
      */
+    @Operation(
+            summary = "Accept an invitation (US-08)",
+            description =
+                    "With {nombre, contrasena} (new account) or a bearer token (existing account); returns a Sesion as INVITADO (CA-08.2). Errors: 410 INVITACION_VENCIDA.")
+    @SecurityRequirements
     @PostMapping(path = API + "/invitaciones/{token}/aceptacion", version = ApiVersioning.V1)
     ResponseEntity<Sesion> aceptar(
             @PathVariable String token,
@@ -80,6 +92,7 @@ class FamiliaController {
         return ResponseEntity.status(HttpStatus.CREATED).body(sesion);
     }
 
+    @Operation(summary = "List the family members (US-08)", description = "Members of the household, owner first.")
     @GetMapping(path = API + "/familiares", version = ApiVersioning.V1)
     List<FamiliarResponse> listar() {
         return listarFamiliares.ejecutar(UsuarioActual.id()).stream()
@@ -88,6 +101,10 @@ class FamiliaController {
                 .toList();
     }
 
+    @Operation(
+            summary = "Remove a family member (owner, US-08)",
+            description =
+                    "Removes access to the alerts at once (CA-08.3). Errors: 409 NO_SE_PUEDE_RETIRAR_TITULAR, 403 SOLO_TITULAR.")
     @DeleteMapping(path = API + "/familiares/{usuarioId}", version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void retirar(@PathVariable UUID usuarioId) {
