@@ -41,7 +41,7 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
   - Add `pausadaHasta` and `deteccionConfiable` to `Camara`.
   - Keep `CamarasMultitenancyIntegrationTest` green.
 - [x] **T07 `camaras` — agent registration and capture state.** Endpoints from `docs/AGENT_CONTRACT.md`: registration with the installation credential issues the per-camera token; `GET /api/agente/estado-captura` reports consent and pauses (CA-05.2). — *agent camera registration and capture state (CA-06.1, CA-05.2)*
-- [ ] **T08 `camaras` — US-07 connection status.**
+- [x] **T08 `camaras` — US-07 connection status.** — *heartbeat, disconnection job and connection pushes (US-07)*
   - `POST /api/agente/senal`.
   - A scheduled job marks cameras `DESCONECTADA` after the heartbeat timeout and sends push `CAMARA_DESCONECTADA`; `CAMARA_RECONECTADA` goes out on return (CA-07.2, CA-07.3).
   - Push goes through a `NotificadorPush` port with a fake adapter (SNS later).

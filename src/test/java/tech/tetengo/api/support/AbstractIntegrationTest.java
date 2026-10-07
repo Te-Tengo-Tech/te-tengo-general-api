@@ -13,13 +13,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Base for integration tests: full context, real PostgreSQL, test JWTs and test doubles. Every test
- * starts from an empty database and a reset clock, so tests never depend on each other.
+ * starts from an empty database and a reset clock, so tests never depend on each other. Scheduled
+ * jobs do not run on their own: tests call them.
  */
 @Tag("integration")
 @SpringBootTest(
         properties = {
             "spring.security.oauth2.resourceserver.jwt.public-key-location=",
-            "tetengo.jwt.clave-privada-location="
+            "tetengo.jwt.clave-privada-location=",
+            "tetengo.tareas.habilitadas=false"
         })
 @AutoConfigureMockMvc
 @Import({TestcontainersConfiguration.class, JwtDePrueba.class, SoporteDePruebas.class})
@@ -34,11 +36,15 @@ public abstract class AbstractIntegrationTest {
     @Autowired
     protected CorreoDePrueba correos;
 
+    @Autowired
+    protected PushDePrueba push;
+
     @BeforeEach
     void prepararEstadoInicial() {
         esperarEventosPendientes();
         reloj.reiniciar();
         correos.limpiar();
+        push.limpiar();
         List<String> tablas = jdbcDeLimpieza.queryForList(
                 "select tablename from pg_tables where schemaname = 'public' and tablename <> 'flyway_schema_history'",
                 String.class);
