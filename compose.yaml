@@ -1,4 +1,7 @@
 # Local infrastructure. Spring Boot starts it with `./gradlew bootRun` (spring-boot-docker-compose).
+# Host ports can be overridden so a second stack (scripts/e2e.sh, with its own project name) runs
+# next to the developer's: TT_POSTGRES_PUERTO (default 0, a free port Spring Boot discovers) and
+# TT_FLOCI_PUERTO (default 4566, also read by application-local.yml).
 services:
   postgres:
     image: postgres:18
@@ -7,14 +10,14 @@ services:
       POSTGRES_USER: tetengo
       POSTGRES_PASSWORD: tetengo
     ports:
-      - "5432"
+      - "${TT_POSTGRES_PUERTO:-0}:5432"
   # Floci, a local AWS emulator (MIT, LocalStack-compatible): S3 for the clips, SES for e-mail and
   # SNS for push (profile `local`, application-local.yml; ADR 0005). There is no Spring service
   # connection for it: the API reaches it through tetengo.clips.s3.*, tetengo.correo.ses.* and
-  # tetengo.push.sns.*, signing with Floci's built-in test/test keys. The host port is fixed because
-  # the pre-signed clip URLs point to http://localhost:4566, which the household agent and the iOS
-  # simulator must reach. Sent e-mails: http://localhost:4566/_aws/ses; pushes:
-  # http://localhost:4566/_aws/sns/push-notifications.
+  # tetengo.push.sns.*, signing with Floci's built-in test/test keys. The host port is known (4566
+  # unless TT_FLOCI_PUERTO says otherwise) because the pre-signed clip URLs point to
+  # http://localhost:4566, which the household agent and the iOS simulator must reach. Sent
+  # e-mails: http://localhost:4566/_aws/ses; pushes: http://localhost:4566/_aws/sns/push-notifications.
   floci:
     image: floci/floci:2.2.0
     environment:
@@ -26,7 +29,7 @@ services:
       # No Docker socket is mounted: skip the ECS clean-up that would retry it at startup.
       FLOCI_SERVICES_ECS_RECONCILE_CONTAINERS_ON_STARTUP: "false"
     ports:
-      - "4566:4566"
+      - "${TT_FLOCI_PUERTO:-4566}:4566"
     volumes:
       - floci-data:/app/data
     healthcheck:

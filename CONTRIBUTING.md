@@ -29,6 +29,7 @@ To add a feature, follow [docs/USE_CASE_GUIDE.md](docs/USE_CASE_GUIDE.md).
 | [CI](.github/workflows/ci.yml) | Push to `main`/`develop`, every PR | `Unit tests` → `Integration tests` (Testcontainers) → `Coverage` (JaCoCo report artifact, summary on the run page, 80 % line gate on `domain` and `application`); `Format, architecture and build` (Spotless, ArchUnit and Spring Modulith, `bootJar`) in parallel |
 | [OSV-Scanner](.github/workflows/osv-scanner.yml) | Weekly, manual, PRs that change the build | Scans every resolved Gradle dependency; scheduled runs fail on high or critical |
 | [OWASP Dependency-Check](.github/workflows/owasp.yml) | Weekly, manual | NVD scan of runtime dependencies (needs the `NVD_API_KEY` secret); fails on CVSS ≥ 7.0 |
+| [End-to-end](.github/workflows/e2e.yml) | Weekly, manual, PRs that change the agent endpoints or the contract | `scripts/e2e.sh`: the real desktop agent, headless, against this API (needs the `E2E_REPO_TOKEN` secret; skipped with a notice without it) |
 
 A new push cancels the superseded CI run of the same branch. Dependabot opens weekly update PRs to `develop`. See [.github/SECURITY.md](.github/SECURITY.md) for vulnerability reporting.
 
