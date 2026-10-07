@@ -11,7 +11,14 @@ public enum HogarError implements CodigoError {
             HttpStatus.UNPROCESSABLE_CONTENT,
             "El consentimiento solo se registra si el adulto mayor lo acepta, incluida la vista en vivo."),
     SIN_CONSENTIMIENTO(
-            "SIN_CONSENTIMIENTO", HttpStatus.NOT_FOUND, "Aún no se registró el consentimiento del adulto mayor.");
+            "SIN_CONSENTIMIENTO", HttpStatus.NOT_FOUND, "Aún no se registró el consentimiento del adulto mayor."),
+    YA_ES_FAMILIAR("YA_ES_FAMILIAR", HttpStatus.CONFLICT, "Esa persona ya es familiar de este hogar."),
+    INVITACION_VENCIDA(
+            "INVITACION_VENCIDA",
+            HttpStatus.GONE,
+            "La invitación ya no es válida. Pide una nueva al familiar titular."),
+    NO_SE_PUEDE_RETIRAR_TITULAR(
+            "NO_SE_PUEDE_RETIRAR_TITULAR", HttpStatus.CONFLICT, "El familiar titular no puede retirarse del hogar.");
 
     private final String codigo;
     private final HttpStatus estado;

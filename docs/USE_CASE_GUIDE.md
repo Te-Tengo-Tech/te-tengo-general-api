@@ -15,7 +15,7 @@ Example: **US-06 / CA-06.2**, renaming a camera's room. It is the `camaras` slic
    - DTOs are `record`s;
    - the mapper is static.
    - Paths, fields and error codes must match the API contract exactly.
-7. **Integration test:** extend `AbstractIntegrationTest` and use `JwtDePrueba.tokenDeFamiliar(hogar)`. It must cover:
+7. **Integration test:** extend `AbstractIntegrationTest`. Create members with `ApiDePrueba.titularConHogar` (through the API) or `DatosDePrueba.hogar` plus `JwtDePrueba.token(usuario, hogar, rol)`: a token only opens a household its user belongs to. It must cover:
    - the happy path;
    - each error as a `ProblemDetail` with its `codigo`;
    - **isolation between two households**.

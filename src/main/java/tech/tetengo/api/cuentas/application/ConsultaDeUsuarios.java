@@ -29,6 +29,12 @@ public class ConsultaDeUsuarios implements DirectorioDeUsuarios {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Usuario> buscarPorCorreo(String correo) {
+        return cuentas.buscarPorCorreo(Cuenta.normalizarCorreo(correo)).map(ConsultaDeUsuarios::aUsuario);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<UUID, Usuario> buscarTodos(Collection<UUID> ids) {
         return cuentas.buscarTodos(ids).stream()
                 .map(ConsultaDeUsuarios::aUsuario)

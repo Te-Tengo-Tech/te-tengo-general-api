@@ -3,6 +3,7 @@ package tech.tetengo.api.shared.infrastructure.security;
 import static org.springframework.http.HttpMethod.POST;
 
 import java.util.function.Supplier;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -17,6 +18,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
+import tech.tetengo.api.shared.application.port.ComprobadorDeMembresia;
 import tech.tetengo.api.shared.domain.model.Rol;
 import tech.tetengo.api.shared.infrastructure.multitenancy.FiltroHogarActual;
 import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
@@ -35,7 +37,8 @@ public class SeguridadConfig {
     private static final String AUTORIDAD_AGENTE = "ROLE_" + Rol.AGENTE.name();
 
     @Bean
-    SecurityFilterChain cadenaDeSeguridad(HttpSecurity http) throws Exception {
+    SecurityFilterChain cadenaDeSeguridad(HttpSecurity http, ObjectProvider<ComprobadorDeMembresia> membresias)
+            throws Exception {
         return http.csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.requestMatchers(
@@ -48,14 +51,16 @@ public class SeguridadConfig {
                                 API + "/sesiones/refresco",
                                 API + "/recuperaciones",
                                 API + "/recuperaciones/confirmacion",
-                                API + "/agente/camaras/registro")
+                                API + "/agente/camaras/registro",
+                                API + "/invitaciones/*/aceptacion")
                         .permitAll()
                         .requestMatchers(API + "/agente/**")
                         .hasRole(Rol.AGENTE.name())
                         .anyRequest()
                         .access(usuarioQueNoEsAgente()))
                 .oauth2ResourceServer(rs -> rs.jwt(jwt -> jwt.jwtAuthenticationConverter(convertidorDeRoles())))
-                .addFilterAfter(new FiltroHogarActual(), BearerTokenAuthenticationFilter.class)
+                .addFilterAfter(
+                        new FiltroHogarActual(membresias::getIfAvailable), BearerTokenAuthenticationFilter.class)
                 .build();
     }
 

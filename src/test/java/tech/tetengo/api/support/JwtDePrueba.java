@@ -48,16 +48,10 @@ public class JwtDePrueba {
         return codificador();
     }
 
-    /** Token of the owner ({@code TITULAR}) of the given household, with a random user id. */
-    public static String tokenDeFamiliar(UUID hogarId) {
-        return token(UUID.randomUUID(), hogarId, Rol.TITULAR);
-    }
-
-    /** Token of an invited member ({@code INVITADO}) of the given household. */
-    public static String tokenDeInvitado(UUID hogarId) {
-        return token(UUID.randomUUID(), hogarId, Rol.INVITADO);
-    }
-
+    /**
+     * Token of a family member. The household is only bound while the user is a member of it
+     * (CA-08.3), so create the membership first (e.g. {@code DatosDePrueba.hogar}).
+     */
     public static String token(UUID usuarioId, UUID hogarId, Rol rol) {
         var claims = JwtClaimsSet.builder()
                 .subject(usuarioId.toString())
