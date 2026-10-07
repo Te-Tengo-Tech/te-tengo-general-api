@@ -47,6 +47,8 @@ class RecuperacionIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(correos.enviadosA("ana@correo.pe")).hasSize(1);
         String token = correos.ultimoToken("ana@correo.pe");
+        assertThat(correos.enviadosA("ana@correo.pe").getFirst().cuerpo())
+                .contains("tetengo://app/nueva-contrasena?token=" + token);
 
         confirmar(token, "nueva-clave").andExpect(status().isNoContent());
 

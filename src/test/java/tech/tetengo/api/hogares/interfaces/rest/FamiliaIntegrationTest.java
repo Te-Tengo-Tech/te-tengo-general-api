@@ -80,7 +80,9 @@ class FamiliaIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(correos.enviadosA("beto@correo.pe")).hasSize(1);
         assertThat(correos.ultimoToken("beto@correo.pe")).isNotBlank();
-        assertThat(correos.enviadosA("beto@correo.pe").getFirst().cuerpo()).contains("Ana");
+        assertThat(correos.enviadosA("beto@correo.pe").getFirst().cuerpo())
+                .contains("Ana")
+                .contains("tetengo://app/invitacion/" + correos.ultimoToken("beto@correo.pe"));
     }
 
     @Test

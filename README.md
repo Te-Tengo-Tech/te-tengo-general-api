@@ -24,11 +24,11 @@ It receives the events detected by the household agent and serves the family mem
 |---|---|---|
 | `TT_JWT_CLAVE_PUBLICA` | RS256 public key (X.509 PEM) that validates every token | `file:.claves/publica.pem` |
 | `TT_JWT_CLAVE_PRIVADA` | RS256 private key (PKCS#8 PEM) that signs the tokens the API issues | `file:.claves/privada.pem` |
-| `TT_ENLACE_RECUPERACION` | Password-reset link sent by e-mail; `{token}` is replaced | `tetengo://recuperacion?token={token}` (pending, see BLOCKERS) |
+| `TT_ENLACE_RECUPERACION` | Password-reset link sent by e-mail; `{token}` is replaced | `tetengo://app/nueva-contrasena?token={token}` |
 | `TT_URL_TRANSMISION` | Base of the live view stream URL (`wss://` in production) | `ws://localhost:8080` |
 | `TT_RETENCION_CLIPS` | How long clips are kept, e.g. `30d` (unset: kept; pending, see BLOCKERS) | — |
 | `TT_AGENTE_VERSION_PUBLICADA` | Agent release published by `GET /api/agente/configuracion` (thresholds: `tetengo.agente.umbrales`, empty by default) | `0.2.0` |
-| `TT_ENLACE_INVITACION` | Invitation link sent by e-mail; `{token}` is replaced | `tetengo://invitacion?token={token}` (pending, see BLOCKERS) |
+| `TT_ENLACE_INVITACION` | Invitation link sent by e-mail; `{token}` is replaced | `tetengo://app/invitacion/{token}` |
 
 ## Tests
 ```bash

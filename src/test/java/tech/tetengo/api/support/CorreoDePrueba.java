@@ -9,7 +9,7 @@ import tech.tetengo.api.shared.application.port.NotificadorCorreo;
 /** Records the e-mails instead of sending them. */
 public class CorreoDePrueba implements NotificadorCorreo {
 
-    private static final Pattern TOKEN = Pattern.compile("token=([A-Za-z0-9_-]+)");
+    private static final Pattern TOKEN = Pattern.compile("(?:token=|/invitacion/)([A-Za-z0-9_-]+)");
 
     private final List<Correo> enviados = new CopyOnWriteArrayList<>();
 

@@ -59,10 +59,10 @@ tetengo:
     # the team decides (docs/BLOCKERS.md). Example: TT_RETENCION_CLIPS=30d
     retencion-de-clips: ${TT_RETENCION_CLIPS:}
   enlaces:
-    # Link e-mailed to reset a password; {token} is the one-time token. The app's deep-link format is
-    # pending (docs/BLOCKERS.md).
-    recuperacion: ${TT_ENLACE_RECUPERACION:tetengo://recuperacion?token={token}}
-    invitacion: ${TT_ENLACE_INVITACION:tetengo://invitacion?token={token}}
+    # Links e-mailed to reset a password and to accept an invitation; {token} is the one-time token.
+    # Defaults: the mobile app's deep-link routes (custom scheme tetengo://app, lib/app/rutas.dart).
+    recuperacion: ${TT_ENLACE_RECUPERACION:tetengo://app/nueva-contrasena?token={token}}
+    invitacion: ${TT_ENLACE_INVITACION:tetengo://app/invitacion/{token}}
   invitaciones:
     # The backlog does not say how long an invitation lasts: placeholder pending (docs/BLOCKERS.md).
     vigencia: 7d
