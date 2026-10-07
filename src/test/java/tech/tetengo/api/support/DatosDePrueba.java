@@ -33,6 +33,21 @@ public final class DatosDePrueba {
         return hogar(jdbc, UUID.randomUUID(), "Rosa");
     }
 
+    /** An installation credential of the household (what scripts/create-installation.sh creates). */
+    public static String instalacion(JdbcTemplate jdbc, UUID hogar) {
+        String credencial = "credencial-" + UUID.randomUUID();
+        Timestamp ahora = Timestamp.from(Instant.now());
+        jdbc.update(
+                "insert into instalaciones (id, hogar_id, credencial_hash, creado_en, actualizado_en)"
+                        + " values (?, ?, encode(sha256(convert_to(?, 'UTF8')), 'hex'), ?, ?)",
+                UUID.randomUUID(),
+                hogar,
+                credencial,
+                ahora,
+                ahora);
+        return credencial;
+    }
+
     public static void membresia(JdbcTemplate jdbc, UUID hogar, UUID usuario, Rol rol) {
         // Memberships created one after another keep their order even within the same millisecond.
         Timestamp creado = new Timestamp(System.currentTimeMillis());

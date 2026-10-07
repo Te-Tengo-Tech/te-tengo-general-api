@@ -57,6 +57,11 @@ public class Camara extends EntidadDelHogar {
         this.estadoConexion = EstadoConexion.EN_LINEA;
     }
 
+    /** CA-22.1: a paused camera neither captures nor detects until its pause ends. */
+    public boolean estaPausada(Instant ahora) {
+        return pausadaHasta != null && ahora.isBefore(pausadaHasta);
+    }
+
     public String getNombreHabitacion() {
         return nombreHabitacion;
     }
