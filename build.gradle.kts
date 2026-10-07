@@ -77,7 +77,7 @@ dependencies {
     exclude(group = "com.google.cloud", module = "google-cloud-storage")
   }
   // FirebaseMessaging parses FCM answers with it; it used to come with the excluded modules.
-  implementation("com.google.http-client:google-http-client-jackson2:2.1.0")
+  implementation("com.google.http-client:google-http-client-jackson2:2.1.1")
 
   // Utilidades: UUID v7
   implementation("com.github.f4b6a3:uuid-creator:6.1.1")
