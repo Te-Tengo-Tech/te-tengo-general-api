@@ -27,6 +27,12 @@ public class Dispositivo extends AggregateRoot {
     @Column(nullable = false, length = 10)
     private Plataforma plataforma;
 
+    @Column(nullable = false)
+    private boolean activo = true;
+
+    @Column(name = "referencia_push", length = 1024)
+    private String referenciaPush;
+
     protected Dispositivo() {}
 
     public Dispositivo(String tokenPush, UUID usuarioId, Plataforma plataforma) {
@@ -34,10 +40,29 @@ public class Dispositivo extends AggregateRoot {
         asignar(usuarioId, plataforma);
     }
 
-    /** The phone now belongs to whoever registered it last (e.g. another account signed in). */
+    /**
+     * The phone now belongs to whoever registered it last (e.g. another account signed in). A
+     * registration also reactivates the device; the provider's address is dropped when the device was
+     * inactive or changed platform, so the provider creates or re-enables it on the next push.
+     */
     public void asignar(UUID usuarioId, Plataforma plataforma) {
+        Objects.requireNonNull(plataforma, "plataforma");
+        if (!activo || (this.plataforma != null && this.plataforma != plataforma)) {
+            referenciaPush = null;
+        }
         this.usuarioId = Objects.requireNonNull(usuarioId, "usuarioId");
-        this.plataforma = Objects.requireNonNull(plataforma, "plataforma");
+        this.plataforma = plataforma;
+        this.activo = true;
+    }
+
+    /** The push service rejected the token: no more notices until the phone registers it again. */
+    public void desactivar() {
+        activo = false;
+    }
+
+    /** The push provider's address of this device (the Amazon SNS platform endpoint ARN). */
+    public void asignarReferenciaPush(String referencia) {
+        this.referenciaPush = referencia;
     }
 
     public String getTokenPush() {
@@ -50,5 +75,13 @@ public class Dispositivo extends AggregateRoot {
 
     public Plataforma getPlataforma() {
         return plataforma;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public String getReferenciaPush() {
+        return referenciaPush;
     }
 }

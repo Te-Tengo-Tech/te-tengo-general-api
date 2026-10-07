@@ -12,6 +12,7 @@ public interface DispositivoRepository {
 
     Optional<Dispositivo> buscarPorToken(String tokenPush);
 
+    /** Active devices of the users. */
     List<Dispositivo> deUsuarios(Collection<UUID> usuarioIds);
 
     void eliminar(Dispositivo dispositivo);

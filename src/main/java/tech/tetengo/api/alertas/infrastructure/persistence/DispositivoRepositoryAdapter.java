@@ -29,7 +29,7 @@ class DispositivoRepositoryAdapter implements DispositivoRepository {
 
     @Override
     public List<Dispositivo> deUsuarios(Collection<UUID> usuarioIds) {
-        return jpa.findByUsuarioIdIn(usuarioIds);
+        return jpa.findByUsuarioIdInAndActivoTrue(usuarioIds);
     }
 
     @Override
