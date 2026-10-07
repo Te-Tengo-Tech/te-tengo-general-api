@@ -22,6 +22,15 @@ public interface AlertaRepository {
 
     record Pagina<T>(List<T> elementos, long total) {}
 
+    /** Active, not yet escalated alerts of the household in context. */
+    List<Alerta> activasSinEscalar();
+
+    /**
+     * Households with active, not yet escalated alerts that happened before {@code limite}: a native
+     * query across households, only for the escalation job.
+     */
+    List<UUID> hogaresConActivasSinEscalarAntesDe(Instant limite);
+
     /** Alerts of the household in context whose clip has not been deleted. */
     List<Alerta> conClip();
 

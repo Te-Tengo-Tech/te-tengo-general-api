@@ -1,6 +1,7 @@
 package tech.tetengo.api.alertas.infrastructure.persistence;
 
 import jakarta.persistence.criteria.Predicate;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -56,6 +57,16 @@ class AlertaRepositoryAdapter implements AlertaRepository {
                 condicion,
                 PageRequest.of(pagina, tamano, Sort.by(Sort.Order.desc("ocurridaEn"), Sort.Order.desc("id"))));
         return new Pagina<>(resultado.getContent(), resultado.getTotalElements());
+    }
+
+    @Override
+    public List<Alerta> activasSinEscalar() {
+        return jpa.findByEstadoAndEscaladaEnIsNull(EstadoAlerta.ACTIVA);
+    }
+
+    @Override
+    public List<UUID> hogaresConActivasSinEscalarAntesDe(Instant limite) {
+        return jpa.hogaresConActivasSinEscalarAntesDe(limite);
     }
 
     @Override

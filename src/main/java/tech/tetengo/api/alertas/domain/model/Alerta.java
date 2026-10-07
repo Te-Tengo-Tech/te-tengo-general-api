@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -141,6 +142,18 @@ public class Alerta extends EntidadDelHogar {
         estado = nuevo;
         atendidaPor = Objects.requireNonNull(usuarioId, "usuarioId");
         atendidaEn = Objects.requireNonNull(ahora, "ahora");
+    }
+
+    /**
+     * CA-20.1: still active once the wait is over; the alert is escalated once. Returns whether it
+     * had to be escalated now.
+     */
+    public boolean escalarSiVencio(Instant ahora, Duration espera) {
+        if (estado != EstadoAlerta.ACTIVA || escaladaEn != null || ahora.isBefore(ocurridaEn.plus(espera))) {
+            return false;
+        }
+        escaladaEn = ahora;
+        return true;
     }
 
     /** The push was accepted by the push service (CA-16.1). */
