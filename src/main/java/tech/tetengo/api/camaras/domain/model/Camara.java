@@ -36,6 +36,9 @@ public class Camara extends EntidadDelHogar {
     @Column(name = "deteccion_confiable", nullable = false)
     private boolean deteccionConfiable = true;
 
+    @Column(name = "no_confiable_desde")
+    private Instant noConfiableDesde;
+
     protected Camara() {}
 
     public Camara(String nombreHabitacion) {
@@ -92,15 +95,22 @@ public class Camara extends EntidadDelHogar {
         return true;
     }
 
-    /** CA-15.3: for over 5 minutes the agent only got frames it had to discard. */
-    public boolean marcarDeteccionNoConfiable() {
-        boolean cambio = deteccionConfiable;
+    /**
+     * CA-15.3: for over 5 minutes the agent only got frames it had to discard. {@code desde} is kept
+     * from the first report, so a repeated one neither moves it nor notifies again.
+     */
+    public boolean marcarDeteccionNoConfiable(Instant desde) {
+        if (!deteccionConfiable) {
+            return false;
+        }
         deteccionConfiable = false;
-        return cambio;
+        noConfiableDesde = Objects.requireNonNull(desde, "desde");
+        return true;
     }
 
     public void marcarDeteccionConfiable() {
         deteccionConfiable = true;
+        noConfiableDesde = null;
     }
 
     /** US-22 / CA-22.1: capture and detection stop until {@code hasta}; a new pause replaces the old one. */
@@ -145,5 +155,18 @@ public class Camara extends EntidadDelHogar {
 
     public boolean isDeteccionConfiable() {
         return deteccionConfiable;
+    }
+
+    /** Null while detection is reliable. */
+    public Instant getNoConfiableDesde() {
+        return noConfiableDesde;
+    }
+
+    /**
+     * The camera is created by the agent's first registration, which the project team runs when it
+     * installs the camera (CA-06.1).
+     */
+    public Instant getInstaladaEn() {
+        return getCreadoEn();
     }
 }

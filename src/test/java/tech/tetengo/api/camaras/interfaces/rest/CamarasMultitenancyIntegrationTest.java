@@ -1,6 +1,9 @@
 package tech.tetengo.api.camaras.interfaces.rest;
 
+import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -34,14 +37,22 @@ class CamarasMultitenancyIntegrationTest extends AbstractIntegrationTest {
     UUID hogarB;
     UUID camaraDeB = UUID.randomUUID();
 
+    Instant instaladaEnA = Instant.parse("2026-08-03T14:00:00Z");
+    Instant instaladaEnB = Instant.parse("2026-09-22T15:30:00Z");
+
     @BeforeEach
     void datos() {
-        var ahora = java.sql.Timestamp.from(Instant.now());
+        var enA = java.sql.Timestamp.from(instaladaEnA);
         hogarA = DatosDePrueba.hogar(jdbc, titularA, "Rosa");
         hogarB = DatosDePrueba.hogar(jdbc, titularB, "Jorge");
-        insertarCamara(UUID.randomUUID(), hogarA, "Sala", ahora);
-        insertarCamara(UUID.randomUUID(), hogarA, "Dormitorio", ahora);
-        insertarCamara(camaraDeB, hogarB, "Cocina", ahora);
+        insertarCamara(UUID.randomUUID(), hogarA, "Sala", enA);
+        insertarCamara(UUID.randomUUID(), hogarA, "Dormitorio", enA);
+        insertarCamara(camaraDeB, hogarB, "Cocina", java.sql.Timestamp.from(instaladaEnB));
+        // Household B's detection is unreliable; household A must not see it.
+        jdbc.update(
+                "update camaras set deteccion_confiable = false, no_confiable_desde = ? where id = ?",
+                java.sql.Timestamp.from(instaladaEnB.plusSeconds(3600)),
+                camaraDeB);
     }
 
     private void insertarCamara(UUID id, UUID hogar, String nombre, java.sql.Timestamp ahora) {
@@ -65,10 +76,16 @@ class CamarasMultitenancyIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$[0].estadoConexion").value("DESCONECTADA"))
                 .andExpect(jsonPath("$[0].ultimaSenal").isEmpty())
                 .andExpect(jsonPath("$[0].pausadaHasta").isEmpty())
-                .andExpect(jsonPath("$[0].deteccionConfiable").value(true));
+                .andExpect(jsonPath("$[0].deteccionConfiable").value(true))
+                .andExpect(jsonPath("$[*].instaladaEn", everyItem(is(instaladaEnA.toString()))))
+                .andExpect(jsonPath("$[*].noConfiableDesde", everyItem(nullValue())));
         mvc.perform(get("/api/camaras")
                         .header("Authorization", "Bearer " + JwtDePrueba.token(titularB, hogarB, Rol.TITULAR)))
-                .andExpect(jsonPath("$", hasSize(1)));
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].instaladaEn").value(instaladaEnB.toString()))
+                .andExpect(jsonPath("$[0].deteccionConfiable").value(false))
+                .andExpect(jsonPath("$[0].noConfiableDesde")
+                        .value(instaladaEnB.plusSeconds(3600).toString()));
     }
 
     @Test

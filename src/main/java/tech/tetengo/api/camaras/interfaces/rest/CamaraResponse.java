@@ -10,4 +10,6 @@ record CamaraResponse(
         String estadoConexion,
         Instant ultimaSenal,
         Instant pausadaHasta,
-        boolean deteccionConfiable) {}
+        boolean deteccionConfiable,
+        Instant instaladaEn,
+        Instant noConfiableDesde) {}

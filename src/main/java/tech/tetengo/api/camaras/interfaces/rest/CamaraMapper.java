@@ -13,6 +13,8 @@ final class CamaraMapper {
                 camara.getEstadoConexion().name(),
                 camara.getUltimaSenal(),
                 camara.getPausadaHasta(),
-                camara.isDeteccionConfiable());
+                camara.isDeteccionConfiable(),
+                camara.getInstaladaEn(),
+                camara.getNoConfiableDesde());
     }
 }

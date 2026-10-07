@@ -11,7 +11,9 @@ record CamaraResponse(
         String estadoConexion,
         Instant ultimaSenal,
         Instant pausadaHasta,
-        boolean deteccionConfiable) {
+        boolean deteccionConfiable,
+        Instant instaladaEn,
+        Instant noConfiableDesde) {
 
     static CamaraResponse de(EstadoDeCamara camara) {
         return new CamaraResponse(
@@ -20,6 +22,8 @@ record CamaraResponse(
                 camara.estadoConexion(),
                 camara.ultimaSenal(),
                 camara.pausadaHasta(),
-                camara.deteccionConfiable());
+                camara.deteccionConfiable(),
+                camara.instaladaEn(),
+                camara.noConfiableDesde());
     }
 }
