@@ -16,8 +16,8 @@ Lee antes de cambiar algo:
 
 ## Dónde guiarte
 - **Qué hacer y en qué orden:** [docs/PLAN_DE_TRABAJO.md](docs/PLAN_DE_TRABAJO.md), por sprint y módulo.
-- **Cómo debe funcionar cada flujo:** , la secuencia completa entre el agente, el backend, la base de datos, el almacenamiento de clips, el push y la app.
-- **Cómo debe comportarse:** los criterios de aceptación en .
+- **Cómo debe funcionar cada flujo:** `docs/referencias/diagramas/integracion.puml`, la secuencia completa entre el agente, el backend, la base de datos, el almacenamiento de clips, el push y la app.
+- **Cómo debe comportarse:** los criterios de aceptación en `docs/referencias/PRODUCT_BACKLOG.md`.
 
 ## Visión general
 - **Monolito modular:** Java 25 + Spring Boot 4.1 + Spring Modulith 2.1 + PostgreSQL 18 + Flyway. El paquete base es `tech.tetengo.api`.
