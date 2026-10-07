@@ -6,6 +6,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Objects;
 import tech.tetengo.api.camaras.CamaraDesconectada;
 import tech.tetengo.api.camaras.CamaraReconectada;
 import tech.tetengo.api.camaras.domain.CamaraError;
@@ -88,6 +89,25 @@ public class Camara extends EntidadDelHogar {
 
     public void marcarDeteccionConfiable() {
         deteccionConfiable = true;
+    }
+
+    /** US-22 / CA-22.1: capture and detection stop until {@code hasta}; a new pause replaces the old one. */
+    public void pausar(Instant hasta) {
+        this.pausadaHasta = Objects.requireNonNull(hasta, "hasta");
+    }
+
+    /** Resume now (manual resume). */
+    public void reanudar() {
+        this.pausadaHasta = null;
+    }
+
+    /** CA-22.3: the pause is over; returns whether it ended now. */
+    public boolean finalizarPausaSiVencio(Instant ahora) {
+        if (pausadaHasta == null || ahora.isBefore(pausadaHasta)) {
+            return false;
+        }
+        pausadaHasta = null;
+        return true;
     }
 
     /** CA-22.1: a paused camera neither captures nor detects until its pause ends. */

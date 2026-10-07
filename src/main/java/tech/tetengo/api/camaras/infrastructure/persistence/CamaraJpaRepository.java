@@ -15,4 +15,8 @@ interface CamaraJpaRepository extends JpaRepository<Camara, UUID> {
             value = "select id, hogar_id from camaras where estado_conexion = 'EN_LINEA' and ultima_senal < :limite",
             nativeQuery = true)
     List<Object[]> enLineaSinSenalDesde(Instant limite);
+
+    /** Native, so not filtered by household: only for the resume job. */
+    @Query(value = "select id, hogar_id from camaras where pausada_hasta <= :ahora", nativeQuery = true)
+    List<Object[]> conPausaVencida(Instant ahora);
 }
