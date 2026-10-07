@@ -54,7 +54,7 @@ public final class ApiDePrueba {
                         .header("Authorization", bearer(campo(sesion, "$.tokenAcceso")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(
-                                "{\"adultoMayor\":{\"nombre\":\"Adulto de %s\",\"direccion\":\"Lima\",\"convivencia\":\"SOLO\"}}"
+                                "{\"adultoMayor\":{\"nombre\":\"Adulto de %s\",\"edad\":78,\"direccion\":\"Lima\",\"convivencia\":\"SOLO\"}}"
                                         .formatted(nombre)))
                 .andExpect(status().isCreated())
                 .andReturn()

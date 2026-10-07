@@ -10,7 +10,8 @@ import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 
 class HogarAvisoTest {
 
-    private final Hogar hogar = new Hogar(UUID.randomUUID(), new AdultoMayor("Rosa", "Lima", Convivencia.SOLO));
+    private final Hogar hogar =
+            new Hogar(UUID.randomUUID(), new AdultoMayor("Rosa", 78, "Lima", Convivencia.SOLO, null));
 
     @Test
     void ca10_3_sinElegirSeEsperanCincoMinutos() {
