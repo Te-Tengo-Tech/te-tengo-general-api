@@ -41,6 +41,11 @@ tetengo:
     # Pre-signed clip URLs are short-lived (implementation choice).
     vigencia-url-subida: 10m
     vigencia-url-lectura: 5m
+  vista-en-vivo:
+    # Base of urlTransmision (wss:// in production) and how long the URL can be used to connect
+    # (implementation choice; the transport is a proposal pending team confirmation).
+    url-base: ${TT_URL_TRANSMISION:ws://localhost:8080}
+    vigencia: 5m
   enlaces:
     # Link e-mailed to reset a password; {token} is the one-time token. The app's deep-link format is
     # pending (docs/BLOCKERS.md).

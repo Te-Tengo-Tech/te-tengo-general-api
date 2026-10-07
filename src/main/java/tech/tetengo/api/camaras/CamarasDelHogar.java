@@ -13,6 +13,9 @@ public interface CamarasDelHogar {
 
     Optional<CamaraDelHogar> buscar(UUID camaraId);
 
+    /** The camera as the app sees it. */
+    Optional<EstadoDeCamara> estado(UUID camaraId);
+
     /** CA-15.3: only frames that were discarded for 5 minutes. True if it was reliable until now. */
     boolean marcarDeteccionNoConfiable(UUID camaraId);
 

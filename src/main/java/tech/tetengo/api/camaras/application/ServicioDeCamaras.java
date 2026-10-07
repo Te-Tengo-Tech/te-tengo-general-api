@@ -32,6 +32,12 @@ public class ServicioDeCamaras implements CamarasDelHogar {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Optional<EstadoDeCamara> estado(UUID camaraId) {
+        return camaras.buscar(camaraId).map(ServicioDeCamaras::estado);
+    }
+
+    @Override
     @Transactional
     public Optional<EstadoDeCamara> pausar(UUID camaraId, Instant hasta) {
         return camaras.buscar(camaraId).map(camara -> {
