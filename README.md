@@ -17,6 +17,11 @@ It receives the events detected by the household agent and serves the family mem
 ./gradlew bootRun            # runs the API (profile `local`) and starts PostgreSQL and SeaweedFS via compose.yaml
 ```
 - Clips: with the `local` profile they go to SeaweedFS, an S3-compatible store, at http://localhost:8333 (bucket `te-tengo-clips`, created at startup). The pre-signed URLs use that host, so the household agent on this machine and the iOS simulator can upload and play clips.
+To try the three apps together, seed the prototype's demo household (account, household, consent and one agent installation) into the running API. With a path, the script also writes the desktop agent's configuration:
+```bash
+./scripts/seed-demo.sh ../te-tengo-desktop-pywebview/config.local.toml
+```
+
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - Health: http://localhost:8080/actuator/health
 
