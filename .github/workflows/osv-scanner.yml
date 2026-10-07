@@ -43,7 +43,7 @@ jobs:
           scan-args: |-
             --lockfile=gradle.lockfile
             --format=json
-            --output=osv-results.json
+            --output-file=osv-results.json
       - name: Summary and gate
         run: |
           gate=""

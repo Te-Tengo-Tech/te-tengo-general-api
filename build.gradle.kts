@@ -159,6 +159,8 @@ tasks.jacocoTestReport {
 tasks.jacocoTestCoverageVerification {
   executionData(fileTree(layout.buildDirectory.get().asFile).include("jacoco/*.exec"))
   mustRunAfter(tasks.withType<Test>())
+  // The filtered class directories below lose the link to compileJava; declare it explicitly.
+  dependsOn(tasks.classes)
   classDirectories.setFrom(
       sourceSets.main.get().output.classesDirs.map {
         fileTree(it) { include("**/domain/**", "**/application/**") }
