@@ -1,0 +1,10 @@
+# Infraestructura local. Spring Boot la levanta sola con `./gradlew bootRun` (spring-boot-docker-compose).
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: tetengo
+      POSTGRES_USER: tetengo
+      POSTGRES_PASSWORD: tetengo
+    ports:
+      - "5432"

@@ -1,0 +1,12 @@
+# Instalar una vez con: lefthook install
+pre-commit:
+  commands:
+    spotless:
+      glob: "*.{java,kts}"
+      run: ./gradlew spotlessApply --no-daemon -q && git add {staged_files}
+commit-msg:
+  commands:
+    conventional:
+      run: |
+        head -1 {1} | grep -qE '^(feat|fix|docs|test|refactor|build|ci|chore|perf|style|revert)(\([a-z0-9-]+\))?!?: .+' \
+          || { echo "El mensaje debe seguir Conventional Commits: tipo(ámbito): descripción"; exit 1; }
