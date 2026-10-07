@@ -45,6 +45,9 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 - Agent endpoints follow the bodies of `docs/AGENT_CONTRACT.md` shared with `te-tengo-desktop-pywebview`: registration takes `credencialInstalacion` and answers `hogarId` and the stored `nombreHabitacion`; the capture state carries `motivo` (`SIN_CONSENTIMIENTO`, `EN_PAUSA`) and `nombreHabitacion`; the heartbeat takes `{webcamConectada, deteccionConfiable, versionAgente}`, answers the capture state and disconnects the camera at once when the webcam is unavailable; the clip upload answers `201 {urlSubida, cabeceras, expiraEn}`.
 - Documentation translated to English, with English file names.
 - Local runs use Floci, a local AWS emulator, instead of SeaweedFS: `compose.yaml` runs it on port 4566 and the `local` profile sends clips, e-mail and push to it (ADR 0005). Sent e-mails are listed at `/_aws/ses` and pushes at `/_aws/sns/push-notifications`.
+### Security
+- Tomcat 11.0.24 → 11.0.26 (override of Spring Boot's `tomcat.version`): fixes the critical CVE-2026-65905, CVE-2026-68525 and CVE-2026-65182.
+- Jackson 3.1.5 → 3.1.7 and 2.21.5 → 2.21.7 (overrides of `jackson-bom.version` and `jackson-2-bom.version`): fixes the high CVE-2026-91777, CVE-2026-91776, CVE-2026-68497, CVE-2026-89425 and CVE-2026-89407, and the medium CVE-2026-83557 and CVE-2026-19032.
 
 ## [0.1.0] - 2026-10-07
 ### Added

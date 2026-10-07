@@ -25,6 +25,18 @@ extra["springModulithVersion"] = "2.1.1"
 
 extra["awsSdkVersion"] = "2.55.12"
 
+// Overrides of versions managed by Spring Boot 4.1.1 (the latest 4.1.x patch) that have known
+// vulnerabilities. Remove each one once a Boot release manages the fixed version or a newer one.
+// Tomcat 11.0.24: CVE-2026-65905 (DIGEST authentication bypass), CVE-2026-68525 (FORM
+// authentication) and CVE-2026-65182 (access control), all critical; fixed in 11.0.25.
+extra["tomcat.version"] = "11.0.26"
+
+// Jackson 3.1.5 and 2.21.5: CVE-2026-91777, CVE-2026-91776 and CVE-2026-68497 (jackson-databind)
+// and CVE-2026-89425 and CVE-2026-89407 (jackson-core), all high; fixed in 3.1.7 and 2.21.7.
+extra["jackson-bom.version"] = "3.1.7"
+
+extra["jackson-2-bom.version"] = "2.21.7"
+
 dependencies {
   // Web, WebSocket (vista en vivo) y documentación OpenAPI
   implementation("org.springframework.boot:spring-boot-starter-webmvc")
@@ -65,7 +77,7 @@ dependencies {
     exclude(group = "com.google.cloud", module = "google-cloud-storage")
   }
   // FirebaseMessaging parses FCM answers with it; it used to come with the excluded modules.
-  implementation("com.google.http-client:google-http-client-jackson2:2.1.0")
+  implementation("com.google.http-client:google-http-client-jackson2:2.1.1")
 
   // Utilidades: UUID v7
   implementation("com.github.f4b6a3:uuid-creator:6.1.1")
