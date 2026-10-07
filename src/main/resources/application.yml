@@ -55,6 +55,11 @@ tetengo:
     # (implementation choice: the backlog only says "retries").
     reintento-cada: 15s
     intentos-maximos: 20
+    # Push adapter: registro (default, only logs), fcm, sns or simulador. docs/NOTIFICATIONS.md
+    proveedor: ${TT_PUSH_PROVEEDOR:registro}
+    fcm:
+      # Path of the Firebase service-account JSON key; never commit it.
+      credenciales: ${TT_FCM_CREDENCIALES:}
   clips:
     # Pre-signed clip URLs are short-lived (implementation choice).
     vigencia-url-subida: 10m
