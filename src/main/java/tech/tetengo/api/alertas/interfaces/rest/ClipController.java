@@ -4,6 +4,7 @@ import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import tech.tetengo.api.alertas.application.ObtenerClip;
 import tech.tetengo.api.alertas.application.PrepararSubidaDeClip;
@@ -31,9 +32,10 @@ class ClipController {
         return aRespuesta(prepararSubida.ejecutar(UsuarioActual.camaraId().orElseThrow(), eventoId));
     }
 
+    /** US-18 / US-26: watch the clip, or download it with {@code descarga=true} (CA-26.2). */
     @GetMapping(path = API + "/alertas/{id}/clip", version = ApiVersioning.V1)
-    UrlDeClipResponse ver(@PathVariable UUID id) {
-        return aRespuesta(obtenerClip.ejecutar(id, false));
+    UrlDeClipResponse ver(@PathVariable UUID id, @RequestParam(defaultValue = "false") boolean descarga) {
+        return aRespuesta(obtenerClip.ejecutar(id, descarga));
     }
 
     private static UrlDeClipResponse aRespuesta(UrlDeClip url) {
