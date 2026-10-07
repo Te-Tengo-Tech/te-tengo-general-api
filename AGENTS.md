@@ -45,7 +45,7 @@ It stores data in PostgreSQL and clips in S3, and sends push alerts through Amaz
 - **IDs:** UUID v7, generated in `AuditableEntity` constructors; never `@GeneratedValue`.
 - **Rules live in aggregates;** use cases stay thin.
 - **Ports and adapters:** ports go in `application/port`; adapters in `infrastructure/...`; `JpaRepository` interfaces are package-private.
-- **External services sit behind ports with a fake adapter for tests and local runs:** email (Amazon SES), push (Amazon SNS), object storage (S3). Never call AWS from tests.
+- **External services sit behind ports with a fake adapter for tests:** email (Amazon SES), push (Amazon SNS or Firebase, chosen by configuration), object storage (S3). Never call AWS from tests; adapter tests and local runs use Floci, a local AWS emulator (ADR 0005, docs/NOTIFICATIONS.md).
 - **Migrations:** Flyway `src/main/resources/db/migration/V<n>__<snake_case>.sql`. Never edit a published migration.
 - **Scheduled jobs** (escalation, pause end, disconnection, deletion) use `@Scheduled` and must be idempotent.
 
