@@ -13,3 +13,13 @@ tetengo:
       access-key: test
       secret-key: test
       crear-bucket: true
+  correo:
+    # E-mails go to Floci's SES: read them at http://localhost:4566/_aws/ses (TT_CORREO_PROVEEDOR=registro
+    # only logs them instead).
+    proveedor: ${TT_CORREO_PROVEEDOR:ses}
+    ses:
+      remitente: Te Tengo <no-responder@tetengo.test>
+      region: us-east-1
+      endpoint: http://localhost:4566
+      access-key: test
+      secret-key: test

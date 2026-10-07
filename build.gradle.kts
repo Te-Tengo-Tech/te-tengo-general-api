@@ -54,6 +54,8 @@ dependencies {
 
   // Clips in Amazon S3 (or an S3-compatible store): pre-signed URLs with the AWS SDK v2
   implementation("software.amazon.awssdk:s3")
+  // E-mail through Amazon SES (API v2)
+  implementation("software.amazon.awssdk:sesv2")
 
   // Utilidades: UUID v7
   implementation("com.github.f4b6a3:uuid-creator:6.1.1")

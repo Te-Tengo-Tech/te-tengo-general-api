@@ -40,6 +40,16 @@ tetengo:
     # calibrated (docs/BLOCKERS.md). Example:
     # umbrales:
     #   "[velocidad_descenso_min]": 0.5
+  correo:
+    # E-mail adapter: registro (default, only logs) or ses (Amazon SES). docs/NOTIFICATIONS.md
+    proveedor: ${TT_CORREO_PROVEEDOR:registro}
+    ses:
+      # Sender: a verified SES identity, e.g. "Te Tengo <no-responder@example.com>" (docs/BLOCKERS.md).
+      remitente: ${TT_SES_REMITENTE:}
+      # Blank: the AWS SDK's default region chain.
+      region: ${TT_SES_REGION:}
+      # Blank is AWS; locally Floci (application-local.yml).
+      endpoint: ${TT_SES_ENDPOINT:}
   push:
     # CA-16.4: a push the service did not accept is retried every 15 s, up to 20 attempts
     # (implementation choice: the backlog only says "retries").
