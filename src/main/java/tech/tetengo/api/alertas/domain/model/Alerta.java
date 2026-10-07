@@ -8,6 +8,8 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import tech.tetengo.api.alertas.domain.AlertaError;
+import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 import tech.tetengo.api.shared.domain.model.EntidadDelHogar;
 
 /**
@@ -120,6 +122,25 @@ public class Alerta extends EntidadDelHogar {
         }
         recuperadaEn = instante;
         return true;
+    }
+
+    /** CA-19.1: a family member attended it; the others see who and when (CA-19.3). */
+    public void atender(UUID usuarioId, Instant ahora) {
+        cerrar(EstadoAlerta.ATENDIDA, usuarioId, ahora);
+    }
+
+    /** CA-19.2: a false alarm; it is left out of the fall count. */
+    public void marcarFalsaAlarma(UUID usuarioId, Instant ahora) {
+        cerrar(EstadoAlerta.FALSA_ALARMA, usuarioId, ahora);
+    }
+
+    private void cerrar(EstadoAlerta nuevo, UUID usuarioId, Instant ahora) {
+        if (estado != EstadoAlerta.ACTIVA) {
+            throw new ErrorDeNegocio(AlertaError.ALERTA_CERRADA);
+        }
+        estado = nuevo;
+        atendidaPor = Objects.requireNonNull(usuarioId, "usuarioId");
+        atendidaEn = Objects.requireNonNull(ahora, "ahora");
     }
 
     /** The push was accepted by the push service (CA-16.1). */

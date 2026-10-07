@@ -7,24 +7,29 @@ import java.time.Instant;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import tech.tetengo.api.alertas.application.CambiarEstadoDeAlerta;
 import tech.tetengo.api.alertas.application.ConsultarAlertas;
 import tech.tetengo.api.alertas.application.port.AlertaRepository.FiltroDeAlertas;
 import tech.tetengo.api.alertas.domain.model.EstadoAlerta;
 import tech.tetengo.api.alertas.domain.model.TipoAlerta;
+import tech.tetengo.api.shared.infrastructure.security.UsuarioActual;
 import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
 
-/** US-25: alert history and detail. */
+/** US-25: alert history and detail; US-19: alert state. */
 @RestController
 @RequestMapping(ApiVersioning.BASE + "/alertas")
 class AlertaController {
 
     private final ConsultarAlertas consultarAlertas;
+    private final CambiarEstadoDeAlerta cambiarEstado;
 
-    AlertaController(ConsultarAlertas consultarAlertas) {
+    AlertaController(ConsultarAlertas consultarAlertas, CambiarEstadoDeAlerta cambiarEstado) {
         this.consultarAlertas = consultarAlertas;
+        this.cambiarEstado = cambiarEstado;
     }
 
     /** Newest first. {@code pagina} starts at 0; {@code tamano} defaults to 20, at most 100. */
@@ -56,5 +61,17 @@ class AlertaController {
     @GetMapping(path = "/{id}", version = ApiVersioning.V1)
     AlertaResponse detalle(@PathVariable UUID id) {
         return AlertaMapper.aRespuesta(consultarAlertas.detalle(id));
+    }
+
+    /** US-19 / CA-19.1: any member, invited ones too. */
+    @PostMapping(path = "/{id}/atencion", version = ApiVersioning.V1)
+    AlertaResponse atender(@PathVariable UUID id) {
+        return AlertaMapper.aRespuesta(cambiarEstado.atender(id, UsuarioActual.id()));
+    }
+
+    /** US-19 / CA-19.2. */
+    @PostMapping(path = "/{id}/falsa-alarma", version = ApiVersioning.V1)
+    AlertaResponse marcarFalsaAlarma(@PathVariable UUID id) {
+        return AlertaMapper.aRespuesta(cambiarEstado.marcarFalsaAlarma(id, UsuarioActual.id()));
     }
 }
