@@ -25,6 +25,12 @@ extra["springModulithVersion"] = "2.1.1"
 
 extra["awsSdkVersion"] = "2.55.12"
 
+// Overrides of versions managed by Spring Boot 4.1.1 (the latest 4.1.x patch) that have known
+// vulnerabilities. Remove each one once a Boot release manages the fixed version or a newer one.
+// Tomcat 11.0.24: CVE-2026-65905 (DIGEST authentication bypass), CVE-2026-68525 (FORM
+// authentication) and CVE-2026-65182 (access control), all critical; fixed in 11.0.25.
+extra["tomcat.version"] = "11.0.26"
+
 dependencies {
   // Web, WebSocket (vista en vivo) y documentación OpenAPI
   implementation("org.springframework.boot:spring-boot-starter-webmvc")
