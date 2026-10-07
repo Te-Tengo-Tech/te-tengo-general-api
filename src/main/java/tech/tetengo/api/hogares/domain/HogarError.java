@@ -18,7 +18,13 @@ public enum HogarError implements CodigoError {
             HttpStatus.GONE,
             "La invitación ya no es válida. Pide una nueva al familiar titular."),
     NO_SE_PUEDE_RETIRAR_TITULAR(
-            "NO_SE_PUEDE_RETIRAR_TITULAR", HttpStatus.CONFLICT, "El familiar titular no puede retirarse del hogar.");
+            "NO_SE_PUEDE_RETIRAR_TITULAR", HttpStatus.CONFLICT, "El familiar titular no puede retirarse del hogar."),
+    ESPERA_INVALIDA(
+            "ESPERA_INVALIDA", HttpStatus.UNPROCESSABLE_CONTENT, "El tiempo de espera debe ser de 3, 5 o 10 minutos."),
+    CONTACTO_NO_ES_FAMILIAR(
+            "CONTACTO_NO_ES_FAMILIAR",
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "Los contactos deben ser familiares distintos vinculados a este hogar.");
 
     private final String codigo;
     private final HttpStatus estado;
