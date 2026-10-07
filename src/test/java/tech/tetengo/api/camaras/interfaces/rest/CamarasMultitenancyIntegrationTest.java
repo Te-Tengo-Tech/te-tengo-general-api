@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import tech.tetengo.api.support.AbstractIntegrationTest;
+import tech.tetengo.api.support.DatosDePrueba;
 import tech.tetengo.api.support.JwtDePrueba;
 
 /** The key multi-tenancy test: a household never sees or changes another household's data. */
@@ -26,16 +27,15 @@ class CamarasMultitenancyIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     JdbcTemplate jdbc;
 
-    UUID hogarA = UUID.randomUUID();
-    UUID hogarB = UUID.randomUUID();
+    UUID hogarA;
+    UUID hogarB;
     UUID camaraDeB = UUID.randomUUID();
 
     @BeforeEach
     void datos() {
         var ahora = java.sql.Timestamp.from(Instant.now());
-        for (UUID hogar : new UUID[] {hogarA, hogarB}) {
-            jdbc.update("insert into hogares (id, creado_en, actualizado_en) values (?, ?, ?)", hogar, ahora, ahora);
-        }
+        hogarA = DatosDePrueba.hogar(jdbc);
+        hogarB = DatosDePrueba.hogar(jdbc);
         insertarCamara(UUID.randomUUID(), hogarA, "Sala", ahora);
         insertarCamara(UUID.randomUUID(), hogarA, "Dormitorio", ahora);
         insertarCamara(camaraDeB, hogarB, "Cocina", ahora);
