@@ -142,4 +142,24 @@ tasks.jacocoTestReport {
   }
 }
 
-tasks.named("check") { dependsOn("jacocoTestReport") }
+// Line coverage of the rules (domain) and use cases (application) must stay at 80 % or more.
+tasks.jacocoTestCoverageVerification {
+  executionData(fileTree(layout.buildDirectory.get().asFile).include("jacoco/*.exec"))
+  mustRunAfter(tasks.withType<Test>())
+  classDirectories.setFrom(
+      sourceSets.main.get().output.classesDirs.map {
+        fileTree(it) { include("**/domain/**", "**/application/**") }
+      }
+  )
+  violationRules {
+    rule {
+      limit {
+        counter = "LINE"
+        value = "COVEREDRATIO"
+        minimum = "0.80".toBigDecimal()
+      }
+    }
+  }
+}
+
+tasks.named("check") { dependsOn("jacocoTestReport", "jacocoTestCoverageVerification") }

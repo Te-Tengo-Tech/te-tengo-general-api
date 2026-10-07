@@ -13,3 +13,11 @@ Partition by discriminator: every household table has `hogar_id`, and Hibernate'
 - Isolation does not depend on every query remembering the filter.
 - Every feature needs a two-household test.
 - Native queries need extra care; row-level security is recommended for them.
+
+## Follow-up (2026-10-07, T24): row-level security not enabled yet
+Row-level security was evaluated as optional defense in depth and left out for now:
+- The only native queries are the scheduled jobs' candidate searches across households, plus the stream-token and installation lookups. They return ids only, and the work then happens through `EjecutorEnHogar` with the `@TenantId` filter.
+- The application connects as the table owner, which PostgreSQL exempts from policies unless `FORCE ROW LEVEL SECURITY` is set. Enabling it needs a separate, non-owner application role, `set_config('app.hogar_id', ..., true)` at the start of every transaction, and a bypass role for those cross-household job queries.
+- Every feature already has a two-household integration test.
+
+Enable it together with the separate database role when the production database is set up.

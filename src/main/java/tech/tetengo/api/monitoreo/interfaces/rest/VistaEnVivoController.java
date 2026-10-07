@@ -1,5 +1,7 @@
 package tech.tetengo.api.monitoreo.interfaces.rest;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,6 +18,7 @@ import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
 
 /** US-23: live view sessions. Any member, invited ones too. */
 @RestController
+@Tag(name = "Vista en vivo", description = "Live view and its access log (US-23, US-24).")
 class VistaEnVivoController {
 
     private static final String API = ApiVersioning.BASE;
@@ -28,6 +31,10 @@ class VistaEnVivoController {
         this.cerrarVistaEnVivo = cerrarVistaEnVivo;
     }
 
+    @Operation(
+            summary = "Open the live view (US-23)",
+            description =
+                    "Returns {sesionId, urlTransmision, expiraEn} (CA-23.1, CA-23.2). Errors: 409 CAMARA_DESCONECTADA (CA-23.3), 409 CAMARA_EN_PAUSA with pausadaHasta (CA-23.4).")
     @PostMapping(path = API + "/camaras/{id}/vista-en-vivo", version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.CREATED)
     SesionDeVistaEnVivoResponse abrir(
@@ -37,6 +44,9 @@ class VistaEnVivoController {
         return new SesionDeVistaEnVivoResponse(sesion.sesionId(), sesion.urlTransmision(), sesion.expiraEn());
     }
 
+    @Operation(
+            summary = "Close the live view (US-24)",
+            description = "Records who watched, when and for how long (CA-24.1).")
     @DeleteMapping(path = API + "/vista-en-vivo/{sesionId}", version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void cerrar(@PathVariable UUID sesionId) {

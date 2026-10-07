@@ -1,5 +1,8 @@
 package tech.tetengo.api.cuentas.interfaces.rest;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,6 +15,7 @@ import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
 
 @RestController
 @RequestMapping(ApiVersioning.BASE + "/cuentas")
+@Tag(name = "Cuentas", description = "Accounts of family members and caregivers (US-01).")
 class CuentaController {
 
     private final RegistrarCuenta registrarCuenta;
@@ -20,6 +24,11 @@ class CuentaController {
         this.registrarCuenta = registrarCuenta;
     }
 
+    @Operation(
+            summary = "Register an account (US-01)",
+            description =
+                    "201 with the account. Errors: 409 CORREO_EN_USO (CA-01.2), 400 VALIDACION with campos (CA-01.3).")
+    @SecurityRequirements
     @PostMapping(version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.CREATED)
     CuentaResponse registrar(@Valid @RequestBody RegistrarCuentaRequest pedido) {

@@ -1,5 +1,7 @@
 package tech.tetengo.api.alertas.interfaces.rest;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +19,7 @@ import tools.jackson.databind.json.JsonMapper;
 /** Household agent: detected events (AGENT_CONTRACT.md). */
 @RestController
 @RequestMapping(ApiVersioning.BASE + "/agente/eventos")
+@Tag(name = "Agente del hogar", description = "Endpoints of the household agent (AGENT_CONTRACT.md).")
 class AgenteEventosController {
 
     private final RecibirEventoDelAgente recibirEvento;
@@ -27,6 +30,10 @@ class AgenteEventosController {
         this.json = json;
     }
 
+    @Operation(
+            summary = "Report a detected event (agent, US-11 to US-21)",
+            description =
+                    "Idempotent by eventoId; creates or updates alerts and pushes them within the request (CA-16.1).")
     @PostMapping(version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.ACCEPTED)
     EventoDelAgenteResponse recibir(@Valid @RequestBody EventoDelAgenteRequest pedido) {

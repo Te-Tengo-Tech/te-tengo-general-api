@@ -1,5 +1,7 @@
 package tech.tetengo.api.hogares.interfaces.rest;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,7 @@ import tech.tetengo.api.shared.infrastructure.security.UsuarioActual;
 import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
 
 @RestController
+@Tag(name = "Hogar", description = "Household, older adult and household switching (US-04).")
 class HogarController {
 
     private static final String API = ApiVersioning.BASE;
@@ -42,6 +45,10 @@ class HogarController {
         this.cambiarDeHogar = cambiarDeHogar;
     }
 
+    @Operation(
+            summary = "Register the older adult and create the household (US-04)",
+            description =
+                    "The caller becomes TITULAR; returns a Sesion carrying hogar_id (CA-04.1). Errors: 409 HOGAR_YA_REGISTRADO (CA-04.2), 400 VALIDACION (CA-04.3).")
     @PostMapping(path = API + "/hogar", version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.CREATED)
     Sesion registrar(@Valid @RequestBody RegistrarHogarRequest pedido) {
@@ -51,17 +58,24 @@ class HogarController {
                 UsuarioActual.sesionId().orElse(null));
     }
 
+    @Operation(
+            summary = "Read the household (US-04)",
+            description = "Older adult, role and consent of the household in the token.")
     @GetMapping(path = API + "/hogar", version = ApiVersioning.V1)
     HogarResponse consultar() {
         return HogarMapper.aRespuesta(consultarHogar.ejecutar(UsuarioActual.id()));
     }
 
+    @Operation(
+            summary = "Edit the older adult's profile (owner, US-04)",
+            description = "Errors: 403 SOLO_TITULAR, 400 VALIDACION.")
     @PutMapping(path = API + "/hogar/adulto-mayor", version = ApiVersioning.V1)
     AdultoMayorResponse actualizarAdultoMayor(@Valid @RequestBody AdultoMayorRequest pedido) {
         UsuarioActual.exigirTitular();
         return HogarMapper.aRespuesta(actualizarAdultoMayor.ejecutar(UsuarioActual.id(), HogarMapper.aDominio(pedido)));
     }
 
+    @Operation(summary = "List the user's households", description = "Households the user belongs to, with their role.")
     @GetMapping(path = API + "/hogares", version = ApiVersioning.V1)
     List<HogarDelUsuarioResponse> listar() {
         return listarHogares.ejecutar(UsuarioActual.id()).stream()
@@ -69,6 +83,9 @@ class HogarController {
                 .toList();
     }
 
+    @Operation(
+            summary = "Switch to another household",
+            description = "Returns a Sesion for that household. Errors: 403 SIN_MEMBRESIA.")
     @PostMapping(path = API + "/sesiones/hogar", version = ApiVersioning.V1)
     Sesion cambiar(@Valid @RequestBody CambiarHogarRequest pedido) {
         return cambiarDeHogar.ejecutar(
