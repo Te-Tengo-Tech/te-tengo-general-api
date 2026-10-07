@@ -16,6 +16,17 @@
 | `POST /api/agente/eventos/{eventoId}/clip` | Returns a pre-signed S3 PUT URL to upload the 6 s + 6 s clip | US-18 |
 | `GET /api/agente/configuracion` | Current classification thresholds and agent version, so agents can update themselves | — |
 
+## Request and response bodies [implementation choice]
+The bodies below are not in the backlog; the backend defines them and the agent follows them.
+
+- **`POST /api/agente/camaras/registro`** (public): `{credencial, nombreHabitacion}` → `200 {camaraId, token, expiraEn}`.
+  - The first registration creates the camera with the room name of the installation (CA-06.1); later registrations return the same camera and keep a name the family changed (CA-06.2).
+  - `401 CREDENCIAL_INVALIDA` for an unknown credential.
+  - The token lasts 30 days; the agent registers again at startup or when it gets a `401`.
+  - The project team creates the credential with `scripts/create-installation.sh <hogar-id>` (only its SHA-256 is stored).
+- **`GET /api/agente/estado-captura`**: → `200 {capturaPermitida, consentimientoVigente, pausadaHasta | null}`. The agent processes video only when `capturaPermitida` is true: a current consent (CA-05.2) and no active pause (CA-22.1).
+- Agent tokens only open `/api/agente/**`; family members' tokens get `403` there.
+
 ## Detected event
 ```json
 {

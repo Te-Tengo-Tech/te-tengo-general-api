@@ -67,6 +67,18 @@ public final class ApiDePrueba {
                 .andExpect(status().isCreated());
     }
 
+    /** The household agent registers its camera (AGENT_CONTRACT.md); returns the response JSON. */
+    public static String registrarAgente(MockMvc mvc, String credencial, String habitacion) throws Exception {
+        return mvc.perform(post("/api/agente/camaras/registro")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"credencial\":\"%s\",\"nombreHabitacion\":\"%s\"}"
+                                .formatted(credencial, habitacion)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+    }
+
     public static String campo(String json, String ruta) {
         Object valor = JsonPath.read(json, ruta);
         return valor == null ? null : valor.toString();

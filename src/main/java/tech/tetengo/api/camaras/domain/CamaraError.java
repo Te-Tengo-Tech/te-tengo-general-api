@@ -9,7 +9,8 @@ public enum CamaraError implements CodigoError {
     NOMBRE_MUY_LARGO(
             "CAMARA_NOMBRE_MUY_LARGO",
             HttpStatus.UNPROCESSABLE_CONTENT,
-            "El nombre de la habitación es demasiado largo.");
+            "El nombre de la habitación es demasiado largo."),
+    CREDENCIAL_INVALIDA("CREDENCIAL_INVALIDA", HttpStatus.UNAUTHORIZED, "La credencial de instalación no es válida.");
 
     private final String codigo;
     private final HttpStatus estado;
