@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import tech.tetengo.api.camaras.application.ListarCamaras;
 import tech.tetengo.api.camaras.application.RenombrarCamara;
+import tech.tetengo.api.shared.infrastructure.security.UsuarioActual;
 import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
 
 @RestController
@@ -30,8 +31,10 @@ class CamaraController {
         return listarCamaras.ejecutar().stream().map(CamaraMapper::aRespuesta).toList();
     }
 
+    /** Owner only: invited members cannot change the cameras (CA-08.4). */
     @PatchMapping(path = "/{id}", version = ApiVersioning.V1)
     CamaraResponse renombrar(@PathVariable UUID id, @Valid @RequestBody RenombrarCamaraRequest pedido) {
+        UsuarioActual.exigirTitular();
         return CamaraMapper.aRespuesta(renombrarCamara.ejecutar(id, pedido.nombreHabitacion()));
     }
 }

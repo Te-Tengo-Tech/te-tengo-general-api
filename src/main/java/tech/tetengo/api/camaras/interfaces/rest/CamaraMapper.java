@@ -11,6 +11,8 @@ final class CamaraMapper {
                 camara.getId(),
                 camara.getNombreHabitacion(),
                 camara.getEstadoConexion().name(),
-                camara.getUltimaSenal());
+                camara.getUltimaSenal(),
+                camara.getPausadaHasta(),
+                camara.isDeteccionConfiable());
     }
 }
