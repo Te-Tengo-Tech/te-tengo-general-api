@@ -63,7 +63,7 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 - [x] **T20 `monitoreo` — US-24 access log.** `GET /api/accesos-vista-en-vivo`, newest first. — *live view access log, newest first (US-24)*
 - [x] **T21 `alertas` — US-21 recovery notice.** Push `SE_LEVANTO`; none when the fall is confirmed (CA-21.2). — *push SE_LEVANTO on recovery, none for confirmed falls (US-21)*
 - [x] **T22 `historial` — US-26 recordings.** Download disposition and the retention job. — *clip download disposition and the retention job (US-26)*
-- [ ] **T23 `historial` — US-27 weekly summary.** `GET /api/resumen-semanal`: false alarms excluded from falls, trend against the previous week.
+- [x] **T23 `historial` — US-27 weekly summary.** `GET /api/resumen-semanal`: false alarms excluded from falls, trend against the previous week. — *weekly summary with trend (US-27)*
 - [ ] **T24 Hardening.**
   - OpenAPI annotations on every endpoint (springdoc).
   - JaCoCo report ≥ 80 % line coverage on `domain` and `application`.

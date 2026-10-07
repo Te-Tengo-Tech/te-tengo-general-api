@@ -34,6 +34,12 @@ public interface AlertaRepository {
     /** Alerts of the household in context whose clip has not been deleted. */
     List<Alerta> conClip();
 
+    /** Alerts of the type that happened in {@code [desde, hasta)}, false alarms left out. */
+    long contarSinFalsasAlarmas(TipoAlerta tipo, Instant desde, Instant hasta);
+
+    /** False alarms that happened in {@code [desde, hasta)}. */
+    long contarFalsasAlarmas(Instant desde, Instant hasta);
+
     /** Same, only for alerts that happened before {@code limite}. */
     List<Alerta> conClipAnteriorA(Instant limite);
 
