@@ -1,5 +1,9 @@
 # te-tengo-general-api
 
+[![CI](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/ci.yml)
+[![OSV-Scanner](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/osv-scanner.yml/badge.svg)](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/osv-scanner.yml)
+[![OWASP Dependency-Check](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/owasp.yml/badge.svg)](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/owasp.yml)
+
 **Backend API of Te Tengo**, a pose-estimation system that detects falls of older adults at home.
 
 It receives the events detected by the household agent and serves the family member's mobile app: accounts, households, cameras, consent, alerts, escalation, live view and history.

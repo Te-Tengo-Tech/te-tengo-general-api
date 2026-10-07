@@ -1,0 +1,8 @@
+// Init script used only by .github/workflows/osv-scanner.yml: it turns on dependency locking so
+// `./gradlew dependencies --write-locks` writes a gradle.lockfile that OSV-Scanner can read.
+// The build itself does not use lock files.
+allprojects {
+    dependencyLocking {
+        lockAllConfigurations()
+    }
+}

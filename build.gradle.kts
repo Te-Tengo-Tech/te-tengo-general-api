@@ -3,6 +3,7 @@ plugins {
   id("org.springframework.boot") version "4.1.1"
   id("io.spring.dependency-management") version "1.1.7"
   id("com.diffplug.spotless") version "8.10.3"
+  id("org.owasp.dependencycheck") version "13.0.0"
   jacoco
 }
 
@@ -158,6 +159,8 @@ tasks.jacocoTestReport {
 tasks.jacocoTestCoverageVerification {
   executionData(fileTree(layout.buildDirectory.get().asFile).include("jacoco/*.exec"))
   mustRunAfter(tasks.withType<Test>())
+  // The filtered class directories below lose the link to compileJava; declare it explicitly.
+  dependsOn(tasks.classes)
   classDirectories.setFrom(
       sourceSets.main.get().output.classesDirs.map {
         fileTree(it) { include("**/domain/**", "**/application/**") }
@@ -175,3 +178,18 @@ tasks.jacocoTestCoverageVerification {
 }
 
 tasks.named("check") { dependsOn("jacocoTestReport", "jacocoTestCoverageVerification") }
+
+// OWASP Dependency-Check of the runtime dependencies: `./gradlew dependencyCheckAnalyze`.
+// CI runs it weekly (.github/workflows/owasp.yml) and fails on CVSS 7.0 or higher.
+dependencyCheck {
+  nvd { apiKey = System.getenv("NVD_API_KEY") }
+  scanConfigurations = listOf("runtimeClasspath")
+  formats = listOf("HTML", "JSON")
+  failBuildOnCVSS = 7.0f
+  analyzers {
+    assemblyEnabled = false
+    nodeEnabled = false
+    nodeAudit { enabled = false }
+    ossIndex { enabled = false }
+  }
+}

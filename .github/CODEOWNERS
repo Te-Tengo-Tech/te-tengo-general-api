@@ -1,0 +1,17 @@
+# Owners are requested as reviewers on every pull request that touches matching files.
+# Format: <pattern> @<github-login>. The last matching pattern wins.
+
+*                       @jhosepmyr
+
+# Build, CI and governance
+/build.gradle.kts       @jhosepmyr
+/settings.gradle.kts    @jhosepmyr
+/gradle/                @jhosepmyr
+/.github/               @jhosepmyr
+
+# Contracts shared with the mobile app and the household agent
+/docs/API_CONTRACT.md   @jhosepmyr
+/docs/AGENT_CONTRACT.md @jhosepmyr
+
+# Database migrations (never edit a published one)
+/src/main/resources/db/migration/ @jhosepmyr
