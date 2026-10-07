@@ -20,6 +20,11 @@ class InstalacionRepositoryAdapter implements InstalacionRepository {
     }
 
     @Override
+    public Optional<Instalacion> buscarPorCredencialParaActualizar(String huella) {
+        return jpa.findByCredencialHashForUpdate(huella);
+    }
+
+    @Override
     public Instalacion guardar(Instalacion instalacion) {
         return jpa.save(instalacion);
     }

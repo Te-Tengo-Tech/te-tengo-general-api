@@ -54,7 +54,9 @@ public class RegistrarCamaraDelAgente {
                 .map(Instalacion::getHogarId)
                 .orElseThrow(() -> new ErrorDeNegocio(CamaraError.CREDENCIAL_INVALIDA));
         return enHogar.obtener(hogarId, () -> {
-            Instalacion instalacion = instalaciones.buscarPorCredencial(huella).orElseThrow();
+            // Locked: an agent's threads may register at the same time; only the first creates the camera.
+            Instalacion instalacion =
+                    instalaciones.buscarPorCredencialParaActualizar(huella).orElseThrow();
             Camara camara = instalacion.getCamaraId() == null
                     ? null
                     : camaras.buscar(instalacion.getCamaraId()).orElse(null);

@@ -8,5 +8,8 @@ public interface InstalacionRepository {
 
     Optional<Instalacion> buscarPorCredencial(String huella);
 
+    /** Same lookup, locking the row until the transaction ends (concurrent registrations). */
+    Optional<Instalacion> buscarPorCredencialParaActualizar(String huella);
+
     Instalacion guardar(Instalacion instalacion);
 }

@@ -105,6 +105,27 @@ class AgenteIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void registrosSimultaneosDeLaMismaInstalacionCreanUnaSolaCamara() throws Exception {
+        var hilos = java.util.concurrent.Executors.newFixedThreadPool(4);
+        try {
+            var registros = new java.util.ArrayList<java.util.concurrent.Future<String>>();
+            for (int i = 0; i < 4; i++) {
+                registros.add(
+                        hilos.submit(() -> campo(ApiDePrueba.registrarAgente(mvc, credencialA, "Sala"), "$.camaraId")));
+            }
+            var camaras = new java.util.HashSet<String>();
+            for (var registro : registros) {
+                camaras.add(registro.get());
+            }
+            assertThat(camaras).hasSize(1);
+        } finally {
+            hilos.shutdownNow();
+        }
+        assertThat(jdbc.queryForObject("select count(*) from camaras", Integer.class))
+                .isEqualTo(1);
+    }
+
+    @Test
     void unaCredencialDesconocidaSeRechaza() throws Exception {
         mvc.perform(post("/api/agente/camaras/registro")
                         .contentType(MediaType.APPLICATION_JSON)
