@@ -3,6 +3,7 @@
 [![CI](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/ci.yml)
 [![OSV-Scanner](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/osv-scanner.yml/badge.svg)](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/osv-scanner.yml)
 [![OWASP Dependency-Check](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/owasp.yml/badge.svg)](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/owasp.yml)
+[![End-to-end](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/e2e.yml/badge.svg)](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/e2e.yml)
 
 **Backend API of Te Tengo**, a pose-estimation system that detects falls of older adults at home.
 
@@ -53,6 +54,8 @@ To try the three apps together, seed the prototype's demo household (account, ho
 | `TT_SNS_ARN_ANDROID` / `TT_SNS_ARN_IOS` | SNS platform application ARNs; required with `sns` (both may be the same FCM application) | — |
 | `TT_SNS_REGION` / `TT_SNS_ENDPOINT` | SNS region and endpoint override (credentials: SDK default chain) | SDK default chain / AWS |
 | `TT_SIMULADOR_BUNDLE_ID` | Bundle id the `simulador` provider pushes to | `tech.tetengo.teTengo` |
+| `TT_FLOCI_PUERTO` | Host port of Floci in `compose.yaml`, and the endpoint port of the `local` profile | `4566` |
+| `TT_POSTGRES_PUERTO` | Host port of PostgreSQL in `compose.yaml` (`0`: a free port, found by Spring Boot) | `0` |
 
 ## Tests
 ```bash
@@ -60,6 +63,24 @@ To try the three apps together, seed the prototype's demo household (account, ho
 ./gradlew unitTest           # fast lane only
 ./gradlew spotlessApply      # format
 ```
+
+### End-to-end smoke test (agent → API → alert)
+`scripts/e2e.sh` checks the contract between the household agent and this API with the real programs. It:
+- starts an isolated stack (compose project `tt-e2e`; PostgreSQL on 15432, Floci on 14566, the API on 18080), so it runs while your own stack is up;
+- seeds the demo household (`seed-demo.sh`) and registers a push device for the family;
+- runs the desktop agent without its UI (`--sin-interfaz`) on a URFD fall clip, cropped to its RGB half, with the last frame held 45 s;
+- asserts, as the family, that a `CAIDA` alert appears and is pushed (provider `registro`), becomes `confirmada`, and that its clip becomes `DISPONIBLE` and downloads from Floci's S3;
+- tears everything down and prints a PASS/FAIL summary with the detection → push latency.
+
+```bash
+# Needs Docker, JDK 25, jq, uv, python3 and te-tengo-desktop-pywebview next to this repository.
+./scripts/e2e.sh
+TT_E2E_ESCRITORIO=/path/to/te-tengo-desktop-pywebview TT_E2E_SIN_BUILD=1 ./scripts/e2e.sh
+```
+
+It takes about 1.5 minutes plus the API build. The fall clip is taken from the agent's `datos/urfd/` or downloaded. The ports, the work directory (logs are kept there) and the timeouts are set with the `TT_E2E_*` variables described at the top of the script.
+
+In CI, the [End-to-end](.github/workflows/e2e.yml) workflow runs it on demand (any branch of the agent), weekly, and on pull requests that change the agent endpoints or the contract. The agent repository is private: add the `E2E_REPO_TOKEN` repository secret, a fine-grained personal access token with read-only *Contents* access to `Te-Tengo-Tech/te-tengo-desktop-pywebview`. Without the secret, the job is skipped with a notice.
 
 ## Documentation
 | Document | Content |
