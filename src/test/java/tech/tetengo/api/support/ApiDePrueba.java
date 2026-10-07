@@ -37,6 +37,36 @@ public final class ApiDePrueba {
                 .getContentAsString();
     }
 
+    /**
+     * Registers an account, signs in and creates its household (US-01, US-02, US-04). Returns the
+     * owner's {@code Sesion} JSON, whose token carries the household.
+     */
+    public static String titularConHogar(MockMvc mvc, String correo, String nombre) throws Exception {
+        registrarCuenta(mvc, correo, "secreta123", nombre);
+        String sesion = iniciarSesion(mvc, correo, "secreta123");
+        return mvc.perform(post("/api/hogar")
+                        .header("Authorization", bearer(campo(sesion, "$.tokenAcceso")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                "{\"adultoMayor\":{\"nombre\":\"Adulto de %s\",\"direccion\":\"Lima\",\"convivencia\":\"SOLO\"}}"
+                                        .formatted(nombre)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+    }
+
+    /** The owner grants the older adult's consent (US-05). */
+    public static void otorgarConsentimiento(MockMvc mvc, String tokenTitular) throws Exception {
+        mvc.perform(
+                        post("/api/hogar/consentimiento")
+                                .header("Authorization", bearer(tokenTitular))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"otorgadoPor\":\"Rosa\",\"aceptadoPorAdultoMayor\":true,\"vistaEnVivoAceptada\":true}"))
+                .andExpect(status().isCreated());
+    }
+
     public static String campo(String json, String ruta) {
         Object valor = JsonPath.read(json, ruta);
         return valor == null ? null : valor.toString();

@@ -1,5 +1,7 @@
 package tech.tetengo.api.cuentas.infrastructure.persistence;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -31,6 +33,11 @@ class CuentaRepositoryAdapter implements CuentaRepository {
     @Override
     public Optional<Cuenta> buscar(UUID id) {
         return jpa.findById(id);
+    }
+
+    @Override
+    public List<Cuenta> buscarTodos(Collection<UUID> ids) {
+        return jpa.findAllById(ids);
     }
 
     @Override

@@ -12,8 +12,9 @@ import org.springframework.data.domain.DomainEvents;
 
 /**
  * Aggregate root: consistency boundary and repository entry point. Events registered with
- * {@link #registrarEvento} are published on save, and other modules listen with
- * {@code @ApplicationModuleListener}.
+ * {@link #registrarEvento} are published on save. Other modules listen with {@code @Async
+ * @TransactionalEventListener} and bind the event's household with {@code EjecutorEnHogar} (see
+ * {@code docs/MULTITENANCY.md}).
  */
 @MappedSuperclass
 public abstract class AggregateRoot extends AuditableEntity {

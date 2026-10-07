@@ -1,6 +1,8 @@
 package tech.tetengo.api.support;
 
+import java.time.Duration;
 import java.util.List;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +36,7 @@ public abstract class AbstractIntegrationTest {
 
     @BeforeEach
     void prepararEstadoInicial() {
+        esperarEventosPendientes();
         reloj.reiniciar();
         correos.limpiar();
         List<String> tablas = jdbcDeLimpieza.queryForList(
@@ -41,6 +44,23 @@ public abstract class AbstractIntegrationTest {
                 String.class);
         if (!tablas.isEmpty()) {
             jdbcDeLimpieza.execute("truncate table " + String.join(", ", tablas) + " cascade");
+        }
+    }
+
+    /**
+     * Asynchronous listeners of the previous test may still be running; wait for them (up to a few
+     * seconds) so they do not write into the next test's data.
+     */
+    private void esperarEventosPendientes() {
+        try {
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(5))
+                    .until(() -> jdbcDeLimpieza.queryForObject(
+                                    "select count(*) from event_publication where status in ('PUBLISHED', 'PROCESSING', 'RESUBMITTED')",
+                                    Integer.class)
+                            == 0);
+        } catch (org.awaitility.core.ConditionTimeoutException e) {
+            // A listener that keeps failing must not block the suite; the test that caused it fails on its own.
         }
     }
 }
