@@ -57,7 +57,7 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 - [x] **T14 `hogares` — US-09 revocation.** `DELETE /api/hogar/consentimiento`: stop capture, schedule clip deletion, push `DATOS_ELIMINADOS` when done. — *revoke consent, stop capture and delete recordings (US-09)*
 - [x] **T15 `alertas` — US-19 alert state.** `POST /api/alertas/{id}/atencion` and `/falsa-alarma`; push `ALERTA_ATENDIDA` to the other members. — *attend alerts or mark false alarms (US-19)*
 - [x] **T16 `hogares` — US-10 alert routing.** `GET` and `PUT /api/hogar/aviso`: 3, 5 or 10 min, default 5, single-member case. — *contact order and wait time (US-10)*
-- [ ] **T17 `alertas` — US-20 escalation.** Scheduled job, idempotent: `ALERTA_ESCALADA` or `SIN_CONTACTO_SECUNDARIO`.
+- [x] **T17 `alertas` — US-20 escalation.** Scheduled job, idempotent: `ALERTA_ESCALADA` or `SIN_CONTACTO_SECUNDARIO`. — *escalate unattended alerts (US-20)*
 - [ ] **T18 `monitoreo` — US-22 pauses.** `POST` and `DELETE /api/camaras/{id}/pausa` with the contract durations (`HASTA_MANANA` = next 07:00 America/Lima); automatic resume with push `PAUSA_FINALIZADA`.
 - [ ] **T19 `monitoreo` — US-23 live view sessions.** `POST /api/camaras/{id}/vista-en-vivo` (`409` when disconnected or paused) and `DELETE /api/vista-en-vivo/{sesionId}`. The WSS relay follows the contract proposal (see BLOCKERS).
 - [ ] **T20 `monitoreo` — US-24 access log.** `GET /api/accesos-vista-en-vivo`, newest first.
