@@ -11,14 +11,21 @@ final class HogarMapper {
     private HogarMapper() {}
 
     static AdultoMayor aDominio(AdultoMayorRequest pedido) {
-        return new AdultoMayor(pedido.nombre(), pedido.direccion(), Convivencia.valueOf(pedido.convivencia()));
+        return new AdultoMayor(
+                pedido.nombre(),
+                pedido.edad(),
+                pedido.direccion(),
+                Convivencia.valueOf(pedido.convivencia()),
+                pedido.telefono());
     }
 
     static AdultoMayorResponse aRespuesta(AdultoMayor adultoMayor) {
         return new AdultoMayorResponse(
                 adultoMayor.getNombre(),
+                adultoMayor.getEdad(),
                 adultoMayor.getDireccion(),
-                adultoMayor.getConvivencia().name());
+                adultoMayor.getConvivencia().name(),
+                adultoMayor.getTelefono());
     }
 
     static HogarResponse aRespuesta(HogarConsultado consultado) {

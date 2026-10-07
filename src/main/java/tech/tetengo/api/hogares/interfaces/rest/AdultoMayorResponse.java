@@ -1,3 +1,4 @@
 package tech.tetengo.api.hogares.interfaces.rest;
 
-record AdultoMayorResponse(String nombre, String direccion, String convivencia) {}
+/** {@code adultoMayor} of the API contract. */
+record AdultoMayorResponse(String nombre, Integer edad, String direccion, String convivencia, String telefono) {}

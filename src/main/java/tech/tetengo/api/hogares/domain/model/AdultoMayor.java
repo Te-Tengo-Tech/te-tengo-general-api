@@ -6,7 +6,10 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import java.util.Objects;
 
-/** US-04 / CA-04.1: name, home address and living arrangement of the older adult. */
+/**
+ * US-04 / CA-04.1: name, home address and living arrangement of the older adult, plus the age the
+ * prototype's profile form asks for and the phone that «Llamar a Rosa» dials (API contract).
+ */
 @Embeddable
 public class AdultoMayor {
 
@@ -20,12 +23,21 @@ public class AdultoMayor {
     @Column(name = "adulto_mayor_convivencia", nullable = false, length = 20)
     private Convivencia convivencia;
 
+    /** Null only for households registered before the age was asked. */
+    @Column(name = "adulto_mayor_edad")
+    private Integer edad;
+
+    @Column(name = "adulto_mayor_telefono", length = 20)
+    private String telefono;
+
     protected AdultoMayor() {}
 
-    public AdultoMayor(String nombre, String direccion, Convivencia convivencia) {
+    public AdultoMayor(String nombre, int edad, String direccion, Convivencia convivencia, String telefono) {
         this.nombre = Objects.requireNonNull(nombre, "nombre").strip();
+        this.edad = edad;
         this.direccion = Objects.requireNonNull(direccion, "direccion").strip();
         this.convivencia = Objects.requireNonNull(convivencia, "convivencia");
+        this.telefono = telefono == null || telefono.isBlank() ? null : telefono.strip();
     }
 
     public String getNombre() {
@@ -38,5 +50,13 @@ public class AdultoMayor {
 
     public Convivencia getConvivencia() {
         return convivencia;
+    }
+
+    public Integer getEdad() {
+        return edad;
+    }
+
+    public String getTelefono() {
+        return telefono;
     }
 }

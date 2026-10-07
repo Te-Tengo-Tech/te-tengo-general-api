@@ -143,11 +143,18 @@ class EventosDelAgenteIntegrationTest extends AbstractIntegrationTest {
                 .isNull();
         assertThat(alertas()).isZero();
         mvc.perform(get("/api/camaras").header("Authorization", bearer(campo(titular, "$.tokenAcceso"))))
-                .andExpect(jsonPath("$[0].deteccionConfiable").value(false));
+                .andExpect(jsonPath("$[0].deteccionConfiable").value(false))
+                .andExpect(jsonPath("$[0].noConfiableDesde").value(cuando.toString()));
+
+        // A repeated report keeps the time detection stopped being reliable.
+        evento("deteccion_no_confiable", cuando.plusSeconds(300));
+        mvc.perform(get("/api/camaras").header("Authorization", bearer(campo(titular, "$.tokenAcceso"))))
+                .andExpect(jsonPath("$[0].noConfiableDesde").value(cuando.toString()));
 
         evento("movimiento_inestable", cuando.plusSeconds(400));
         mvc.perform(get("/api/camaras").header("Authorization", bearer(campo(titular, "$.tokenAcceso"))))
-                .andExpect(jsonPath("$[0].deteccionConfiable").value(true));
+                .andExpect(jsonPath("$[0].deteccionConfiable").value(true))
+                .andExpect(jsonPath("$[0].noConfiableDesde").isEmpty());
     }
 
     @Test

@@ -78,15 +78,17 @@ public class ServicioDeCamaras implements CamarasDelHogar {
                 camara.getEstadoConexion().name(),
                 camara.getUltimaSenal(),
                 camara.getPausadaHasta(),
-                camara.isDeteccionConfiable());
+                camara.isDeteccionConfiable(),
+                camara.getInstaladaEn(),
+                camara.getNoConfiableDesde());
     }
 
     @Override
     @Transactional
-    public boolean marcarDeteccionNoConfiable(UUID camaraId) {
+    public boolean marcarDeteccionNoConfiable(UUID camaraId, Instant desde) {
         return camaras.buscar(camaraId)
                 .map(camara -> {
-                    boolean cambio = camara.marcarDeteccionNoConfiable();
+                    boolean cambio = camara.marcarDeteccionNoConfiable(desde);
                     camaras.guardar(camara);
                     return cambio;
                 })

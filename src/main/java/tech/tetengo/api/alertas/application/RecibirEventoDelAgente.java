@@ -97,7 +97,7 @@ public class RecibirEventoDelAgente {
 
     private Efecto aplicar(TipoEvento tipo, CamaraDelHogar camara, Instant ocurridoEn) {
         if (tipo == TipoEvento.DETECCION_NO_CONFIABLE) {
-            return camaras.marcarDeteccionNoConfiable(camara.id())
+            return camaras.marcarDeteccionNoConfiable(camara.id(), ocurridoEn)
                     ? new Efecto(null, TipoAviso.DETECCION_NO_CONFIABLE)
                     : Efecto.NINGUNO;
         }

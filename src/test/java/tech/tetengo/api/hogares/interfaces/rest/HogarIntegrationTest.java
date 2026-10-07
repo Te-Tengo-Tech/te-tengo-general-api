@@ -29,7 +29,8 @@ import tech.tetengo.api.support.JwtDePrueba;
 class HogarIntegrationTest extends AbstractIntegrationTest {
 
     private static final String ADULTO_MAYOR =
-            "{\"adultoMayor\":{\"nombre\":\"Rosa Quispe\",\"direccion\":\"Jr. Puno 123, Lima\",\"convivencia\":\"SOLO\"}}";
+            "{\"adultoMayor\":{\"nombre\":\"Rosa Quispe\",\"edad\":78,\"direccion\":\"Jr. Puno 123, Lima\","
+                    + "\"convivencia\":\"SOLO\",\"telefono\":\"987 654 321\"}}";
 
     @Autowired
     MockMvc mvc;
@@ -80,8 +81,10 @@ class HogarIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.hogarId").value(hogarId))
                 .andExpect(jsonPath("$.adultoMayor.nombre").value("Rosa Quispe"))
+                .andExpect(jsonPath("$.adultoMayor.edad").value(78))
                 .andExpect(jsonPath("$.adultoMayor.direccion").value("Jr. Puno 123, Lima"))
                 .andExpect(jsonPath("$.adultoMayor.convivencia").value("SOLO"))
+                .andExpect(jsonPath("$.adultoMayor.telefono").value("987 654 321"))
                 .andExpect(jsonPath("$.rol").value("TITULAR"))
                 .andExpect(jsonPath("$.consentimiento").isEmpty());
 
@@ -108,6 +111,7 @@ class HogarIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("VALIDACION"))
                 .andExpect(jsonPath("$.campos['adultoMayor.nombre']").isNotEmpty())
+                .andExpect(jsonPath("$.campos['adultoMayor.edad']").value("Escribe su edad."))
                 .andExpect(jsonPath("$.campos['adultoMayor.direccion']").isNotEmpty())
                 .andExpect(jsonPath("$.campos['adultoMayor.convivencia']").isNotEmpty());
         registrarHogar(tokenSinHogar, "{}")
@@ -115,9 +119,23 @@ class HogarIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.campos.adultoMayor").isNotEmpty());
         registrarHogar(
                         tokenSinHogar,
-                        "{\"adultoMayor\":{\"nombre\":\"Rosa\",\"direccion\":\"Lima\",\"convivencia\":\"OTRA\"}}")
+                        "{\"adultoMayor\":{\"nombre\":\"Rosa\",\"edad\":78,\"direccion\":\"Lima\",\"convivencia\":\"OTRA\"}}")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.campos['adultoMayor.convivencia']").isNotEmpty());
+        for (int edad : new int[] {49, 121}) {
+            registrarHogar(
+                            tokenSinHogar,
+                            "{\"adultoMayor\":{\"nombre\":\"Rosa\",\"edad\":%d,\"direccion\":\"Lima\",\"convivencia\":\"SOLO\"}}"
+                                    .formatted(edad))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.campos['adultoMayor.edad']").value("Escribe una edad válida, en años."));
+        }
+        registrarHogar(
+                        tokenSinHogar,
+                        "{\"adultoMayor\":{\"nombre\":\"Rosa\",\"edad\":78,\"direccion\":\"Lima\","
+                                + "\"convivencia\":\"SOLO\",\"telefono\":\"llamar\"}}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.campos['adultoMayor.telefono']").isNotEmpty());
         assertThat(jdbc.queryForObject("select count(*) from hogares", Integer.class))
                 .isZero();
     }
@@ -127,7 +145,7 @@ class HogarIntegrationTest extends AbstractIntegrationTest {
         String sesion = crearHogar();
         UUID hogar = UUID.fromString(campo(sesion, "$.hogarId"));
         String cambio =
-                "{\"nombre\":\"Rosa Quispe de Ríos\",\"direccion\":\"Jr. Puno 456\",\"convivencia\":\"CON_CUIDADOR\"}";
+                "{\"nombre\":\"Rosa Quispe de Ríos\",\"edad\":79,\"direccion\":\"Jr. Puno 456\",\"convivencia\":\"CON_CUIDADOR\"}";
 
         mvc.perform(put("/api/hogar/adulto-mayor")
                         .header("Authorization", bearer(campo(sesion, "$.tokenAcceso")))
@@ -135,7 +153,10 @@ class HogarIntegrationTest extends AbstractIntegrationTest {
                         .content(cambio))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nombre").value("Rosa Quispe de Ríos"))
-                .andExpect(jsonPath("$.convivencia").value("CON_CUIDADOR"));
+                .andExpect(jsonPath("$.edad").value(79))
+                .andExpect(jsonPath("$.convivencia").value("CON_CUIDADOR"))
+                // The profile is replaced as a whole: without a phone, the old one is cleared.
+                .andExpect(jsonPath("$.telefono").isEmpty());
 
         UUID invitado = UUID.randomUUID();
         DatosDePrueba.membresia(jdbc, hogar, invitado, Rol.INVITADO);
@@ -149,7 +170,8 @@ class HogarIntegrationTest extends AbstractIntegrationTest {
         mvc.perform(get("/api/hogar").header("Authorization", bearer(JwtDePrueba.token(invitado, hogar, Rol.INVITADO))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rol").value("INVITADO"))
-                .andExpect(jsonPath("$.adultoMayor.nombre").value("Rosa Quispe de Ríos"));
+                .andExpect(jsonPath("$.adultoMayor.nombre").value("Rosa Quispe de Ríos"))
+                .andExpect(jsonPath("$.adultoMayor.edad").value(79));
     }
 
     @Test
@@ -211,12 +233,19 @@ class HogarIntegrationTest extends AbstractIntegrationTest {
         mvc.perform(put("/api/hogar/adulto-mayor")
                         .header("Authorization", bearer(JwtDePrueba.token(titularA, hogarA, Rol.TITULAR)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nombre\":\"Rosa Cambiada\",\"direccion\":\"Lima\",\"convivencia\":\"SOLO\"}"))
+                        .content("{\"nombre\":\"Rosa Cambiada\",\"edad\":80,\"direccion\":\"Lima\","
+                                + "\"convivencia\":\"SOLO\",\"telefono\":\"+51 987 654 321\"}"))
                 .andExpect(status().isOk());
 
+        mvc.perform(get("/api/hogar").header("Authorization", bearer(JwtDePrueba.token(titularA, hogarA, Rol.TITULAR))))
+                .andExpect(jsonPath("$.adultoMayor.edad").value(80))
+                .andExpect(jsonPath("$.adultoMayor.telefono").value("+51 987 654 321"));
+        // Household B keeps its own profile: no age or phone of A leaks into it.
         mvc.perform(get("/api/hogar").header("Authorization", bearer(JwtDePrueba.token(titularB, hogarB, Rol.TITULAR))))
                 .andExpect(jsonPath("$.hogarId").value(hogarB.toString()))
-                .andExpect(jsonPath("$.adultoMayor.nombre").value("Jorge"));
+                .andExpect(jsonPath("$.adultoMayor.nombre").value("Jorge"))
+                .andExpect(jsonPath("$.adultoMayor.edad").isEmpty())
+                .andExpect(jsonPath("$.adultoMayor.telefono").isEmpty());
 
         // A token for a household the user does not belong to gives no access.
         mvc.perform(get("/api/hogar").header("Authorization", bearer(JwtDePrueba.token(titularA, hogarB, Rol.TITULAR))))

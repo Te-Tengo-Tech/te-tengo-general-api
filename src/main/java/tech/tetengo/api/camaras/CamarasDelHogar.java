@@ -16,8 +16,11 @@ public interface CamarasDelHogar {
     /** The camera as the app sees it. */
     Optional<EstadoDeCamara> estado(UUID camaraId);
 
-    /** CA-15.3: only frames that were discarded for 5 minutes. True if it was reliable until now. */
-    boolean marcarDeteccionNoConfiable(UUID camaraId);
+    /**
+     * CA-15.3: only frames that were discarded for 5 minutes, reported at {@code desde}. True if it
+     * was reliable until now.
+     */
+    boolean marcarDeteccionNoConfiable(UUID camaraId, Instant desde);
 
     /** The agent sees the person again. */
     void marcarDeteccionConfiable(UUID camaraId);
@@ -46,7 +49,9 @@ public interface CamarasDelHogar {
             String estadoConexion,
             Instant ultimaSenal,
             Instant pausadaHasta,
-            boolean deteccionConfiable) {}
+            boolean deteccionConfiable,
+            Instant instaladaEn,
+            Instant noConfiableDesde) {}
 
     record CamaraEnHogar(UUID camaraId, UUID hogarId) {}
 }
