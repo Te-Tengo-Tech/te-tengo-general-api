@@ -27,7 +27,7 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 ## Tasks
 
 ### Sprint 3
-- [ ] **T01 `cuentas` — US-01 register.** `POST /api/cuentas`; BCrypt passwords; unique email (`409 CORREO_EN_USO`); `400 VALIDACION` with `campos`.
+- [x] **T01 `cuentas` — US-01 register.** `POST /api/cuentas`; BCrypt passwords; unique email (`409 CORREO_EN_USO`); `400 VALIDACION` with `campos`. — *register accounts (US-01)*
 - [ ] **T02 `cuentas` — US-02 sessions.**
   - `POST /api/sesiones`, `POST /api/sesiones/refresco` and `DELETE /api/sesiones/actual`.
   - Issue JWT RS256 access tokens (claims `sub`, `hogar_id`, `rol`) and persisted refresh tokens.
