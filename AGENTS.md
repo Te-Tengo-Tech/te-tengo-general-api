@@ -3,7 +3,7 @@
 ## Purpose
 Backend API of **Te Tengo**, a system that detects falls of older adults at home. This repository is the "Backend API del sistema" container of the C4 model. It serves two clients:
 - **the household agent** (Te Tengo Captura, `te-tengo-desktop-pywebview`), which processes video on the household PC and sends **events**;
-- **the mobile app** of the family member or caregiver (`te-tengo-mobile-flutter`).
+- **the mobile app** of the family member or caregiver (`te-tengo-mobile-flutter`), native or its web build (PWA, served from another origin: see CORS in the API contract).
 
 It stores data in PostgreSQL and clips in S3, and sends push alerts through Amazon SNS.
 
