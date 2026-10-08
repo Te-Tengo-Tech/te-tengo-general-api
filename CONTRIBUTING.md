@@ -30,6 +30,7 @@ To add a feature, follow [docs/USE_CASE_GUIDE.md](docs/USE_CASE_GUIDE.md).
 | [OSV-Scanner](.github/workflows/osv-scanner.yml) | Weekly, manual, PRs that change the build | Scans every resolved Gradle dependency; scheduled runs fail on high or critical |
 | [OWASP Dependency-Check](.github/workflows/owasp.yml) | Weekly, manual | NVD scan of runtime dependencies (needs the `NVD_API_KEY` secret); fails on CVSS ≥ 7.0 |
 | [End-to-end](.github/workflows/e2e.yml) | Weekly, manual, PRs that change the agent endpoints or the contract | `scripts/e2e.sh`: the real desktop agent, headless, against this API (needs the `E2E_REPO_TOKEN` secret; skipped with a notice without it) |
+| [Container image](.github/workflows/image.yml) | PRs that change the image inputs, manual, tags `api-v*` | Builds the image for `linux/arm64` and `linux/amd64` and smoke-tests it against PostgreSQL; pushes to `ghcr.io/te-tengo-tech/te-tengo-general-api` only on a tag or a manual run with *push* ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)) |
 
 A new push cancels the superseded CI run of the same branch. Dependabot opens weekly update PRs to `develop`. See [.github/SECURITY.md](.github/SECURITY.md) for vulnerability reporting.
 

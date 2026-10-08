@@ -1,0 +1,136 @@
+name: Container image
+
+# Builds the API image (Dockerfile) for linux/arm64 (the EC2 instance is a Graviton t4g) and
+# linux/amd64. Pull requests only build it and smoke-test the amd64 image against PostgreSQL;
+# nothing is pushed. A manual run with `push: true`, or a tag `api-v<version>`, pushes it to
+# ghcr.io/te-tengo-tech/te-tengo-general-api with the workflow's own GITHUB_TOKEN (docs/DEPLOYMENT.md).
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - build.gradle.kts
+      - settings.gradle.kts
+      - gradle.properties
+      - gradle/**
+      - src/main/**
+      - .github/workflows/image.yml
+  workflow_dispatch:
+    inputs:
+      push:
+        description: Push the image to GHCR (tags sha-<commit> and the branch name)
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "api-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/te-tengo-tech/te-tengo-general-api
+  # Push only on a release tag or when a manual run asks for it.
+  PUSH: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push) }}
+
+jobs:
+  image:
+    name: Build${{ (github.event_name == 'push' || inputs.push) && ' and push' || '' }} (arm64, amd64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v4
+      - name: Image tags and OCI labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=match,pattern=api-v(.*),group=1
+            type=match,pattern=api-v(\d+\.\d+),group=1
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/api-v') }}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,format=long
+          labels: |
+            org.opencontainers.image.title=te-tengo-general-api
+            org.opencontainers.image.description=Backend API of Te Tengo: fall detection alerts for older adults at home
+            org.opencontainers.image.vendor=Te Tengo
+      - name: Log in to GHCR
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build${{ env.PUSH == 'true' && ' and push' || '' }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/arm64,linux/amd64
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # Smoke test: the amd64 image (from the cache above) must start, run the Flyway migrations
+      # on an empty PostgreSQL 18 and report healthy. Clips, e-mail and push use their in-memory
+      # and logging adapters, so no AWS emulator is needed.
+      - name: Load the amd64 image for the smoke test
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: te-tengo-general-api:smoke
+          cache-from: type=gha
+      - name: Smoke test (PostgreSQL + /actuator/health)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/claves"
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$RUNNER_TEMP/claves/privada.pem"
+          openssl rsa -in "$RUNNER_TEMP/claves/privada.pem" -pubout -out "$RUNNER_TEMP/claves/publica.pem"
+          chmod 644 "$RUNNER_TEMP"/claves/*.pem
+          docker network create smoke
+          docker run -d --name pg --network smoke -e POSTGRES_DB=tetengo -e POSTGRES_USER=tetengo -e POSTGRES_PASSWORD=tetengo postgres:18
+          docker run -d --name api --network smoke -p 8080:8080 \
+            -v "$RUNNER_TEMP/claves:/run/secrets/tetengo:ro" \
+            -e SPRING_DATASOURCE_URL=jdbc:postgresql://pg:5432/tetengo \
+            -e SPRING_DATASOURCE_USERNAME=tetengo -e SPRING_DATASOURCE_PASSWORD=tetengo \
+            -e TT_JWT_CLAVE_PUBLICA=file:/run/secrets/tetengo/publica.pem \
+            -e TT_JWT_CLAVE_PRIVADA=file:/run/secrets/tetengo/privada.pem \
+            te-tengo-general-api:smoke
+          for _ in $(seq 1 60); do
+            estado=$(docker inspect -f '{{.State.Health.Status}}' api 2>/dev/null || echo exited)
+            [ "$estado" = healthy ] && break
+            [ "$(docker inspect -f '{{.State.Running}}' api)" = true ] || { docker logs api; exit 1; }
+            sleep 3
+          done
+          curl -fsS localhost:8080/actuator/health/readiness
+          echo
+          [ "$estado" = healthy ] || { docker logs api; exit 1; }
+          [ "$(docker exec api id -u)" != 0 ] || { echo "::error::The image runs as root"; exit 1; }
+      - name: Summary
+        if: always()
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          {
+            echo "## Container image"
+            if [ "$PUSH" = true ]; then echo "Pushed to \`$IMAGE\` (linux/arm64, linux/amd64):"; else echo "Built for linux/arm64 and linux/amd64, **not pushed**. Tags it would get:"; fi
+            echo '```'
+            echo "$TAGS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
