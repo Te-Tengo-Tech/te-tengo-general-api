@@ -48,15 +48,19 @@ To try the three apps together, seed the prototype's demo household (account, ho
 | `TT_ENLACE_RECUPERACION` | Password-reset link sent by e-mail, replacing the whole template; `{token}` is replaced | `<TT_ENLACE_BASE>/nueva-contrasena?token={token}` |
 | `TT_RETENCION_CLIPS` | How long clips are kept, e.g. `30d` (unset: kept; pending, see BLOCKERS) | — |
 | `TT_AGENTE_VERSION_PUBLICADA` | Agent release published by `GET /api/agente/configuracion` (thresholds: `tetengo.agente.umbrales`, empty by default) | `0.2.0` |
-| `TT_CLIPS_BUCKET` | S3 bucket of the clips; unset uses an in-memory fake (the `local` profile sets `te-tengo-clips` on Floci) | — |
-| `TT_CLIPS_REGION` | AWS region of the bucket | SDK default chain |
-| `TT_CLIPS_ENDPOINT` | Endpoint of an S3-compatible store; also the host of the pre-signed URLs | AWS |
+| `TT_CLIPS_BUCKET` | Bucket of the clips (Amazon S3 or an S3-compatible store such as Cloudflare R2, [DEPLOYMENT.md](docs/DEPLOYMENT.md#clips-on-cloudflare-r2)); unset uses an in-memory fake (the `local` profile sets `te-tengo-clips` on Floci) | — |
+| `TT_CLIPS_REGION` | Region of the bucket (`auto` for R2) | SDK default chain |
+| `TT_CLIPS_ENDPOINT` | Endpoint of an S3-compatible store (R2: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`); also the host of the pre-signed URLs | AWS |
 | `TT_CLIPS_PATH_STYLE` | Path-style URLs (`endpoint/bucket/key`) | `false` |
 | `TT_CLIPS_ACCESS_KEY` / `TT_CLIPS_SECRET_KEY` | Static credentials | SDK default chain |
 | `TT_ENLACE_INVITACION` | Invitation link sent by e-mail, replacing the whole template; `{token}` is replaced | `<TT_ENLACE_BASE>/invitacion/{token}` |
-| `TT_CORREO_PROVEEDOR` | E-mail adapter: `registro` (logs) or `ses` (Amazon SES) | `registro` (`ses` on Floci with the `local` profile) |
+| `TT_CORREO_PROVEEDOR` | E-mail adapter: `registro` (logs), `ses` (Amazon SES) or `smtp` (any SMTP relay) | `registro` (`ses` on Floci with the `local` profile) |
 | `TT_SES_REMITENTE` | Sender of the e-mails, a verified SES identity; required with `ses` | — |
 | `TT_SES_REGION` / `TT_SES_ENDPOINT` | SES region and endpoint override (credentials: SDK default chain) | SDK default chain / AWS |
+| `TT_SMTP_REMITENTE` | Sender of the e-mails with `smtp`, an address the relay accepts; required with `smtp` | — |
+| `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` | SMTP relay of `smtp` (Spring Boot's standard `spring.mail.*`); the host is required with `smtp`, e.g. port `587` | — |
+| `SPRING_MAIL_USERNAME` / `SPRING_MAIL_PASSWORD` | SMTP credentials; keep the password in the server's secrets | — |
+| `TT_SMTP_STARTTLS` | Require STARTTLS on the SMTP connection; `false` only for a local relay without TLS | `true` |
 | `TT_PUSH_PROVEEDOR` | Push adapter: `registro` (logs), `fcm`, `sns` or `simulador` ([NOTIFICATIONS.md](docs/NOTIFICATIONS.md)) | `registro` (`sns` on Floci with the `local` profile) |
 | `TT_FCM_CREDENCIALES` | Path of the Firebase service-account JSON key; required with `fcm`; never commit it | — |
 | `TT_SNS_ARN_ANDROID` / `TT_SNS_ARN_IOS` | SNS platform application ARNs; required with `sns` (both may be the same FCM application) | — |

@@ -4,18 +4,36 @@ The API sends e-mail (password recovery, invitations) and push notices (API cont
 
 | Port | Property (variable) | Values | Default |
 |---|---|---|---|
-| `NotificadorCorreo` | `tetengo.correo.proveedor` (`TT_CORREO_PROVEEDOR`) | `registro`, `ses` | `registro`; `ses` with the `local` profile |
+| `NotificadorCorreo` | `tetengo.correo.proveedor` (`TT_CORREO_PROVEEDOR`) | `registro`, `ses`, `smtp` | `registro`; `ses` with the `local` profile |
 | `NotificadorPush` | `tetengo.push.proveedor` (`TT_PUSH_PROVEEDOR`) | `registro`, `fcm`, `sns`, `simulador` | `registro`; `sns` with the `local` profile |
 
-Any other value leaves the port without an adapter, so the API does not start. Integration tests replace both ports with recording fakes (`CorreoDePrueba`, `PushDePrueba`) and never call a real service; the AWS adapters have their own tests against Floci ([ADR 0005](adr/0005-floci-local-aws-emulator.md)).
+Any other value leaves the port without an adapter, so the API does not start. Integration tests replace both ports with recording fakes (`CorreoDePrueba`, `PushDePrueba`) and never call a real service; the AWS adapters have their own tests against Floci ([ADR 0005](adr/0005-floci-local-aws-emulator.md)) and the SMTP adapter against a Mailpit container.
 
 ## E-mail
 | Provider | What it does | Configuration |
 |---|---|---|
 | `registro` | Logs the recipient and subject; the body (with one-time links) only at `DEBUG` | — |
 | `ses` | Amazon SES v2 `SendEmail`, plain UTF-8 text | `TT_SES_REMITENTE` (a verified SES identity, required), `TT_SES_REGION`, `TT_SES_ENDPOINT` (blank: AWS); credentials from the AWS SDK default chain (instance role) |
+| `smtp` | Any SMTP relay through Spring's `JavaMailSender`: the same message as `ses` (sender, recipient, subject, plain UTF-8 text body) | `TT_SMTP_REMITENTE` (required) and Spring Boot's standard `spring.mail.*`: `SPRING_MAIL_HOST` (required), `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`; STARTTLS required (`TT_SMTP_STARTTLS`, default `true`) |
 
-A SES failure is logged and not propagated [implementation choice]: password recovery must answer the same whether the account exists or not (CA-03.2).
+A failure of SES or of the SMTP relay is logged and not propagated [implementation choice]: password recovery must answer the same whether the account exists or not (CA-03.2).
+
+### SMTP
+`smtp` works with any SMTP relay that supports STARTTLS: a transactional e-mail service, a mail server of your own domain or your organization's relay. Use the host, port (usually `587` for STARTTLS), user name and password the relay gives, and a sender address it is allowed to send from (often a verified domain or address; the relay's own documentation says what it requires and what limits it applies):
+
+```bash
+TT_CORREO_PROVEEDOR=smtp
+TT_SMTP_REMITENTE="Te Tengo <no-responder@example.com>"
+SPRING_MAIL_HOST=smtp.example.com
+SPRING_MAIL_PORT=587
+SPRING_MAIL_USERNAME=<user>
+SPRING_MAIL_PASSWORD=<password>   # from the server's secrets, never committed
+```
+
+- **STARTTLS** is enabled and required (`mail.smtp.starttls.enable` and `mail.smtp.starttls.required`), so the password never travels in clear text; the API refuses to send if the relay does not offer it. `TT_SMTP_STARTTLS=false` turns it off, only for a local relay without TLS. Connection, read and write time out after 10 s [implementation choice]. Any other JavaMail setting goes in `spring.mail.properties.*`.
+- **Startup.** Spring Boot creates the mail sender only when `SPRING_MAIL_HOST` is set, so `registro` and `ses` need no mail settings. `smtp` without `SPRING_MAIL_HOST` or `TT_SMTP_REMITENTE` stops the API at startup.
+- **Health.** With `SPRING_MAIL_HOST` set, `/actuator/health` includes a `mail` component that connects to the relay. It is not part of the liveness and readiness groups, so a relay outage never restarts or unroutes the API; `MANAGEMENT_HEALTH_MAIL_ENABLED=false` removes it.
+- **Locally**, any SMTP catcher works, e.g. a Mailpit container (`docker run -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.31.2`) with `TT_CORREO_PROVEEDOR=smtp SPRING_MAIL_HOST=localhost SPRING_MAIL_PORT=1025 TT_SMTP_STARTTLS=false TT_SMTP_REMITENTE=no-responder@tetengo.test ./gradlew bootRun`; read the mail at http://localhost:8025.
 
 ### Links
 The password-reset and invitation e-mails carry a link to the app's `/nueva-contrasena?token={token}` and `/invitacion/{token}` routes (`lib/app/rutas.dart` of the mobile app) under `TT_ENLACE_BASE`, which has no trailing slash. `TT_ENLACE_RECUPERACION` and `TT_ENLACE_INVITACION` replace a whole template instead; `{token}` is the URL-safe one-time token.
@@ -108,4 +126,4 @@ To see a push on a phone or simulator, override the provider:
   TT_PUSH_PROVEEDOR=fcm TT_FCM_CREDENCIALES=~/.config/te-tengo/fcm.json ./gradlew bootRun
   ```
   Keep the key outside the repository (`chmod 600`).
-- `TT_PUSH_PROVEEDOR=registro` / `TT_CORREO_PROVEEDOR=registro` only log, as before.
+- `TT_PUSH_PROVEEDOR=registro` / `TT_CORREO_PROVEEDOR=registro` only log, as before. To try `smtp` locally, see [SMTP](#smtp).
