@@ -5,7 +5,7 @@ Backend API of **Te Tengo**, a system that detects falls of older adults at home
 - **the household agent** (Te Tengo Captura, `te-tengo-desktop-pywebview`), which processes video on the household PC and sends **events**;
 - **the mobile app** of the family member or caregiver (`te-tengo-mobile-flutter`), native or its web build (PWA, served from another origin: see CORS in the API contract).
 
-It stores data in PostgreSQL and clips in S3, and sends push alerts through Amazon SNS.
+It stores data in PostgreSQL and clips in S3 or an S3-compatible store (Cloudflare R2), sends e-mail through SES or any SMTP relay, and sends push alerts through Firebase or Amazon SNS.
 
 ## Where to look
 | Question | Source |
@@ -45,7 +45,7 @@ It stores data in PostgreSQL and clips in S3, and sends push alerts through Amaz
 - **IDs:** UUID v7, generated in `AuditableEntity` constructors; never `@GeneratedValue`.
 - **Rules live in aggregates;** use cases stay thin.
 - **Ports and adapters:** ports go in `application/port`; adapters in `infrastructure/...`; `JpaRepository` interfaces are package-private.
-- **External services sit behind ports with a fake adapter for tests:** email (Amazon SES), push (Amazon SNS or Firebase, chosen by configuration), object storage (S3). Never call AWS from tests; adapter tests and local runs use Floci, a local AWS emulator (ADR 0005, docs/NOTIFICATIONS.md).
+- **External services sit behind ports with a fake adapter for tests:** email (Amazon SES or SMTP), push (Amazon SNS or Firebase, chosen by configuration), object storage (S3 or Cloudflare R2 through its S3 API). Never call a real cloud service from tests; adapter tests and local runs use Floci, a local AWS emulator (ADR 0005, docs/NOTIFICATIONS.md), and the SMTP adapter test uses a Mailpit container.
 - **Migrations:** Flyway `src/main/resources/db/migration/V<n>__<snake_case>.sql`. Never edit a published migration.
 - **Scheduled jobs** (escalation, pause end, disconnection, deletion) use `@Scheduled` and must be idempotent.
 

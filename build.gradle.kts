@@ -69,6 +69,8 @@ dependencies {
   implementation("software.amazon.awssdk:s3")
   // E-mail through Amazon SES (API v2)
   implementation("software.amazon.awssdk:sesv2")
+  // Or through any SMTP relay (JavaMailSender, spring.mail.*)
+  implementation("org.springframework.boot:spring-boot-starter-mail")
   // Push: Amazon SNS mobile push, or Firebase Cloud Messaging (HTTP v1) through the Admin SDK.
   // Only messaging is used, so Firestore and Cloud Storage (and their gRPC stack) are left out.
   implementation("software.amazon.awssdk:sns")
