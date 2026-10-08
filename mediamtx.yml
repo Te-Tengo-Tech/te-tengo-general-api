@@ -38,10 +38,15 @@ hls: true
 hlsAddress: :8888
 hlsAllowOrigins: ["*"]
 hlsAlwaysRemux: true
-hlsVariant: lowLatency
+# Local development serves HLS over plain http://, and Apple's players only accept low-latency HLS
+# over HTTPS (MediaMTX README, "Low-Latency HLS"). Locally use standard fMP4 HLS (a few seconds of
+# delay); production (te-tengo-infra) serves lowLatency behind Caddy's HTTPS.
+hlsVariant: fmp4
 hlsSegmentCount: 7
 hlsSegmentDuration: 1s
-hlsPartDuration: 200ms
+# Two frames of the agent's constant 8 fps: Apple's low-latency HLS player needs parts of equal
+# duration, so the part must be a whole number of frames.
+hlsPartDuration: 250ms
 
 # Protocols live view does not use.
 rtmp: false
