@@ -1,0 +1,14 @@
+# Only the Gradle wrapper, build scripts and src/main reach the build context.
+*
+!gradlew
+!gradle/
+!settings.gradle.kts
+!build.gradle.kts
+!gradle.properties
+!src/main/
+# Never send local keys or cloud credentials, even if they end up under src/.
+**/.claves
+**/*.pem
+**/*service-account*.json
+**/google-services.json
+**/.DS_Store

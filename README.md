@@ -4,6 +4,7 @@
 [![OSV-Scanner](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/osv-scanner.yml/badge.svg)](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/osv-scanner.yml)
 [![OWASP Dependency-Check](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/owasp.yml/badge.svg)](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/owasp.yml)
 [![End-to-end](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/e2e.yml/badge.svg)](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/e2e.yml)
+[![Container image](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/image.yml/badge.svg)](https://github.com/Te-Tengo-Tech/te-tengo-general-api/actions/workflows/image.yml)
 
 **Backend API of Te Tengo**, a pose-estimation system that detects falls of older adults at home.
 
@@ -30,6 +31,7 @@ To try the three apps together, seed the prototype's demo household (account, ho
 
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - Health: http://localhost:8080/actuator/health
+- Container image: `docker build -t te-tengo-general-api .` (Temurin 25 JRE, non-root, arm64 and amd64); running and publishing it to GHCR: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ## Configuration
 | Variable | Purpose | Default |

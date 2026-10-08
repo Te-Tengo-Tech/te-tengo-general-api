@@ -4,6 +4,7 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 ### Added
+- Container image: multi-stage `Dockerfile` (Temurin 25 JRE, non-root user, Spring Boot layers, liveness `HEALTHCHECK`) for `linux/arm64` and `linux/amd64`, and the `Container image` workflow, which builds and smoke-tests it on pull requests and pushes it to GHCR on `api-v*` tags or a manual run (docs/DEPLOYMENT.md).
 - End-to-end smoke test of the agent ↔ API contract, `scripts/e2e.sh`. It runs an isolated stack, seeds the demo household and plays a URFD fall clip through the real desktop agent, headless. It then asserts that the CAIDA alert is created, pushed and confirmed, and that its clip is available from Floci's S3. It prints a PASS/FAIL summary with the detection → push latency. The `End-to-end` workflow runs it on demand, weekly and on pull requests that touch the agent endpoints; it needs the `E2E_REPO_TOKEN` secret and is skipped with a notice without it. `compose.yaml` host ports are now overridable (`TT_POSTGRES_PUERTO`, `TT_FLOCI_PUERTO`), and the `local` profile follows `TT_FLOCI_PUERTO`.
 - CI: separate unit, integration (Testcontainers), architecture/format/build and coverage jobs with JaCoCo report artifacts and step summaries; weekly OWASP Dependency-Check and OSV-Scanner scans; Dependabot, CODEOWNERS, issue and pull request templates, security policy and code of conduct.
 - `cuentas`: account registration `POST /api/cuentas` with BCrypt passwords, unique e-mail and `400 VALIDACION` with `campos` (US-01).
