@@ -83,7 +83,7 @@
 | `GET /api/accesos-vista-en-vivo` | member | → `200 [{usuario: {id, nombre}, inicio, duracionSegundos, desdeAlerta: boolean}]`, newest first (CA-24.2). Empty list when none (CA-24.3) | — |
 
 **Live view (MediaMTX).** Decided by the project owner on 2026-10-07; it replaces the earlier WebSocket JPEG relay proposal.
-- **Playback:** `urlTransmision` is an LL-HLS playlist served by MediaMTX, the system's live streaming service: `<HLS base>/camaras/<camaraId>/index.m3u8?token=<viewer token>`. The app plays it with `video_player`. HLS base: `http://localhost:8888` locally; `https://<host>/vivo` in production.
+- **Playback:** `urlTransmision` is an LL-HLS playlist served by MediaMTX, the system's live streaming service: `<HLS base>/camaras/<camaraId>/index.m3u8?token=<viewer token>`. The app plays it with `video_player`. HLS base: `http://localhost:8888` locally; `https://<host>/vivo` in production. Apple's players only accept low-latency HLS over HTTPS, so the local stack serves standard (fMP4) HLS, a few seconds behind; production serves LL-HLS through Caddy's HTTPS.
 - **Viewer token:** it belongs to one session. It can be used many times (HLS makes many requests) until the session ends. A read without a token, with an unknown token or after the session ended gets `401` from MediaMTX.
 - **Video:** H.264 at 480p and about 8 fps, no audio.
 - **`expiraEn`:** the maximum end of the session, 10 min after it opened **[implementation choice]**. Then the app opens a new session.
