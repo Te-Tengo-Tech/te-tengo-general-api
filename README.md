@@ -8,7 +8,7 @@
 
 **Backend API of Te Tengo**, a pose-estimation system that detects falls of older adults at home.
 
-It receives the events detected by the household agent and serves the family member's mobile app: accounts, households, cameras, consent, alerts, escalation, live view and history.
+It receives the events detected by the household agent and serves the family member's mobile app, native or its web build (PWA): accounts, households, cameras, consent, alerts, escalation, live view and history.
 
 | Stack | Version |
 |---|---|
@@ -43,7 +43,9 @@ To try the three apps together, seed the prototype's demo household (account, ho
 |---|---|---|
 | `TT_JWT_CLAVE_PUBLICA` | RS256 public key (X.509 PEM) that validates every token | `file:.claves/publica.pem` |
 | `TT_JWT_CLAVE_PRIVADA` | RS256 private key (PKCS#8 PEM) that signs the tokens the API issues | `file:.claves/privada.pem` |
-| `TT_ENLACE_RECUPERACION` | Password-reset link sent by e-mail; `{token}` is replaced | `tetengo://app/nueva-contrasena?token={token}` |
+| `TT_CORS_ORIGENES` | Origins of browser clients (the PWA) allowed to call `/api/**`, comma-separated; scheme, host and port, patterns allowed (`http://localhost:*`). Empty: CORS off; no host is assumed. Example for the PWA: `https://te-tengo.pages.dev` | — (`http://localhost:*,http://127.0.0.1:*` with the `local` profile) |
+| `TT_ENLACE_BASE` | Base of the e-mailed links, no trailing slash: `tetengo://app` (native app) or the PWA's hash URL, e.g. `https://te-tengo.pages.dev/app/#` ([NOTIFICATIONS.md](docs/NOTIFICATIONS.md#links)) | `tetengo://app` |
+| `TT_ENLACE_RECUPERACION` | Password-reset link sent by e-mail, replacing the whole template; `{token}` is replaced | `<TT_ENLACE_BASE>/nueva-contrasena?token={token}` |
 | `TT_RETENCION_CLIPS` | How long clips are kept, e.g. `30d` (unset: kept; pending, see BLOCKERS) | — |
 | `TT_AGENTE_VERSION_PUBLICADA` | Agent release published by `GET /api/agente/configuracion` (thresholds: `tetengo.agente.umbrales`, empty by default) | `0.2.0` |
 | `TT_CLIPS_BUCKET` | S3 bucket of the clips; unset uses an in-memory fake (the `local` profile sets `te-tengo-clips` on Floci) | — |
@@ -51,13 +53,15 @@ To try the three apps together, seed the prototype's demo household (account, ho
 | `TT_CLIPS_ENDPOINT` | Endpoint of an S3-compatible store; also the host of the pre-signed URLs | AWS |
 | `TT_CLIPS_PATH_STYLE` | Path-style URLs (`endpoint/bucket/key`) | `false` |
 | `TT_CLIPS_ACCESS_KEY` / `TT_CLIPS_SECRET_KEY` | Static credentials | SDK default chain |
-| `TT_ENLACE_INVITACION` | Invitation link sent by e-mail; `{token}` is replaced | `tetengo://app/invitacion/{token}` |
+| `TT_ENLACE_INVITACION` | Invitation link sent by e-mail, replacing the whole template; `{token}` is replaced | `<TT_ENLACE_BASE>/invitacion/{token}` |
 | `TT_CORREO_PROVEEDOR` | E-mail adapter: `registro` (logs) or `ses` (Amazon SES) | `registro` (`ses` on Floci with the `local` profile) |
 | `TT_SES_REMITENTE` | Sender of the e-mails, a verified SES identity; required with `ses` | — |
 | `TT_SES_REGION` / `TT_SES_ENDPOINT` | SES region and endpoint override (credentials: SDK default chain) | SDK default chain / AWS |
 | `TT_PUSH_PROVEEDOR` | Push adapter: `registro` (logs), `fcm`, `sns` or `simulador` ([NOTIFICATIONS.md](docs/NOTIFICATIONS.md)) | `registro` (`sns` on Floci with the `local` profile) |
 | `TT_FCM_CREDENCIALES` | Path of the Firebase service-account JSON key; required with `fcm`; never commit it | — |
 | `TT_SNS_ARN_ANDROID` / `TT_SNS_ARN_IOS` | SNS platform application ARNs; required with `sns` (both may be the same FCM application) | — |
+| `TT_SNS_ARN_WEB` | SNS platform application (FCM) of the PWA's web push tokens; blank: `sns` skips web devices | — |
+| `TT_PWA_URL` | The PWA's HTTPS address, opened when a web push is clicked (`fcm` and `sns`); another scheme stops the API at startup | — |
 | `TT_SNS_REGION` / `TT_SNS_ENDPOINT` | SNS region and endpoint override (credentials: SDK default chain) | SDK default chain / AWS |
 | `TT_SIMULADOR_BUNDLE_ID` | Bundle id the `simulador` provider pushes to | `tech.tetengo.teTengo` |
 | `TT_FLOCI_PUERTO` | Host port of Floci in `compose.yaml`, and the endpoint port of the `local` profile | `4566` |
@@ -68,6 +72,7 @@ To try the three apps together, seed the prototype's demo household (account, ho
 | `TT_VIVO_SECRETO_AUTORIZACION` | Shared secret of MediaMTX's authorization hook (`compose.yaml` passes the same value to MediaMTX); blank denies every publish and read | — (`secreto-local-de-vista-en-vivo` with the `local` profile) |
 | `TT_API_PUERTO` | Port of the API on the host that MediaMTX's hook calls (`compose.yaml` only) | `8080` |
 | `TT_MEDIAMTX_PUERTO_RTSP` / `TT_MEDIAMTX_PUERTO_HLS` / `TT_MEDIAMTX_PUERTO_API` | Host ports of MediaMTX in `compose.yaml` (the API one bound to 127.0.0.1) | `8554` / `8888` / `9997` |
+| `TT_MEDIAMTX_HLS_ORIGENES` | Origins whose browser pages may read HLS (the PWA), comma-separated; `compose.yaml` passes it to MediaMTX as `MTX_HLSALLOWORIGINS` (`hlsAllowOrigins`). Production sets the same variable on its MediaMTX with the PWA's origin, e.g. `MTX_HLSALLOWORIGINS=https://te-tengo.pages.dev` | `*` |
 
 ## Tests
 ```bash

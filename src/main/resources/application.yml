@@ -18,6 +18,12 @@ spring:
           public-key-location: ${TT_JWT_CLAVE_PUBLICA:file:.claves/publica.pem}
 
 tetengo:
+  cors:
+    # Origins of browser clients (the PWA build of the app) allowed to call /api/**: scheme, host and
+    # port, never a path; patterns such as http://localhost:* work. Comma-separated, e.g.
+    # TT_CORS_ORIGENES=https://te-tengo.pages.dev. Empty (default): CORS is off; the native app and
+    # the household agent need none. The `local` profile allows localhost.
+    origenes: ${TT_CORS_ORIGENES:}
   jwt:
     # RS256 private key that signs the tokens this API issues (PKCS#8 PEM). Locally: scripts/generate-keys.sh
     clave-privada-location: ${TT_JWT_CLAVE_PRIVADA:file:.claves/privada.pem}
@@ -69,7 +75,15 @@ tetengo:
       region: ${TT_SNS_REGION:}
       # Blank is AWS; locally Floci (application-local.yml).
       endpoint: ${TT_SNS_ENDPOINT:}
+      # Optional: platform application of the PWA's web push tokens, an FCM (GCM) application of the
+      # same Firebase project (it may be the same ARN as Android). Blank: SNS skips web devices.
+      arn-web: ${TT_SNS_ARN_WEB:}
       crear-aplicaciones: false
+    web:
+      # The PWA's URL, opened when a web push notification is clicked (webpush.fcm_options.link, sent by
+      # fcm and sns). HTTPS only, as FCM requires; blank sends no link. Example:
+      # TT_PWA_URL=https://te-tengo.pages.dev/app/
+      enlace: ${TT_PWA_URL:}
     simulador:
       # Local only: `xcrun simctl push booted <bundle-id>`; the default is the bundle id of the app.
       bundle-id: ${TT_SIMULADOR_BUNDLE_ID:tech.tetengo.teTengo}
@@ -112,9 +126,16 @@ tetengo:
     retencion-de-clips: ${TT_RETENCION_CLIPS:}
   enlaces:
     # Links e-mailed to reset a password and to accept an invitation; {token} is the one-time token.
-    # Defaults: the mobile app's deep-link routes (custom scheme tetengo://app, lib/app/rutas.dart).
-    recuperacion: ${TT_ENLACE_RECUPERACION:tetengo://app/nueva-contrasena?token={token}}
-    invitacion: ${TT_ENLACE_INVITACION:tetengo://app/invitacion/{token}}
+    # They open the app's routes (lib/app/rutas.dart of the mobile app) under `base`, which has no
+    # trailing slash:
+    # - native app (default): the custom scheme, tetengo://app/nueva-contrasena?token=...
+    # - PWA with hash routing (example host; any origin works):
+    #   TT_ENLACE_BASE=https://te-tengo.pages.dev/app/#
+    #   gives https://te-tengo.pages.dev/app/#/nueva-contrasena?token=...
+    # TT_ENLACE_RECUPERACION and TT_ENLACE_INVITACION replace a whole template instead.
+    base: ${TT_ENLACE_BASE:tetengo://app}
+    recuperacion: ${TT_ENLACE_RECUPERACION:${tetengo.enlaces.base}/nueva-contrasena?token={token}}
+    invitacion: ${TT_ENLACE_INVITACION:${tetengo.enlaces.base}/invitacion/{token}}
   invitaciones:
     # The backlog does not say how long an invitation lasts: placeholder pending (docs/BLOCKERS.md).
     vigencia: 7d

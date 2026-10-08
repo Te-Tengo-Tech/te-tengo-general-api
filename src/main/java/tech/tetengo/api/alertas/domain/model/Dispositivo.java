@@ -10,8 +10,9 @@ import java.util.UUID;
 import tech.tetengo.api.shared.domain.model.AggregateRoot;
 
 /**
- * A family member's phone that receives push notices (API contract §7). Global: it belongs to a
- * user, who may be a member of several households. A push token belongs to one user at a time.
+ * A family member's phone or browser (the PWA) that receives push notices (API contract §7).
+ * Global: it belongs to a user, who may be a member of several households. A push token belongs to
+ * one user at a time.
  */
 @Entity
 @Table(name = "dispositivos")

@@ -72,6 +72,21 @@ class NotificadorPushSimuladorTest {
     }
 
     @Test
+    void losDispositivosWebNoSeAvisanPorElSimulador() {
+        var simulador = con(new NotificadorPushSimulador.Salida(0, "ok"));
+
+        var mixto =
+                simulador.enviar(List.of(new Destino("a", Plataforma.IOS), new Destino("pwa", Plataforma.WEB)), CAIDA);
+        assertThat(mixto.aceptados()).isEqualTo(1);
+        assertThat(comandos).hasSize(1);
+
+        var soloWeb = simulador.enviar(List.of(new Destino("pwa", Plataforma.WEB)), CAIDA);
+        assertThat(soloWeb.aceptados()).isZero();
+        assertThat(soloWeb.tokensInvalidos()).isEmpty();
+        assertThat(comandos).hasSize(1);
+    }
+
+    @Test
     void ca16_4_siSimctlFallaSeReintenta() {
         assertThatThrownBy(() -> con(new NotificadorPushSimulador.Salida(149, "No devices are booted."))
                         .enviar(DESTINOS, CAIDA))

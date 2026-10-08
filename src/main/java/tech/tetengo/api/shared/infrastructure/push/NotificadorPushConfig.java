@@ -7,8 +7,9 @@ import tech.tetengo.api.shared.application.port.NotificadorPush;
 
 /**
  * Chooses the push adapter with {@code tetengo.push.proveedor}: {@code registro} (default, only
- * logs), {@code fcm} (Firebase Cloud Messaging), {@code sns} (Amazon SNS mobile push) or
- * {@code simulador} (the booted iOS simulator, local only). Any other value leaves no adapter, so the
+ * logs), {@code fcm} (Firebase Cloud Messaging, also web push to the PWA), {@code sns} (Amazon SNS
+ * mobile push; web devices only with a web platform application) or {@code simulador} (the booted iOS
+ * simulator, local only; it skips web devices). Any other value leaves no adapter, so the
  * API does not start. docs/NOTIFICATIONS.md
  */
 @Configuration(proxyBeanMethods = false)
@@ -25,14 +26,14 @@ class NotificadorPushConfig {
 
     @Bean
     @ConditionalOnProperty(prefix = PREFIJO, name = PROVEEDOR, havingValue = "fcm")
-    NotificadorPush notificadorPushFcm(PropiedadesDeFcm propiedades) {
-        return new NotificadorPushFcm(MensajeriaFirebase.crear(propiedades));
+    NotificadorPush notificadorPushFcm(PropiedadesDeFcm propiedades, PropiedadesDePushWeb web) {
+        return new NotificadorPushFcm(MensajeriaFirebase.crear(propiedades), web.enlace());
     }
 
     @Bean
     @ConditionalOnProperty(prefix = PREFIJO, name = PROVEEDOR, havingValue = "sns")
-    NotificadorPush notificadorPushSns(PropiedadesDeSns propiedades) {
-        return NotificadorPushSns.crear(propiedades);
+    NotificadorPush notificadorPushSns(PropiedadesDeSns propiedades, PropiedadesDePushWeb web) {
+        return NotificadorPushSns.crear(propiedades, web.enlace());
     }
 
     @Bean

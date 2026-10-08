@@ -12,7 +12,12 @@ import tech.tetengo.api.shared.application.port.NotificadorPush;
 class NotificadorPushConfigTest {
 
     @Configuration(proxyBeanMethods = false)
-    @EnableConfigurationProperties({PropiedadesDeFcm.class, PropiedadesDeSns.class, PropiedadesDelSimulador.class})
+    @EnableConfigurationProperties({
+        PropiedadesDeFcm.class,
+        PropiedadesDeSns.class,
+        PropiedadesDelSimulador.class,
+        PropiedadesDePushWeb.class
+    })
     static class Soporte {}
 
     private final ApplicationContextRunner contexto =
@@ -51,6 +56,12 @@ class NotificadorPushConfigTest {
         contexto.withPropertyValues("tetengo.push.proveedor=sns", "tetengo.push.sns.region=us-east-1")
                 .run(ctx ->
                         assertThat(ctx).hasFailed().getFailure().rootCause().hasMessageContaining("TT_SNS_ARN_IOS"));
+    }
+
+    @Test
+    void unaUrlDeLaPwaQueNoEsHttpsNoArranca() {
+        contexto.withPropertyValues("tetengo.push.web.enlace=http://te-tengo.test/app/")
+                .run(ctx -> assertThat(ctx).hasFailed().getFailure().rootCause().hasMessageContaining("TT_PWA_URL"));
     }
 
     @Test

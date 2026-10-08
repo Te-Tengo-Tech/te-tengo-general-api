@@ -36,6 +36,11 @@ rtspAddress: :8554
 # the app asks. On Apple devices LL-HLS needs HTTPS: production serves it through the reverse proxy.
 hls: true
 hlsAddress: :8888
+# Origins whose browser pages may read HLS (CORS): the PWA build of the app plays it from another
+# origin; the native app needs none. Any origin locally. Override without editing this file with the
+# environment variable MTX_HLSALLOWORIGINS, comma-separated (compose.yaml passes TT_MEDIAMTX_HLS_ORIGENES):
+# production sets the PWA's origin, e.g. MTX_HLSALLOWORIGINS=https://te-tengo.pages.dev. Reads are
+# still authorized by the API through the viewer token.
 hlsAllowOrigins: ["*"]
 hlsAlwaysRemux: true
 # Local development serves HLS over plain http://, and Apple's players only accept low-latency HLS

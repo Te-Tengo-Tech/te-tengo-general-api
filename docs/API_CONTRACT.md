@@ -6,6 +6,9 @@
 
 ## Conventions
 - **Base path** `/api`. **Version header** `Api-Version: 1` (optional; defaults to 1).
+- **Clients:** the native app (Android, iOS) and its web build, a PWA served from another origin (e.g. Cloudflare Pages, `https://te-tengo.pages.dev/app/`, or a custom domain; the backend has no default origin).
+  - **CORS** for `/api/**` is on only for the origins the backend is configured with (`TT_CORS_ORIGENES`; off by default, `http://localhost:*` locally). Allowed request headers: `Authorization`, `Api-Version`, `Content-Type`; exposed: `WWW-Authenticate`; no cookies or credentials; preflight answers are cached for 1 h **[implementation choice]**. A preflight from another origin, or with another header, answers `403` without CORS headers.
+  - **E-mailed links** open the app's `/nueva-contrasena?token={token}` and `/invitacion/{token}` routes under the configured base: `tetengo://app/…` for the native app (default), or the PWA's hash URL, e.g. `https://te-tengo.pages.dev/app/#/nueva-contrasena?token=…` and `…/app/#/invitacion/{token}`.
 - **Auth:** `Authorization: Bearer <accessToken>` (JWT RS256). Claims:
   - `sub`: user id;
   - `hogar_id`: active household, the tenant;
@@ -86,6 +89,7 @@
 - **Playback:** `urlTransmision` is an LL-HLS playlist served by MediaMTX, the system's live streaming service: `<HLS base>/camaras/<camaraId>/index.m3u8?token=<viewer token>`. The app plays it with `video_player`. HLS base: `http://localhost:8888` locally; `https://<host>/vivo` in production. Apple's players only accept low-latency HLS over HTTPS, so the local stack serves standard (fMP4) HLS, a few seconds behind; production serves LL-HLS through Caddy's HTTPS.
 - **Viewer token:** it belongs to one session. It can be used many times (HLS makes many requests) until the session ends. A read without a token, with an unknown token or after the session ended gets `401` from MediaMTX.
 - **Video:** H.264 at 480p and about 8 fps, no audio.
+- **PWA:** the browser reads the HLS playlist from another origin, so MediaMTX answers CORS for the configured origins (`hlsAllowOrigins`: any origin locally, the PWA's origin in production).
 - **`expiraEn`:** the maximum end of the session, 10 min after it opened **[implementation choice]**. Then the app opens a new session.
 - **Session end without `DELETE`:** the API ends a session when its viewer has not read the stream for 30 s **[implementation choice]**, and records the duration until the last read (US-24).
 - **Pause or revoked consent:** every session of the camera ends at once, and MediaMTX disconnects the viewers.
@@ -133,8 +137,8 @@ Alerta = {
 - `tendencia` compares each type with the previous week (CA-27.3).
 
 ## 7. Push notifications
-- **Device registration:** `POST /api/dispositivos {tokenPush, plataforma: "ANDROID" | "IOS"}` → `201`, and `DELETE /api/dispositivos/{tokenPush}` → `204` (member).
-- **Delivery:** the backend sends through Amazon SNS (FCM on Android, APNs on iOS) to every member device. Fall pushes must arrive **in less than 10 s** from the moment the person is on the floor, with the room and the time (CA-16.1, CA-16.2). On failure the backend logs the error and retries (CA-16.4).
+- **Device registration:** `POST /api/dispositivos {tokenPush, plataforma: "ANDROID" | "IOS" | "WEB"}` → `201`, and `DELETE /api/dispositivos/{tokenPush}` → `204` (member). `WEB` is the PWA, with its FCM web push token (`getToken` with the project's VAPID key). Another `plataforma` is `400 VALIDACION` with `campos.plataforma`.
+- **Delivery:** the backend sends through Amazon SNS (FCM on Android, APNs on iOS) or Firebase Cloud Messaging to every member device. Web devices get an FCM web push with the same title, body and data payload; clicking it opens the PWA. Without a web configuration on the push service the backend skips web devices (they do not count as delivered). Fall pushes must arrive **in less than 10 s** from the moment the person is on the floor, with the room and the time (CA-16.1, CA-16.2). On failure the backend logs the error and retries (CA-16.4).
 
 Data payload: `{tipo, alertaId?, camaraId?, habitacion?, ocurridaEn}`. `tipo` is one of:
 

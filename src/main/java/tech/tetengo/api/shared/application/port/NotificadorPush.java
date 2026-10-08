@@ -7,8 +7,9 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Push delivery port. {@code tetengo.push.proveedor} chooses the adapter: Firebase Cloud Messaging,
- * Amazon SNS (FCM on Android, APNs or FCM on iOS), the iOS simulator, or a logging one by default
+ * Push delivery port. {@code tetengo.push.proveedor} chooses the adapter: Firebase Cloud Messaging
+ * (Android, iOS and web push), Amazon SNS (FCM on Android and the web, APNs or FCM on iOS), the iOS
+ * simulator, or a logging one by default
  * (docs/NOTIFICATIONS.md); tests record the notices. Throws {@link FallaDePush} when the service
  * does not respond or accepts none of the devices, so the caller can retry (CA-16.4).
  */
@@ -17,9 +18,11 @@ public interface NotificadorPush {
     /** Sends the notice to every destination and reports what the service did with them. */
     Resultado enviar(List<Destino> destinos, Aviso aviso);
 
+    /** {@code WEB}: the PWA build, with an FCM web push token. */
     enum Plataforma {
         ANDROID,
-        IOS
+        IOS,
+        WEB
     }
 
     /**

@@ -3,6 +3,9 @@
 # moves the published port in compose.yaml (scripts/e2e.sh). The keys are Floci's built-in
 # test/test pair: compose.yaml turns on signature verification, which only accepts known keys.
 tetengo:
+  cors:
+    # A PWA served locally (flutter run -d chrome, any port) may call the API.
+    origenes: ${TT_CORS_ORIGENES:http://localhost:*,http://127.0.0.1:*}
   clips:
     # The pre-signed URLs point to http://localhost:4566, reachable from the household agent on this
     # machine and from the iOS simulator.
@@ -34,7 +37,7 @@ tetengo:
       endpoint: http://localhost:${TT_FLOCI_PUERTO:4566}
       access-key: test
       secret-key: test
-      # Creates te-tengo-android and te-tengo-ios (FCM applications) on Floci.
+      # Creates te-tengo-android, te-tengo-ios and te-tengo-web (FCM applications) on Floci.
       crear-aplicaciones: true
   vista-en-vivo:
     # Same default as the MediaMTX service of compose.yaml (its auth hook calls this API on the host).

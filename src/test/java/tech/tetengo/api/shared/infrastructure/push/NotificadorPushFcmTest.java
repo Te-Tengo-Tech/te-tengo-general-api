@@ -39,6 +39,8 @@ class NotificadorPushFcmTest {
     private static final List<Destino> DESTINOS =
             List.of(new Destino("token-ana", Plataforma.ANDROID), new Destino("token-beto", Plataforma.IOS));
 
+    private static final String PWA = "https://te-tengo.pages.dev/app/";
+
     /** Answers each message with the next queued answer. */
     static class MensajeriaFalsa implements MensajeriaFcm {
         final List<Message> enviados = new ArrayList<>();
@@ -56,7 +58,7 @@ class NotificadorPushFcmTest {
     }
 
     private final MensajeriaFalsa mensajeria = new MensajeriaFalsa();
-    private final NotificadorPushFcm notificador = new NotificadorPushFcm(mensajeria);
+    private final NotificadorPushFcm notificador = new NotificadorPushFcm(mensajeria, PWA);
 
     private static MensajeriaFcm.Respuesta aceptada() {
         return new MensajeriaFcm.Respuesta(true, null);
@@ -74,7 +76,7 @@ class NotificadorPushFcmTest {
 
         assertThat(resultado).isEqualTo(new Resultado(2, java.util.Set.of(), Map.of()));
         assertThat(mensajeria.enviados).hasSize(2);
-        Map<String, Object> esperado = new LinkedHashMap<>(CargasPush.mensajeFcm(ContenidoDelAviso.de(CAIDA)));
+        Map<String, Object> esperado = new LinkedHashMap<>(CargasPush.mensajeFcm(ContenidoDelAviso.de(CAIDA), PWA));
         esperado.put("token", "token-ana");
         assertThat(json(mensajeria.enviados.getFirst())).isEqualTo(normalizar(esperado));
     }
@@ -112,6 +114,63 @@ class NotificadorPushFcmTest {
                                         "body", "10:42 · Toca para ver qué hacer y llamarla."),
                                 "sound",
                                 "default")));
+    }
+
+    @Test
+    void laPwaRecibeElBloqueWebpushConElEnlaceALaApp() {
+        mensajeria.respuestas = List.of(aceptada());
+
+        Resultado resultado = notificador.enviar(List.of(new Destino("token-web", Plataforma.WEB)), CAIDA);
+
+        assertThat(resultado.aceptados()).isEqualTo(1);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> mensaje = (Map<String, Object>) json(mensajeria.enviados.getFirst());
+        assertThat(mensaje).containsEntry("token", "token-web");
+        assertThat(mensaje)
+                .extractingByKey("webpush")
+                .isEqualTo(Map.of(
+                        "headers",
+                        Map.of("Urgency", "high"),
+                        "notification",
+                        Map.of(
+                                "title", "Posible caída de Rosa en la Sala",
+                                "body", "10:42 · Toca para ver qué hacer y llamarla."),
+                        "fcm_options",
+                        Map.of("link", PWA)));
+        // The contract's data payload reaches the PWA too.
+        assertThat(mensaje)
+                .extractingByKey("data")
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .containsEntry("tipo", "ALERTA_CAIDA")
+                .containsEntry("habitacion", "Sala");
+    }
+
+    @Test
+    void sinUrlDeLaPwaElAvisoWebNoLlevaEnlace() {
+        mensajeria.respuestas = List.of(aceptada());
+
+        new NotificadorPushFcm(mensajeria, null).enviar(List.of(new Destino("token-web", Plataforma.WEB)), CAIDA);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> mensaje = (Map<String, Object>) json(mensajeria.enviados.getFirst());
+        assertThat(mensaje)
+                .extractingByKey("webpush")
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .doesNotContainKey("fcm_options")
+                .containsKey("notification");
+        assertThat(CargasPush.mensajeFcm(ContenidoDelAviso.de(CAIDA), null))
+                .extractingByKey("webpush")
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .doesNotContainKey("fcm_options");
+    }
+
+    @Test
+    void laUrlDeLaPwaDebeSerHttps() {
+        assertThat(new PropiedadesDePushWeb("  ").enlace()).isNull();
+        assertThat(new PropiedadesDePushWeb(PWA).enlace()).isEqualTo(PWA);
+        assertThatThrownBy(() -> new PropiedadesDePushWeb("http://localhost:5000/"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("TT_PWA_URL");
     }
 
     @Test
