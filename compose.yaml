@@ -1,7 +1,7 @@
 # Local infrastructure. Spring Boot starts it with `./gradlew bootRun` (spring-boot-docker-compose).
 # Host ports can be overridden so a second stack (scripts/e2e.sh, with its own project name) runs
-# next to the developer's: TT_POSTGRES_PUERTO (default 0, a free port Spring Boot discovers) and
-# TT_FLOCI_PUERTO (default 4566, also read by application-local.yml).
+# next to the developer's: TT_POSTGRES_PUERTO (default 0, a free port Spring Boot discovers),
+# TT_FLOCI_PUERTO (default 4566, also read by application-local.yml) and the MediaMTX ports below.
 services:
   postgres:
     image: postgres:18
@@ -42,6 +42,25 @@ services:
       interval: 2s
       timeout: 2s
       retries: 30
+  # MediaMTX, the live view streaming service (ADR 0007), configured by mediamtx.yml. The household
+  # agent publishes RTSP on 8554 and the app plays LL-HLS on 8888; the control API (9997) is published
+  # on 127.0.0.1 only. Every publish and read is authorized by the API running on the host
+  # (./gradlew bootRun on TT_API_PUERTO, default 8080) with the shared TT_VIVO_SECRETO_AUTORIZACION,
+  # whose local default matches application-local.yml. If you change a port here, set the matching
+  # TT_VIVO_URL_PUBLICACION, TT_VIVO_URL_HLS or TT_VIVO_MEDIAMTX_API for the API.
+  mediamtx:
+    image: bluenviron/mediamtx:1.21.1
+    environment:
+      MTX_AUTHHTTPADDRESS: "http://host.docker.internal:${TT_API_PUERTO:-8080}/api/interno/mediamtx/autorizar?secreto=${TT_VIVO_SECRETO_AUTORIZACION:-secreto-local-de-vista-en-vivo}"
+    extra_hosts:
+      # Linux has no host.docker.internal by default; Docker Desktop already provides it.
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${TT_MEDIAMTX_PUERTO_RTSP:-8554}:8554"
+      - "${TT_MEDIAMTX_PUERTO_HLS:-8888}:8888"
+      - "127.0.0.1:${TT_MEDIAMTX_PUERTO_API:-9997}:9997"
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
 
 volumes:
   floci-data:

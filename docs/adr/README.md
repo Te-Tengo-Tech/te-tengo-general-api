@@ -10,5 +10,6 @@ Michael Nygard's format: context, decision, status and consequences (Nygard, 201
 | [0004](0004-processing-on-household-pc.md) | The household agent processes video and sends events | Proposed (charter change request pending) |
 | [0005](0005-floci-local-aws-emulator.md) | Floci as the local AWS emulator (S3, SES, SNS) | Accepted |
 | [0006](0006-push-provider-switch.md) | Push provider chosen by configuration (registro, FCM, SNS, iOS simulator) | Accepted |
+| [0007](0007-live-view-through-mediamtx.md) | Live view through MediaMTX (LL-HLS, API-authorized tokens, agent control channel) | Accepted |
 
 Nygard, M. (2011, November 15). *Documenting architecture decisions*. Cognitect. https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions

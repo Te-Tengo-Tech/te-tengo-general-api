@@ -45,6 +45,14 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 - `hogares`: `adultoMayor` carries the age (`edad`, required, 50 to 120, as in the prototype's profile form) and an optional `telefono` that «Llamar a Rosa» dials; the app already read both (migration `V18`).
 - `camaras`: `Camara` carries `instaladaEn` («Instalada el», the agent's first registration) and `noConfiableDesde` («La detección no es confiable desde las …», the time of the `deteccion_no_confiable` event, cleared when the agent sees the person again); the app already read both (migration `V19`).
 ### Changed
+- `monitoreo`: live view through MediaMTX (ADR 0007), replacing the WebSocket JPEG relay.
+  - `POST /api/camaras/{id}/vista-en-vivo` takes an optional `modo` and answers `modo`. `urlTransmision` is the camera's LL-HLS playlist with a viewer token. An `alertaId` of another camera is `400 VALIDACION`.
+  - New `PATCH /api/vista-en-vivo/{sesionId}` `{modo}`: `VIDEO`, `VIDEO_CON_POSTURA` or `SOLO_POSTURA`.
+  - The agent's `/api/agente/transmision` is a text-only control channel: `transmitir:true` with the publish URL, credentials and mode; `modo`; `transmitir:false`.
+  - MediaMTX authorizes publishes and reads through `POST /api/interno/mediamtx/autorizar` and a shared secret. Viewer and publish tokens are stored hashed.
+  - Sessions end after 30 s without reads or at 10 min, with the access duration recorded.
+  - A pause or a revoked consent ends the sessions, stops the agent and kicks every MediaMTX client.
+  - `compose.yaml` runs MediaMTX 1.21.1 with `mediamtx.yml`. New `TT_VIVO_*` settings replace `TT_URL_TRANSMISION`. Migration `V21`.
 - Agent endpoints follow the bodies of `docs/AGENT_CONTRACT.md` shared with `te-tengo-desktop-pywebview`: registration takes `credencialInstalacion` and answers `hogarId` and the stored `nombreHabitacion`; the capture state carries `motivo` (`SIN_CONSENTIMIENTO`, `EN_PAUSA`) and `nombreHabitacion`; the heartbeat takes `{webcamConectada, deteccionConfiable, versionAgente}`, answers the capture state and disconnects the camera at once when the webcam is unavailable; the clip upload answers `201 {urlSubida, cabeceras, expiraEn}`.
 - Documentation translated to English, with English file names.
 - Local runs use Floci, a local AWS emulator, instead of SeaweedFS: `compose.yaml` runs it on port 4566 and the `local` profile sends clips, e-mail and push to it (ADR 0005). Sent e-mails are listed at `/_aws/ses` and pushes at `/_aws/sns/push-notifications`.

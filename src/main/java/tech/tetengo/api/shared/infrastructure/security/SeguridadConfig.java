@@ -1,6 +1,5 @@
 package tech.tetengo.api.shared.infrastructure.security;
 
-import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
 
 import java.util.function.Supplier;
@@ -55,10 +54,9 @@ public class SeguridadConfig {
                                 API + "/recuperaciones",
                                 API + "/recuperaciones/confirmacion",
                                 API + "/agente/camaras/registro",
-                                API + "/invitaciones/*/aceptacion")
-                        .permitAll()
-                        // Live view stream: authenticated by the one-time token of its URL.
-                        .requestMatchers(GET, API + "/vista-en-vivo/*/transmision")
+                                API + "/invitaciones/*/aceptacion",
+                                // MediaMTX's authorization hook: checked by its shared secret.
+                                API + "/interno/mediamtx/autorizar")
                         .permitAll()
                         .requestMatchers(API + "/agente/**")
                         .hasRole(Rol.AGENTE.name())

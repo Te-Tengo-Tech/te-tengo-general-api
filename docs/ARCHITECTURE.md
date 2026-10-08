@@ -4,13 +4,16 @@
 This repository implements the **"Backend API del sistema"** container of the C4 model: the Services layer (Backend API and Application Services) and the Shared Persistence layer of the logical architecture (`docs/references/ARQUITECTURA_LOGICA_FISICA.md`, Spanish).
 
 ```
-Household agent (PC: capture + detection) ──HTTPS: events, heartbeat, clips──┐
-Mobile app ─────────────────────────────HTTPS/REST + WSS (live view)─────────┤
-                                                                             ▼
+Household agent (PC: capture + detection) ──HTTPS: events, heartbeat, clips; WSS: live view control──┐
+Mobile app ──────────────────────────────────────HTTPS/REST────────────────────────────────────────────┤
+                                                                                                       ▼
                           te-tengo-general-api (Spring Boot, modular monolith)
                           ├─ PostgreSQL (Base de Datos Central)
                           ├─ S3 (Almacenamiento de clips, pre-signed URLs)
-                          └─ Amazon SNS (Servicio de notificaciones push)
+                          ├─ Amazon SNS (Servicio de notificaciones push)
+                          └─ MediaMTX (Servicio de transmisión en vivo): authorizes it, kicks clients
+
+Household agent ──RTSP(S): live video──► MediaMTX ──LL-HLS──► Mobile app      (ADR 0007)
 ```
 
 ## Modules
@@ -21,7 +24,7 @@ Mobile app ───────────────────────
 | `hogares` | EP02 Profile, consent and family | US-04, US-05, US-08 to US-10 | Done |
 | `camaras` | EP02 Cameras | US-06, US-07; camera side of US-05, US-15, US-22 | Done (**reference slice**) |
 | `alertas` | EP03 Detection and alerts | US-11 to US-21; alert list (US-25) and clips (US-18, US-26) | Done |
-| `monitoreo` | EP04 Monitoring and privacy | US-22 to US-24 | Done (live view transport pending confirmation) |
+| `monitoreo` | EP04 Monitoring and privacy | US-22 to US-24 | Done (live view through MediaMTX, ADR 0007) |
 | `historial` | EP05 History and summary | US-26 retention, US-27 | Done (retention period pending) |
 
 Open decisions and missing credentials are in [BLOCKERS.md](BLOCKERS.md).
@@ -39,7 +42,7 @@ cuentas ◄── hogares ◄── camaras ◄── monitoreo
 |---|---|---|
 | `hogares` | `cuentas` | `ServicioDeSesiones` (sessions after creating or switching households, accepting invitations), `AltaDeCuentas`, `DirectorioDeUsuarios`; implements the `MembresiasDeUsuario` SPI that sign-in uses |
 | `camaras` | `hogares` | Listens to `ConsentimientoOtorgado` / `ConsentimientoRevocado` to keep the capture state |
-| `monitoreo` | `camaras`, `cuentas` | Pauses and live view through `CamarasDelHogar`; names for the access log |
+| `monitoreo` | `camaras`, `cuentas`, `hogares` | Pauses and live view through `CamarasDelHogar`; names for the access log; listens to `ConsentimientoRevocado` to stop live view. Declares the `AlertasDeCamara` SPI, which `alertas` implements (CA-23.2) |
 | `alertas` | `camaras`, `hogares`, `monitoreo`, `cuentas` | Camera name, capture state and detection reliability; members and alert order; listens to camera, consent and pause events to send their pushes |
 | `historial` | `alertas` | `ConteoDeAlertas` (weekly summary) and `RetencionDeClips` |
 
@@ -52,6 +55,7 @@ Every external service sits behind a port with a fake adapter, so tests never ca
 |---|---|---|
 | `NotificadorCorreo` (`shared`) | Amazon SES | `tetengo.correo.proveedor`: logs by default, `ses` (Floci's SES with the `local` profile) |
 | `NotificadorPush` (`shared`) | Amazon SNS (FCM, APNs), or Firebase Cloud Messaging directly | `tetengo.push.proveedor`: logs by default, `fcm`, `sns` (Floci's SNS with the `local` profile) or `simulador` (iOS simulator); see [NOTIFICATIONS.md](NOTIFICATIONS.md) and [ADR 0006](adr/0006-push-provider-switch.md) |
+| `ServicioDeTransmision` (`monitoreo`) | MediaMTX control API | `ServicioDeTransmisionMediaMtx` against `TT_VIVO_MEDIAMTX_API` (MediaMTX of `compose.yaml`); tests use `TransmisionDePrueba`, and `MediaMtxIntegrationTest` a MediaMTX container |
 | `AlmacenamientoDeClips` (`alertas`) | Amazon S3, pre-signed URLs | `AlmacenamientoDeClipsEnS3` when `TT_CLIPS_BUCKET` is set (Floci with the `local` profile of `bootRun`); otherwise in memory, placeholder URLs |
 
 Tests replace them with recording fakes (the AWS adapters have their own tests against a Floci container) (`CorreoDePrueba`, `PushDePrueba`, `AlmacenamientoDePrueba`) and move time with `RelojDePrueba`.
@@ -66,6 +70,7 @@ All are idempotent, find their candidates with a native query across households 
 | `EscalarAlertas` | `alertas` | US-20 |
 | `EliminarGrabaciones` | `alertas` | US-09: deletes recordings after revocation |
 | `FinalizarPausasVencidas` | `monitoreo` | US-22 |
+| `FinalizarSesionesDeVistaEnVivo` | `monitoreo` | US-23, US-24: live view sessions nobody closed (30 s without reads, 10 min at most) |
 | `AplicarRetencionDeGrabaciones` | `historial` | US-26, only when the retention period is set |
 
 ## Quality gates

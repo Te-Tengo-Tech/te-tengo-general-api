@@ -36,3 +36,6 @@ tetengo:
       secret-key: test
       # Creates te-tengo-android and te-tengo-ios (FCM applications) on Floci.
       crear-aplicaciones: true
+  vista-en-vivo:
+    # Same default as the MediaMTX service of compose.yaml (its auth hook calls this API on the host).
+    secreto-autorizacion: ${TT_VIVO_SECRETO_AUTORIZACION:secreto-local-de-vista-en-vivo}

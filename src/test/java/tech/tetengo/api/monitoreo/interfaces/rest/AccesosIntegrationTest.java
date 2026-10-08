@@ -36,6 +36,7 @@ class AccesosIntegrationTest extends AbstractIntegrationTest {
     String titular;
     String tokenAna;
     String camara;
+    String agente;
     UUID beto;
     String tokenBeto;
 
@@ -45,7 +46,8 @@ class AccesosIntegrationTest extends AbstractIntegrationTest {
         tokenAna = campo(titular, "$.tokenAcceso");
         String registro = ApiDePrueba.agenteConConsentimiento(mvc, jdbc, titular, "Sala");
         camara = campo(registro, "$.camaraId");
-        mvc.perform(post("/api/agente/senal").header("Authorization", bearer(campo(registro, "$.token"))));
+        agente = campo(registro, "$.token");
+        mvc.perform(post("/api/agente/senal").header("Authorization", bearer(agente)));
         ApiDePrueba.registrarCuenta(mvc, "beto@correo.pe", "secreta123", "Beto");
         beto = UUID.fromString(campo(ApiDePrueba.iniciarSesion(mvc, "beto@correo.pe", "secreta123"), "$.usuario.id"));
         UUID hogar = UUID.fromString(campo(titular, "$.hogarId"));
@@ -83,7 +85,13 @@ class AccesosIntegrationTest extends AbstractIntegrationTest {
         verEnVivo(tokenAna, "{}", Duration.ofSeconds(90));
         reloj.avanzar(Duration.ofMinutes(10));
         Instant segundo = reloj.instant();
-        verEnVivo(tokenBeto, "{\"alertaId\":\"%s\"}".formatted(UUID.randomUUID()), Duration.ofSeconds(40));
+        String alerta = campo(
+                ApiDePrueba.enviarEvento(mvc, agente, UUID.randomUUID(), "caida", reloj.instant())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString(),
+                "$.alertaId");
+        verEnVivo(tokenBeto, "{\"alertaId\":\"%s\"}".formatted(alerta), Duration.ofSeconds(40));
 
         mvc.perform(get("/api/accesos-vista-en-vivo").header("Authorization", bearer(tokenBeto)))
                 .andExpect(status().isOk())
