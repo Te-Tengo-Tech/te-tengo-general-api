@@ -10,7 +10,15 @@ interface AccesoVistaEnVivoJpaRepository extends JpaRepository<AccesoVistaEnVivo
 
     List<AccesoVistaEnVivo> findAllByOrderByInicioDesc();
 
-    /** Native, so not filtered by household: the stream connection has no JWT. */
+    List<AccesoVistaEnVivo> findByFinIsNull();
+
+    List<AccesoVistaEnVivo> findByCamaraIdAndFinIsNull(UUID camaraId);
+
+    /** Native, so not filtered by household: MediaMTX's request has no JWT. */
     @Query(value = "select id, hogar_id from accesos_vista_en_vivo where token_hash = :huella", nativeQuery = true)
     List<Object[]> porToken(String huella);
+
+    /** Native, across households: only for the session end job. */
+    @Query(value = "select distinct hogar_id from accesos_vista_en_vivo where fin is null", nativeQuery = true)
+    List<UUID> hogaresConSesionesAbiertas();
 }

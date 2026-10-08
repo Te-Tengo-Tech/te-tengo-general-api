@@ -1,0 +1,61 @@
+# MediaMTX for live view (docs/API_CONTRACT.md §4, docs/AGENT_CONTRACT.md, ADR 0007), the
+# "Servicio de transmisión en vivo" of the architecture. compose.yaml mounts it read-only; the same file
+# runs in the integration tests. Only what differs from MediaMTX's defaults (v1.21) is set here.
+#
+# - The household agent publishes H.264 to rtsp://<host>:8554/camaras/<camaraId> (TCP), as user `agente`
+#   with the publish token the API sent it over its control channel.
+# - The app plays LL-HLS from http://<host>:8888/camaras/<camaraId>/index.m3u8?token=<viewer token>.
+# - Every publish and every new reader is authorized by the API (authMethod http). compose.yaml overrides
+#   the address with MTX_AUTHHTTPADDRESS, so the API port and the secret come from the environment.
+# - The control API (9997) lets the API kick clients out; compose.yaml publishes it on 127.0.0.1 only and
+#   production never exposes it.
+
+logLevel: info
+
+# Authentication: the API decides (POST /api/interno/mediamtx/autorizar). Requests without the shared
+# secret are rejected by the API.
+authMethod: http
+authHTTPAddress: http://host.docker.internal:8080/api/interno/mediamtx/autorizar?secreto=secreto-local-de-vista-en-vivo
+# The control API is reachable only from the server (127.0.0.1 or the internal network), so the API's
+# own calls are not sent back to it. Metrics and pprof stay disabled.
+authHTTPExclude:
+  - action: api
+
+# Control API, used by the API to kick the publisher and the readers (pause, revoked consent, ended
+# sessions) and to see which viewers are still reading.
+api: true
+apiAddress: :9997
+
+# RTSP over TCP only (no UDP ports to open, works through NAT and Docker). Production adds RTSPS on 8322
+# with the infrastructure's certificates (rtspEncryption: optional, rtspServerKey, rtspServerCert).
+rtsp: true
+rtspTransports: [tcp]
+rtspAddress: :8554
+
+# Low-Latency HLS for the app. The muxer starts with the publisher, so the first playlist is ready when
+# the app asks. On Apple devices LL-HLS needs HTTPS: production serves it through the reverse proxy.
+hls: true
+hlsAddress: :8888
+hlsAllowOrigins: ["*"]
+hlsAlwaysRemux: true
+hlsVariant: lowLatency
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+
+# Protocols live view does not use.
+rtmp: false
+webrtc: false
+srt: false
+moq: false
+playback: false
+metrics: false
+pprof: false
+
+pathDefaults:
+  # A new publish of the same camera (the agent reconnected) replaces the previous one.
+  overridePublisher: true
+
+# One path per camera; anything else does not exist.
+paths:
+  "~^camaras/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$": {}

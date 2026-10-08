@@ -31,4 +31,10 @@ public class SoporteDePruebas {
     AlmacenamientoDePrueba almacenamientoDePrueba() {
         return new AlmacenamientoDePrueba();
     }
+
+    @Bean
+    @Primary
+    TransmisionDePrueba transmisionDePrueba() {
+        return new TransmisionDePrueba();
+    }
 }

@@ -18,7 +18,11 @@ public enum MonitoreoError implements CodigoError {
     SIN_CONSENTIMIENTO(
             "SIN_CONSENTIMIENTO",
             HttpStatus.CONFLICT,
-            "Sin el consentimiento del adulto mayor la cámara no transmite.");
+            "Sin el consentimiento del adulto mayor la cámara no transmite."),
+    /** {@code alertaId} of another camera, or an unknown {@code modo} (with {@code campos}). */
+    VALIDACION("VALIDACION", HttpStatus.BAD_REQUEST, "Revisa los datos ingresados."),
+    SESION_NO_ENCONTRADA(
+            "SESION_NO_ENCONTRADA", HttpStatus.NOT_FOUND, "La sesión de vista en vivo no existe o ya terminó.");
 
     private final String codigo;
     private final HttpStatus estado;

@@ -21,11 +21,18 @@ import org.springframework.jdbc.core.JdbcTemplate;
         properties = {
             "spring.security.oauth2.resourceserver.jwt.public-key-location=",
             "tetengo.jwt.clave-privada-location=",
-            "tetengo.tareas.habilitadas=false"
+            "tetengo.tareas.habilitadas=false",
+            AbstractIntegrationTest.SECRETO_MEDIAMTX
         })
 @AutoConfigureMockMvc
 @Import({TestcontainersConfiguration.class, JwtDePrueba.class, SoporteDePruebas.class})
 public abstract class AbstractIntegrationTest {
+
+    /** Shared secret of MediaMTX's authorization requests in tests. */
+    public static final String SECRETO_MEDIAMTX = "tetengo.vista-en-vivo.secreto-autorizacion=secreto-de-prueba";
+
+    @Autowired
+    protected TransmisionDePrueba transmision;
 
     @Autowired
     private JdbcTemplate jdbcDeLimpieza;
@@ -49,6 +56,7 @@ public abstract class AbstractIntegrationTest {
         correos.limpiar();
         push.limpiar();
         almacenamiento.limpiar();
+        transmision.limpiar();
         List<String> tablas = jdbcDeLimpieza.queryForList(
                 "select tablename from pg_tables where schemaname = 'public' and tablename <> 'flyway_schema_history'",
                 String.class);

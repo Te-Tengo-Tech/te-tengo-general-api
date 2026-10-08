@@ -32,7 +32,22 @@ class AccesoVistaEnVivoRepositoryAdapter implements AccesoVistaEnVivoRepository 
     }
 
     @Override
+    public List<AccesoVistaEnVivo> abiertas() {
+        return jpa.findByFinIsNull();
+    }
+
+    @Override
+    public List<AccesoVistaEnVivo> abiertasDe(UUID camaraId) {
+        return jpa.findByCamaraIdAndFinIsNull(camaraId);
+    }
+
+    @Override
     public Optional<SesionDeToken> porToken(String huella) {
         return jpa.porToken(huella).stream().findFirst().map(fila -> new SesionDeToken((UUID) fila[0], (UUID) fila[1]));
+    }
+
+    @Override
+    public List<UUID> hogaresConSesionesAbiertas() {
+        return jpa.hogaresConSesionesAbiertas();
     }
 }

@@ -4,30 +4,26 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
-import tech.tetengo.api.monitoreo.application.ConexionDeTransmision;
+import tech.tetengo.api.monitoreo.application.ControlDeVistaEnVivo;
 
-/** WebSocket endpoints of the live view relay (US-23). Access is by token, not by origin. */
+/** The agent's live view control channel (US-23). Access is by the agent's token, not by origin. */
 @Configuration
 @EnableWebSocket
 class TransmisionConfig implements WebSocketConfigurer {
 
-    private final RelevoDeVistaEnVivo relevo;
-    private final ConexionDeTransmision conexion;
+    private final CanalDelAgenteWebSocket canal;
+    private final ControlDeVistaEnVivo control;
 
-    TransmisionConfig(RelevoDeVistaEnVivo relevo, ConexionDeTransmision conexion) {
-        this.relevo = relevo;
-        this.conexion = conexion;
+    TransmisionConfig(CanalDelAgenteWebSocket canal, ControlDeVistaEnVivo control) {
+        this.canal = canal;
+        this.control = control;
     }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registro) {
-        ManejadorDelAgente agente = new ManejadorDelAgente(relevo);
-        ManejadorDelEspectador espectador = new ManejadorDelEspectador(relevo, conexion);
+        ManejadorDelAgente agente = new ManejadorDelAgente(canal, control);
         registro.addHandler(agente, "/api/agente/transmision")
                 .addInterceptors(agente)
-                .setAllowedOriginPatterns("*");
-        registro.addHandler(espectador, "/api/vista-en-vivo/*/transmision")
-                .addInterceptors(espectador)
                 .setAllowedOriginPatterns("*");
     }
 }
