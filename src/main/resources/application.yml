@@ -109,7 +109,9 @@ tetengo:
     vigencia-url-subida: 10m
     vigencia-url-lectura: 5m
     # Amazon S3 (or an S3-compatible store). Without a bucket the in-memory fake is used. Locally,
-    # `./gradlew bootRun` uses Floci from compose.yaml (application-local.yml).
+    # `./gradlew bootRun` uses Floci from compose.yaml (application-local.yml). Cloudflare R2:
+    # TT_CLIPS_REGION=auto, TT_CLIPS_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com,
+    # TT_CLIPS_PATH_STYLE=true and the R2 API token's keys (docs/DEPLOYMENT.md).
     s3:
       bucket: ${TT_CLIPS_BUCKET:}
       # Blank: the AWS SDK's default region chain (AWS_REGION, ~/.aws/config...).

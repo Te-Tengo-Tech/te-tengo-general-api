@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.env.YamlPropertySourceLoader;
@@ -55,6 +56,45 @@ class AlmacenamientoDeClipsConfigTest {
                                     "video/mp4",
                                     Instant.now().plusSeconds(600));
                     assertThat(subida.url().toString()).startsWith("http://localhost:4566/te-tengo-clips/hogares/h/");
+                });
+    }
+
+    /**
+     * Cloudflare R2 (developers.cloudflare.com/r2/examples/aws/aws-sdk-java/): region {@code auto},
+     * the account's S3 endpoint and path-style URLs. Presigning needs no request: the URLs sign only
+     * {@code Content-Type} and {@code Host}, with no SDK checksum parameters, so the agent's plain
+     * PUT matches the signature.
+     */
+    @Test
+    void conR2LasUrlsFirmadasUsanLaRegionAutoYNoLlevanChecksums() {
+        String endpoint = "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com";
+        contexto.withPropertyValues(
+                        "tetengo.clips.s3.bucket=te-tengo-clips",
+                        "tetengo.clips.s3.region=auto",
+                        "tetengo.clips.s3.endpoint=" + endpoint,
+                        "tetengo.clips.s3.path-style=true",
+                        "tetengo.clips.s3.access-key=r2-access-key",
+                        "tetengo.clips.s3.secret-key=r2-secret-key")
+                .run(ctx -> {
+                    var almacenamiento = ctx.getBean(AlmacenamientoDeClips.class);
+                    var subida = almacenamiento.urlDeSubida(
+                            "hogares/h/alertas/a/e", "video/mp4", Instant.now().plusSeconds(600));
+                    String url = subida.url().toString();
+                    assertThat(url)
+                            .startsWith(endpoint + "/te-tengo-clips/hogares/h/alertas/a/e?")
+                            .contains("X-Amz-Credential=r2-access-key%2F", "%2Fauto%2Fs3%2Faws4_request")
+                            .contains("X-Amz-SignedHeaders=content-type%3Bhost")
+                            .contains("X-Amz-Expires=")
+                            .doesNotContainIgnoringCase("checksum");
+                    assertThat(subida.cabeceras()).containsExactly(Map.entry("Content-Type", "video/mp4"));
+
+                    var lectura = almacenamiento
+                            .urlDeLectura("hogares/h/alertas/a/e", Instant.now().plusSeconds(300), false, "clip")
+                            .toString();
+                    assertThat(lectura)
+                            .startsWith(endpoint + "/te-tengo-clips/hogares/h/alertas/a/e?")
+                            .contains("X-Amz-SignedHeaders=host")
+                            .doesNotContainIgnoringCase("checksum");
                 });
     }
 
