@@ -9,6 +9,9 @@ import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.Notification;
+import com.google.firebase.messaging.WebpushConfig;
+import com.google.firebase.messaging.WebpushFcmOptions;
+import com.google.firebase.messaging.WebpushNotification;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +22,8 @@ import tech.tetengo.api.shared.application.port.NotificadorPush;
 
 /**
  * Push through Firebase Cloud Messaging (HTTP v1, Firebase Admin SDK) to the FCM registration tokens
- * the app registers on Android and iOS. Tokens FCM no longer accepts ({@code UNREGISTERED},
+ * the app registers on Android, iOS and the web (PWA): every message carries the Android, APNs and
+ * web push blocks, and FCM applies the one of the token's platform. Tokens FCM no longer accepts ({@code UNREGISTERED},
  * {@code SENDER_ID_MISMATCH}, {@code INVALID_ARGUMENT}) are reported so their devices are
  * deactivated. When FCM accepts no device for any other reason, it throws {@link FallaDePush} so the
  * notice is retried (CA-16.4).
@@ -34,16 +38,23 @@ class NotificadorPushFcm implements NotificadorPush {
             MessagingErrorCode.INVALID_ARGUMENT);
 
     private final MensajeriaFcm mensajeria;
+    private final String enlaceWeb;
 
-    NotificadorPushFcm(MensajeriaFcm mensajeria) {
+    /**
+     * @param enlaceWeb the PWA's URL that web notifications open ({@link PropiedadesDePushWeb}); null
+     *     sends none
+     */
+    NotificadorPushFcm(MensajeriaFcm mensajeria, String enlaceWeb) {
         this.mensajeria = mensajeria;
+        this.enlaceWeb = enlaceWeb;
     }
 
     @Override
     public Resultado enviar(List<Destino> destinos, Aviso aviso) {
         ContenidoDelAviso contenido = ContenidoDelAviso.de(aviso);
-        List<Message> mensajes =
-                destinos.stream().map(d -> mensaje(d.tokenPush(), contenido)).toList();
+        List<Message> mensajes = destinos.stream()
+                .map(d -> mensaje(d.tokenPush(), contenido, enlaceWeb))
+                .toList();
         List<MensajeriaFcm.Respuesta> respuestas;
         try {
             respuestas = mensajeria.enviar(mensajes);
@@ -73,7 +84,7 @@ class NotificadorPushFcm implements NotificadorPush {
     }
 
     /** The same payload as {@link CargasPush#mensajeFcm}, built with the Admin SDK. */
-    static Message mensaje(String token, ContenidoDelAviso contenido) {
+    static Message mensaje(String token, ContenidoDelAviso contenido, String enlaceWeb) {
         return Message.builder()
                 .setToken(token)
                 .setNotification(Notification.builder()
@@ -94,7 +105,21 @@ class NotificadorPushFcm implements NotificadorPush {
                                 .setSound("default")
                                 .build())
                         .build())
+                .setWebpushConfig(webpush(contenido, enlaceWeb))
                 .build();
+    }
+
+    private static WebpushConfig webpush(ContenidoDelAviso contenido, String enlaceWeb) {
+        WebpushConfig.Builder webpush = WebpushConfig.builder()
+                .putHeader(CargasPush.URGENCIA, CargasPush.URGENCIA_ALTA)
+                .setNotification(WebpushNotification.builder()
+                        .setTitle(contenido.titulo())
+                        .setBody(contenido.cuerpo())
+                        .build());
+        if (enlaceWeb != null) {
+            webpush.setFcmOptions(WebpushFcmOptions.withLink(enlaceWeb));
+        }
+        return webpush.build();
     }
 
     private static ApsAlert alertaApns(ContenidoDelAviso contenido) {

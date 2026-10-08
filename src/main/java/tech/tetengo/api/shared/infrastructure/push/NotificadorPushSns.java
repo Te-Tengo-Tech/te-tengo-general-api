@@ -1,5 +1,6 @@
 package tech.tetengo.api.shared.infrastructure.push;
 
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -25,9 +26,11 @@ import tools.jackson.databind.json.JsonMapper;
  * application of its platform ({@code CreatePlatformEndpoint}, re-enabled if SNS had disabled it),
  * and its ARN is stored with the device. The message carries the payload of every platform
  * ({@code MessageStructure=json}): {@code GCM} in the FCM HTTP v1 format ({@code fcmV1Message}) and
- * {@code APNS} / {@code APNS_SANDBOX}, with the same content as the other providers. Endpoints SNS
- * reports as disabled are reported as invalid tokens. When SNS accepts no device for any other
- * reason, it throws {@link FallaDePush} so the notice is retried (CA-16.4).
+ * {@code APNS} / {@code APNS_SANDBOX}, with the same content as the other providers. Web devices
+ * (the PWA's FCM web push tokens) need a web platform application, an FCM one whose {@code GCM}
+ * payload carries the web push block; without it they are skipped with a warning and do not count
+ * as delivered. Endpoints SNS reports as disabled are reported as invalid tokens. When SNS accepts
+ * no device for any other reason, it throws {@link FallaDePush} so the notice is retried (CA-16.4).
  */
 class NotificadorPushSns implements NotificadorPush, AutoCloseable {
 
@@ -40,28 +43,44 @@ class NotificadorPushSns implements NotificadorPush, AutoCloseable {
 
     private final SnsClient sns;
     private final Map<Plataforma, String> aplicaciones;
+    private final String enlaceWeb;
 
-    NotificadorPushSns(SnsClient sns, String arnAndroid, String arnIos) {
+    /**
+     * @param arnWeb platform application of web devices; blank skips them
+     * @param enlaceWeb the PWA's URL that web notifications open; null sends none
+     */
+    NotificadorPushSns(SnsClient sns, String arnAndroid, String arnIos, String arnWeb, String enlaceWeb) {
         if (!StringUtils.hasText(arnAndroid) || !StringUtils.hasText(arnIos)) {
             throw new IllegalStateException(
                     "tetengo.push.sns.arn-android y arn-ios (TT_SNS_ARN_ANDROID, TT_SNS_ARN_IOS) son obligatorios con SNS");
         }
         this.sns = sns;
-        this.aplicaciones = Map.of(Plataforma.ANDROID, arnAndroid, Plataforma.IOS, arnIos);
+        this.aplicaciones = new EnumMap<>(Map.of(Plataforma.ANDROID, arnAndroid, Plataforma.IOS, arnIos));
+        if (StringUtils.hasText(arnWeb)) {
+            aplicaciones.put(Plataforma.WEB, arnWeb);
+        }
+        this.enlaceWeb = enlaceWeb;
     }
 
-    static NotificadorPushSns crear(PropiedadesDeSns propiedades) {
+    static NotificadorPushSns crear(PropiedadesDeSns propiedades, String enlaceWeb) {
         var cliente = propiedades.cliente();
         SnsClient sns = cliente.configurar(SnsClient.builder()).build();
         String android = propiedades.arnAndroid();
         String ios = propiedades.arnIos();
+        String web = propiedades.arnWeb();
         if (propiedades.crearAplicaciones()) {
-            // Locally (Floci) both are FCM applications: the app registers FCM tokens on iOS too.
+            // Locally (Floci) all are FCM applications: the app registers FCM tokens on iOS and the web too.
             android = StringUtils.hasText(android) ? android : crearAplicacion(sns, "te-tengo-android");
             ios = StringUtils.hasText(ios) ? ios : crearAplicacion(sns, "te-tengo-ios");
+            web = StringUtils.hasText(web) ? web : crearAplicacion(sns, "te-tengo-web");
         }
-        log.info("Push por Amazon SNS ({}): Android {}, iOS {}", cliente.destino(), android, ios);
-        return new NotificadorPushSns(sns, android, ios);
+        log.info(
+                "Push por Amazon SNS ({}): Android {}, iOS {}, web {}",
+                cliente.destino(),
+                android,
+                ios,
+                StringUtils.hasText(web) ? web : "(sin aplicación: no se avisa a la PWA)");
+        return new NotificadorPushSns(sns, android, ios, web, enlaceWeb);
     }
 
     private static String crearAplicacion(SnsClient sns, String nombre) {
@@ -72,12 +91,17 @@ class NotificadorPushSns implements NotificadorPush, AutoCloseable {
 
     @Override
     public Resultado enviar(List<Destino> destinos, Aviso aviso) {
-        String mensaje = mensaje(ContenidoDelAviso.de(aviso), UUID.randomUUID().toString());
+        String mensaje = mensaje(ContenidoDelAviso.de(aviso), UUID.randomUUID().toString(), enlaceWeb);
         int aceptados = 0;
+        int sinAplicacion = 0;
         Set<String> invalidos = new HashSet<>();
         Map<String, String> referencias = new HashMap<>();
         SdkException ultimoError = null;
         for (Destino destino : destinos) {
+            if (!aplicaciones.containsKey(destino.plataforma())) {
+                sinAplicacion++;
+                continue;
+            }
             try {
                 String endpoint = destino.referencia();
                 if (endpoint == null) {
@@ -100,6 +124,12 @@ class NotificadorPushSns implements NotificadorPush, AutoCloseable {
                 ultimoError = e;
                 referencias.remove(destino.tokenPush());
             }
+        }
+        if (sinAplicacion > 0) {
+            log.warn(
+                    "Push {}: {} dispositivo(s) web sin aviso; SNS no tiene aplicación web (TT_SNS_ARN_WEB)",
+                    aviso.tipo(),
+                    sinAplicacion);
         }
         if (ultimoError != null && aceptados == 0) {
             throw new FallaDePush("SNS no aceptó el push " + aviso.tipo(), ultimoError);
@@ -147,13 +177,14 @@ class NotificadorPushSns implements NotificadorPush, AutoCloseable {
     }
 
     /** {@code MessageStructure=json}: one payload per platform, each a JSON string. */
-    static String mensaje(ContenidoDelAviso contenido, String idDelMensaje) {
+    static String mensaje(ContenidoDelAviso contenido, String idDelMensaje, String enlaceWeb) {
         String apns = JSON.writeValueAsString(CargasPush.apns(contenido, idDelMensaje));
         Map<String, String> porPlataforma = new LinkedHashMap<>();
         porPlataforma.put("default", contenido.titulo() + ". " + contenido.cuerpo());
         porPlataforma.put(
                 "GCM",
-                JSON.writeValueAsString(Map.of("fcmV1Message", Map.of("message", CargasPush.mensajeFcm(contenido)))));
+                JSON.writeValueAsString(
+                        Map.of("fcmV1Message", Map.of("message", CargasPush.mensajeFcm(contenido, enlaceWeb)))));
         porPlataforma.put("APNS", apns);
         porPlataforma.put("APNS_SANDBOX", apns);
         return JSON.writeValueAsString(porPlataforma);

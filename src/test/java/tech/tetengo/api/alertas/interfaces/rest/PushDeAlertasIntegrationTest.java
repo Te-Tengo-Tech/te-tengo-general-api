@@ -24,6 +24,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import tech.tetengo.api.alertas.application.ReintentarAvisos;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Aviso;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Detalle;
+import tech.tetengo.api.shared.application.port.NotificadorPush.Plataforma;
 import tech.tetengo.api.shared.application.port.NotificadorPush.TipoDeAlerta;
 import tech.tetengo.api.shared.application.port.TipoAviso;
 import tech.tetengo.api.shared.domain.model.Rol;
@@ -210,7 +211,25 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void laPlataformaDebeSerAndroidOIos() throws Exception {
+    void laPwaRegistraSuTokenWebYRecibeLasAlertasComoLosTelefonos() throws Exception {
+        registrarDispositivo(campo(titular, "$.tokenAcceso"), "navegador-ana", "WEB")
+                .andExpect(status().isCreated());
+        assertThat(jdbc.queryForObject(
+                        "select plataforma from dispositivos where token_push = ?", String.class, "navegador-ana"))
+                .isEqualTo("WEB");
+
+        evento("caida", cuando);
+
+        assertThat(push.deTipo(TipoAviso.ALERTA_CAIDA).getFirst().destinos())
+                .extracting(d -> d.tokenPush(), d -> d.plataforma())
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("telefono-ana", Plataforma.ANDROID),
+                        org.assertj.core.groups.Tuple.tuple("telefono-beto", Plataforma.IOS),
+                        org.assertj.core.groups.Tuple.tuple("navegador-ana", Plataforma.WEB));
+    }
+
+    @Test
+    void laPlataformaDebeSerAndroidIosOWeb() throws Exception {
         registrarDispositivo(campo(titular, "$.tokenAcceso"), "x", "WINDOWS")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.campos.plataforma").isNotEmpty());

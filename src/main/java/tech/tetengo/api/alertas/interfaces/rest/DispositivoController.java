@@ -28,7 +28,9 @@ class DispositivoController {
         this.registrarDispositivo = registrarDispositivo;
     }
 
-    @Operation(summary = "Register a push device", description = "201. plataforma is ANDROID or IOS.")
+    @Operation(
+            summary = "Register a push device",
+            description = "201. plataforma is ANDROID, IOS or WEB (the PWA's FCM web push token).")
     @PostMapping(version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.CREATED)
     void registrar(@Valid @RequestBody RegistrarDispositivoRequest pedido) {

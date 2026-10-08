@@ -9,5 +9,5 @@ record RegistrarDispositivoRequest(
         String tokenPush,
 
         @NotBlank(message = "Falta la plataforma.")
-        @Pattern(regexp = "ANDROID|IOS", message = "La plataforma debe ser ANDROID o IOS.")
+        @Pattern(regexp = "ANDROID|IOS|WEB", message = "La plataforma debe ser ANDROID, IOS o WEB.")
         String plataforma) {}
