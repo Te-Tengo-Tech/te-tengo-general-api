@@ -31,6 +31,7 @@ One person can belong to several households, for example someone caring for both
 There is no JWT outside a web request, so the household must be bound explicitly:
 - **Event listeners** (`@Async @TransactionalEventListener`) receive the `hogarId` in the event and run their work through `EjecutorEnHogar`, which binds the household and **then** opens a new transaction. Hibernate fixes a session's tenant when the session opens, so `@ApplicationModuleListener` (whose transaction starts before the method body) is not used for household data.
 - **Scheduled jobs** first find their candidates across households with a native query that returns `(id, hogar_id)` pairs (native queries are not filtered), then process each one through `EjecutorEnHogar`, one transaction per household.
+- **MediaMTX's authorization hook** (live view, ADR 0007) carries no JWT either: it finds the session or the transmission by the SHA-256 of its token with a native query that returns its `hogar_id`, then reads and writes through `EjecutorEnHogar`.
 
 ## The household agent
 The agent receives a **per-camera token** when it registers. That token carries `hogar_id` and `camara_id`, so its events can only write to its own household. See [AGENT_CONTRACT.md](AGENT_CONTRACT.md).

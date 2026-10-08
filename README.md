@@ -19,10 +19,15 @@ It receives the events detected by the household agent and serves the family mem
 ## Getting started
 ```bash
 ./scripts/generate-keys.sh   # local RS256 keys for JWTs (.claves/, not versioned)
-./gradlew bootRun            # runs the API (profile `local`) and starts PostgreSQL and Floci via compose.yaml
+./gradlew bootRun            # runs the API (profile `local`) and starts PostgreSQL, Floci and MediaMTX via compose.yaml
 ```
 - AWS services: with the `local` profile they run on [Floci](https://github.com/floci-io/floci), a local AWS emulator, at http://localhost:4566 ([ADR 0005](docs/adr/0005-floci-local-aws-emulator.md)). Clips go to its S3 (bucket `te-tengo-clips`, created at startup); the pre-signed URLs use that host, so the household agent on this machine and the iOS simulator can upload and play clips.
 - E-mail and push: sent e-mails are listed at http://localhost:4566/_aws/ses and captured pushes at http://localhost:4566/_aws/sns/push-notifications. To see pushes on the iOS simulator or real phones, see [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md).
+- Live view: [MediaMTX](https://github.com/bluenviron/mediamtx), configured by `mediamtx.yml` ([ADR 0007](docs/adr/0007-live-view-through-mediamtx.md)):
+  - the agent publishes RTSP to `rtsp://localhost:8554/camaras/<camaraId>`;
+  - the app plays LL-HLS from `http://localhost:8888/…`;
+  - its control API listens on `127.0.0.1:9997` only;
+  - every publish and read is authorized by this API on the host (`host.docker.internal:8080`; another port: `TT_API_PUERTO`).
 To try the three apps together, seed the prototype's demo household (account, household, consent and one agent installation) into the running API. With a path, the script also writes the desktop agent's configuration:
 ```bash
 ./scripts/seed-demo.sh ../te-tengo-desktop-pywebview/config.local.toml
@@ -37,7 +42,6 @@ To try the three apps together, seed the prototype's demo household (account, ho
 | `TT_JWT_CLAVE_PUBLICA` | RS256 public key (X.509 PEM) that validates every token | `file:.claves/publica.pem` |
 | `TT_JWT_CLAVE_PRIVADA` | RS256 private key (PKCS#8 PEM) that signs the tokens the API issues | `file:.claves/privada.pem` |
 | `TT_ENLACE_RECUPERACION` | Password-reset link sent by e-mail; `{token}` is replaced | `tetengo://app/nueva-contrasena?token={token}` |
-| `TT_URL_TRANSMISION` | Base of the live view stream URL (`wss://` in production) | `ws://localhost:8080` |
 | `TT_RETENCION_CLIPS` | How long clips are kept, e.g. `30d` (unset: kept; pending, see BLOCKERS) | — |
 | `TT_AGENTE_VERSION_PUBLICADA` | Agent release published by `GET /api/agente/configuracion` (thresholds: `tetengo.agente.umbrales`, empty by default) | `0.2.0` |
 | `TT_CLIPS_BUCKET` | S3 bucket of the clips; unset uses an in-memory fake (the `local` profile sets `te-tengo-clips` on Floci) | — |
@@ -56,6 +60,12 @@ To try the three apps together, seed the prototype's demo household (account, ho
 | `TT_SIMULADOR_BUNDLE_ID` | Bundle id the `simulador` provider pushes to | `tech.tetengo.teTengo` |
 | `TT_FLOCI_PUERTO` | Host port of Floci in `compose.yaml`, and the endpoint port of the `local` profile | `4566` |
 | `TT_POSTGRES_PUERTO` | Host port of PostgreSQL in `compose.yaml` (`0`: a free port, found by Spring Boot) | `0` |
+| `TT_VIVO_URL_PUBLICACION` | Live view: where the agent publishes; `{camaraId}` is replaced (`rtsps://<host>:8322/…` in production) | `rtsp://localhost:8554/camaras/{camaraId}` |
+| `TT_VIVO_URL_HLS` | Live view: base of the app's `urlTransmision` (LL-HLS; `https://<host>/vivo` in production) | `http://localhost:8888` |
+| `TT_VIVO_MEDIAMTX_API` | MediaMTX control API, used to kick clients and see who is reading; never expose it | `http://localhost:9997` |
+| `TT_VIVO_SECRETO_AUTORIZACION` | Shared secret of MediaMTX's authorization hook (`compose.yaml` passes the same value to MediaMTX); blank denies every publish and read | — (`secreto-local-de-vista-en-vivo` with the `local` profile) |
+| `TT_API_PUERTO` | Port of the API on the host that MediaMTX's hook calls (`compose.yaml` only) | `8080` |
+| `TT_MEDIAMTX_PUERTO_RTSP` / `TT_MEDIAMTX_PUERTO_HLS` / `TT_MEDIAMTX_PUERTO_API` | Host ports of MediaMTX in `compose.yaml` (the API one bound to 127.0.0.1) | `8554` / `8888` / `9997` |
 
 ## Tests
 ```bash
@@ -66,10 +76,11 @@ To try the three apps together, seed the prototype's demo household (account, ho
 
 ### End-to-end smoke test (agent → API → alert)
 `scripts/e2e.sh` checks the contract between the household agent and this API with the real programs. It:
-- starts an isolated stack (compose project `tt-e2e`; PostgreSQL on 15432, Floci on 14566, the API on 18080), so it runs while your own stack is up;
+- starts an isolated stack (compose project `tt-e2e`; PostgreSQL on 15432, Floci on 14566, MediaMTX on 18554/18888/19997, the API on 18080), so it runs while your own stack is up;
 - seeds the demo household (`seed-demo.sh`) and registers a push device for the family;
 - runs the desktop agent without its UI (`--sin-interfaz`) on a URFD fall clip, cropped to its RGB half, with the last frame held 45 s;
 - asserts, as the family, that a `CAIDA` alert appears and is pushed (provider `registro`), becomes `confirmada`, and that its clip becomes `DISPONIBLE` and downloads from Floci's S3;
+- opens a live view session and checks that MediaMTX authorizes its LL-HLS playlist through the API (and denies it without the token or once the session is closed). The agent's own publishing is not checked yet: the desktop agent does not publish to MediaMTX yet;
 - tears everything down and prints a PASS/FAIL summary with the detection → push latency.
 
 ```bash
