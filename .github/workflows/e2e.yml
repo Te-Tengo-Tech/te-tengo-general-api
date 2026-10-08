@@ -21,6 +21,7 @@ on:
       - src/main/java/**/shared/infrastructure/security/**
       - src/main/resources/application*.yml
       - compose.yaml
+      - mediamtx.yml
       - scripts/e2e.sh
       - scripts/seed-demo.sh
       - .github/workflows/e2e.yml
