@@ -10,6 +10,18 @@ spring:
       ddl-auto: validate
   flyway:
     locations: classpath:db/migration
+  # SMTP relay of tetengo.correo.proveedor=smtp: host, port and credentials come from the standard
+  # SPRING_MAIL_HOST, SPRING_MAIL_PORT (e.g. 587), SPRING_MAIL_USERNAME and SPRING_MAIL_PASSWORD.
+  # Spring Boot creates the mail sender (and its health indicator) only when the host is set, so the
+  # other providers need none of this. STARTTLS is required (TT_SMTP_STARTTLS=false only for a local
+  # relay without TLS); timeouts in ms keep a slow relay from holding a request.
+  mail:
+    properties:
+      "[mail.smtp.starttls.enable]": ${TT_SMTP_STARTTLS:true}
+      "[mail.smtp.starttls.required]": ${TT_SMTP_STARTTLS:true}
+      "[mail.smtp.connectiontimeout]": 10000
+      "[mail.smtp.timeout]": 10000
+      "[mail.smtp.writetimeout]": 10000
   security:
     oauth2:
       resourceserver:
@@ -47,8 +59,12 @@ tetengo:
     # umbrales:
     #   "[velocidad_descenso_min]": 0.5
   correo:
-    # E-mail adapter: registro (default, only logs) or ses (Amazon SES). docs/NOTIFICATIONS.md
+    # E-mail adapter: registro (default, only logs), ses (Amazon SES) or smtp (any SMTP relay,
+    # spring.mail above). docs/NOTIFICATIONS.md
     proveedor: ${TT_CORREO_PROVEEDOR:registro}
+    smtp:
+      # Sender the relay accepts, e.g. "Te Tengo <no-responder@example.com>"; required with smtp.
+      remitente: ${TT_SMTP_REMITENTE:}
     ses:
       # Sender: a verified SES identity, e.g. "Te Tengo <no-responder@example.com>" (docs/BLOCKERS.md).
       remitente: ${TT_SES_REMITENTE:}
