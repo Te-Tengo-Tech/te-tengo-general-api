@@ -6,9 +6,9 @@
 
 ## Conventions
 - **Base path** `/api`. **Version header** `Api-Version: 1` (optional; defaults to 1).
-- **Clients:** the native app (Android, iOS) and its web build, a PWA served from another origin (GitHub Pages, e.g. `https://te-tengo-tech.github.io/te-tengo-descargas/app/`).
+- **Clients:** the native app (Android, iOS) and its web build, a PWA served from another origin (e.g. Cloudflare Pages, `https://te-tengo.pages.dev/app/`, or a custom domain; the backend has no default origin).
   - **CORS** for `/api/**` is on only for the origins the backend is configured with (`TT_CORS_ORIGENES`; off by default, `http://localhost:*` locally). Allowed request headers: `Authorization`, `Api-Version`, `Content-Type`; exposed: `WWW-Authenticate`; no cookies or credentials; preflight answers are cached for 1 h **[implementation choice]**. A preflight from another origin, or with another header, answers `403` without CORS headers.
-  - **E-mailed links** open the app's `/nueva-contrasena?token={token}` and `/invitacion/{token}` routes under the configured base: `tetengo://app/…` for the native app (default), or the PWA's hash URL, e.g. `https://te-tengo-tech.github.io/te-tengo-descargas/app/#/nueva-contrasena?token=…` and `…/app/#/invitacion/{token}`.
+  - **E-mailed links** open the app's `/nueva-contrasena?token={token}` and `/invitacion/{token}` routes under the configured base: `tetengo://app/…` for the native app (default), or the PWA's hash URL, e.g. `https://te-tengo.pages.dev/app/#/nueva-contrasena?token=…` and `…/app/#/invitacion/{token}`.
 - **Auth:** `Authorization: Bearer <accessToken>` (JWT RS256). Claims:
   - `sub`: user id;
   - `hogar_id`: active household, the tenant;

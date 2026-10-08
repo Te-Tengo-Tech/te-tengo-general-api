@@ -39,7 +39,7 @@ hlsAddress: :8888
 # Origins whose browser pages may read HLS (CORS): the PWA build of the app plays it from another
 # origin; the native app needs none. Any origin locally. Override without editing this file with the
 # environment variable MTX_HLSALLOWORIGINS, comma-separated (compose.yaml passes TT_MEDIAMTX_HLS_ORIGENES):
-# production sets the PWA's origin, e.g. MTX_HLSALLOWORIGINS=https://te-tengo-tech.github.io. Reads are
+# production sets the PWA's origin, e.g. MTX_HLSALLOWORIGINS=https://te-tengo.pages.dev. Reads are
 # still authorized by the API through the viewer token.
 hlsAllowOrigins: ["*"]
 hlsAlwaysRemux: true

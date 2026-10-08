@@ -56,7 +56,7 @@ class NotificadorPushSnsIntegrationTest {
             Instant.parse("2026-10-07T15:42:31Z"),
             new Detalle("Rosa", null, null, null, null));
 
-    private static final String PWA = "https://te-tengo-tech.github.io/te-tengo-descargas/app/";
+    private static final String PWA = "https://te-tengo.pages.dev/app/";
 
     private static URI endpoint;
     private static SnsClient sns;

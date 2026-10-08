@@ -43,8 +43,8 @@ To try the three apps together, seed the prototype's demo household (account, ho
 |---|---|---|
 | `TT_JWT_CLAVE_PUBLICA` | RS256 public key (X.509 PEM) that validates every token | `file:.claves/publica.pem` |
 | `TT_JWT_CLAVE_PRIVADA` | RS256 private key (PKCS#8 PEM) that signs the tokens the API issues | `file:.claves/privada.pem` |
-| `TT_CORS_ORIGENES` | Origins of browser clients (the PWA) allowed to call `/api/**`, comma-separated; scheme, host and port, patterns allowed (`http://localhost:*`). Empty: CORS off. Production with the PWA: `https://te-tengo-tech.github.io` | — (`http://localhost:*,http://127.0.0.1:*` with the `local` profile) |
-| `TT_ENLACE_BASE` | Base of the e-mailed links, no trailing slash: `tetengo://app` (native app) or the PWA's hash URL, e.g. `https://te-tengo-tech.github.io/te-tengo-descargas/app/#` ([NOTIFICATIONS.md](docs/NOTIFICATIONS.md#links)) | `tetengo://app` |
+| `TT_CORS_ORIGENES` | Origins of browser clients (the PWA) allowed to call `/api/**`, comma-separated; scheme, host and port, patterns allowed (`http://localhost:*`). Empty: CORS off; no host is assumed. Example for the PWA: `https://te-tengo.pages.dev` | — (`http://localhost:*,http://127.0.0.1:*` with the `local` profile) |
+| `TT_ENLACE_BASE` | Base of the e-mailed links, no trailing slash: `tetengo://app` (native app) or the PWA's hash URL, e.g. `https://te-tengo.pages.dev/app/#` ([NOTIFICATIONS.md](docs/NOTIFICATIONS.md#links)) | `tetengo://app` |
 | `TT_ENLACE_RECUPERACION` | Password-reset link sent by e-mail, replacing the whole template; `{token}` is replaced | `<TT_ENLACE_BASE>/nueva-contrasena?token={token}` |
 | `TT_RETENCION_CLIPS` | How long clips are kept, e.g. `30d` (unset: kept; pending, see BLOCKERS) | — |
 | `TT_AGENTE_VERSION_PUBLICADA` | Agent release published by `GET /api/agente/configuracion` (thresholds: `tetengo.agente.umbrales`, empty by default) | `0.2.0` |
@@ -72,7 +72,7 @@ To try the three apps together, seed the prototype's demo household (account, ho
 | `TT_VIVO_SECRETO_AUTORIZACION` | Shared secret of MediaMTX's authorization hook (`compose.yaml` passes the same value to MediaMTX); blank denies every publish and read | — (`secreto-local-de-vista-en-vivo` with the `local` profile) |
 | `TT_API_PUERTO` | Port of the API on the host that MediaMTX's hook calls (`compose.yaml` only) | `8080` |
 | `TT_MEDIAMTX_PUERTO_RTSP` / `TT_MEDIAMTX_PUERTO_HLS` / `TT_MEDIAMTX_PUERTO_API` | Host ports of MediaMTX in `compose.yaml` (the API one bound to 127.0.0.1) | `8554` / `8888` / `9997` |
-| `TT_MEDIAMTX_HLS_ORIGENES` | Origins whose browser pages may read HLS (the PWA), comma-separated; `compose.yaml` passes it to MediaMTX as `MTX_HLSALLOWORIGINS` (`hlsAllowOrigins`). Production sets the same variable on its MediaMTX: `MTX_HLSALLOWORIGINS=https://te-tengo-tech.github.io` | `*` |
+| `TT_MEDIAMTX_HLS_ORIGENES` | Origins whose browser pages may read HLS (the PWA), comma-separated; `compose.yaml` passes it to MediaMTX as `MTX_HLSALLOWORIGINS` (`hlsAllowOrigins`). Production sets the same variable on its MediaMTX with the PWA's origin, e.g. `MTX_HLSALLOWORIGINS=https://te-tengo.pages.dev` | `*` |
 
 ## Tests
 ```bash

@@ -28,8 +28,9 @@ import tech.tetengo.api.support.DatosDePrueba;
 import tech.tetengo.api.support.JwtDePrueba;
 
 /**
- * The PWA build of the app, served from GitHub Pages: the browser calls the API from another origin
- * (CORS, preflight included, through Spring Security) and e-mailed links open the PWA's hash routes.
+ * The PWA build of the app, served from another origin (e.g. Cloudflare Pages): the browser calls
+ * the API cross-origin (CORS, preflight included, through Spring Security) and e-mailed links open
+ * the PWA's hash routes. The hosts are examples; the backend assumes none.
  */
 @TestPropertySource(
         properties = {
@@ -38,7 +39,7 @@ import tech.tetengo.api.support.JwtDePrueba;
         })
 class ClienteWebIntegrationTest extends AbstractIntegrationTest {
 
-    static final String PAGINAS = "https://te-tengo-tech.github.io";
+    static final String PAGINAS = "https://te-tengo.pages.dev";
     static final String PWA = PAGINAS + "/te-tengo-descargas/app/";
     static final String OTRO = "https://otro-sitio.example";
 
@@ -108,7 +109,7 @@ class ClienteWebIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isForbidden())
                 .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
         // An origin is scheme, host and port: the same host over plain HTTP is another origin.
-        preflight("/api/camaras", "http://te-tengo-tech.github.io", "GET", "authorization")
+        preflight("/api/camaras", "http://te-tengo.pages.dev", "GET", "authorization")
                 .andExpect(status().isForbidden());
     }
 

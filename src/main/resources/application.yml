@@ -21,7 +21,7 @@ tetengo:
   cors:
     # Origins of browser clients (the PWA build of the app) allowed to call /api/**: scheme, host and
     # port, never a path; patterns such as http://localhost:* work. Comma-separated, e.g.
-    # TT_CORS_ORIGENES=https://te-tengo-tech.github.io. Empty (default): CORS is off; the native app and
+    # TT_CORS_ORIGENES=https://te-tengo.pages.dev. Empty (default): CORS is off; the native app and
     # the household agent need none. The `local` profile allows localhost.
     origenes: ${TT_CORS_ORIGENES:}
   jwt:
@@ -82,7 +82,7 @@ tetengo:
     web:
       # The PWA's URL, opened when a web push notification is clicked (webpush.fcm_options.link, sent by
       # fcm and sns). HTTPS only, as FCM requires; blank sends no link. Example:
-      # TT_PWA_URL=https://te-tengo-tech.github.io/te-tengo-descargas/app/
+      # TT_PWA_URL=https://te-tengo.pages.dev/app/
       enlace: ${TT_PWA_URL:}
     simulador:
       # Local only: `xcrun simctl push booted <bundle-id>`; the default is the bundle id of the app.
@@ -129,9 +129,9 @@ tetengo:
     # They open the app's routes (lib/app/rutas.dart of the mobile app) under `base`, which has no
     # trailing slash:
     # - native app (default): the custom scheme, tetengo://app/nueva-contrasena?token=...
-    # - PWA on GitHub Pages, hash routing:
-    #   TT_ENLACE_BASE=https://te-tengo-tech.github.io/te-tengo-descargas/app/#
-    #   gives https://te-tengo-tech.github.io/te-tengo-descargas/app/#/nueva-contrasena?token=...
+    # - PWA with hash routing (example host; any origin works):
+    #   TT_ENLACE_BASE=https://te-tengo.pages.dev/app/#
+    #   gives https://te-tengo.pages.dev/app/#/nueva-contrasena?token=...
     # TT_ENLACE_RECUPERACION and TT_ENLACE_INVITACION replace a whole template instead.
     base: ${TT_ENLACE_BASE:tetengo://app}
     recuperacion: ${TT_ENLACE_RECUPERACION:${tetengo.enlaces.base}/nueva-contrasena?token={token}}

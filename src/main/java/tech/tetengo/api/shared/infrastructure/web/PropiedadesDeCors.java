@@ -15,7 +15,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  * app and the household agent are not browsers and need none.
  *
  * @param origenes origins (scheme, host and port, never a path) or origin patterns allowed to call the
- *     API, e.g. {@code https://te-tengo-tech.github.io} or {@code http://localhost:*}
+ *     API, e.g. {@code https://te-tengo.pages.dev} or {@code http://localhost:*}
  *     ({@code TT_CORS_ORIGENES}, comma-separated). Empty, the default outside the {@code local}
  *     profile: CORS is off and browsers on other origins cannot call the API.
  */

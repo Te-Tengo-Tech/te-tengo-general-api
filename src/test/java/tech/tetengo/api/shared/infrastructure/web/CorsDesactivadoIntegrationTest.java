@@ -19,11 +19,11 @@ class CorsDesactivadoIntegrationTest extends AbstractIntegrationTest {
     @Test
     void sinOrigenesConfiguradosNoSeRespondeNingunaCabeceraCors() throws Exception {
         mvc.perform(options("/api/sesiones")
-                        .header("Origin", "https://te-tengo-tech.github.io")
+                        .header("Origin", "https://te-tengo.pages.dev")
                         .header("Access-Control-Request-Method", "POST")
                         .header("Access-Control-Request-Headers", "content-type"))
                 .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
-        mvc.perform(get("/api/camaras").header("Origin", "https://te-tengo-tech.github.io"))
+        mvc.perform(get("/api/camaras").header("Origin", "https://te-tengo.pages.dev"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
     }

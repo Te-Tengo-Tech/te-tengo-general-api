@@ -23,7 +23,7 @@ The password-reset and invitation e-mails carry a link to the app's `/nueva-cont
 | Client | `TT_ENLACE_BASE` | Links |
 |---|---|---|
 | Native app (default) | `tetengo://app` | `tetengo://app/nueva-contrasena?token=…`, `tetengo://app/invitacion/…` |
-| PWA on GitHub Pages (hash routing) | `https://te-tengo-tech.github.io/te-tengo-descargas/app/#` | `https://te-tengo-tech.github.io/te-tengo-descargas/app/#/nueva-contrasena?token=…`, `…/app/#/invitacion/…` |
+| PWA, hash routing (e.g. Cloudflare Pages) | `https://te-tengo.pages.dev/app/#` | `https://te-tengo.pages.dev/app/#/nueva-contrasena?token=…`, `…/app/#/invitacion/…` |
 
 One base serves every e-mail, so a deployment chooses one client. With the PWA base, the link opens the PWA in the browser, even on a phone that has the native app.
 
@@ -75,7 +75,7 @@ Rooms outside the app's list (`Sala`, `Sala comedor`, `Dormitorio`, `Cocina`, `P
 
 ### Web push (PWA)
 The PWA registers its FCM web push token (FlutterFire `getToken` with the Firebase project's VAPID key, service worker `firebase-messaging-sw.js`) with `plataforma: "WEB"`. Nothing else is needed on the backend side:
-- **`fcm`**: the same service-account key sends to web tokens. Set `TT_PWA_URL` to the PWA's address (e.g. `https://te-tengo-tech.github.io/te-tengo-descargas/app/`) so a click opens it.
+- **`fcm`**: the same service-account key sends to web tokens. Set `TT_PWA_URL` to the PWA's address (e.g. `https://te-tengo.pages.dev/app/`) so a click opens it.
 - **`sns`**: create a platform application of platform `GCM` with the same Firebase project's credential, or reuse the Android one, and set `TT_SNS_ARN_WEB`. Locally, Floci gets `te-tengo-web` created.
 - On iPhone, web push only reaches a PWA added to the home screen (iOS 16.4 or later), after the user allows notifications.
 

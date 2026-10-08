@@ -4,7 +4,7 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 ### Added
-- Web client (the app's PWA build on GitHub Pages):
+- Web client (the app's PWA build, served from any configured origin, e.g. Cloudflare Pages):
   - CORS for `/api/**` with the origins of `TT_CORS_ORIGENES` (patterns allowed; off when empty, the default; `http://localhost:*` with the `local` profile), handled by Spring Security before authentication so preflights work; allowed headers `Authorization`, `Api-Version`, `Content-Type`, exposed `WWW-Authenticate`.
   - Push devices with `plataforma: "WEB"` (FCM web push tokens). `fcm` sends them a `webpush` block (title, body, `Urgency: high`, `fcm_options.link` to `TT_PWA_URL`, HTTPS only); `sns` reaches them only with `TT_SNS_ARN_WEB` and skips them with a warning otherwise; `simulador` skips them.
   - `TT_ENLACE_BASE` sets the base of the e-mailed links: `tetengo://app` by default, or the PWA's hash URL (`https://<pwa>/#/nueva-contrasena?token=…`, `…/#/invitacion/{token}`).

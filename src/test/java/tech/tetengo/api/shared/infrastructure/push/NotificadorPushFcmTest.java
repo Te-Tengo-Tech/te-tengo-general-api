@@ -39,7 +39,7 @@ class NotificadorPushFcmTest {
     private static final List<Destino> DESTINOS =
             List.of(new Destino("token-ana", Plataforma.ANDROID), new Destino("token-beto", Plataforma.IOS));
 
-    private static final String PWA = "https://te-tengo-tech.github.io/te-tengo-descargas/app/";
+    private static final String PWA = "https://te-tengo.pages.dev/app/";
 
     /** Answers each message with the next queued answer. */
     static class MensajeriaFalsa implements MensajeriaFcm {
