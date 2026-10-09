@@ -3,6 +3,8 @@
 Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+
+## [0.3.0] - 2026-10-09
 ### Added
 - Live view v3, WebRTC playback (ADR 0008): `POST /api/camaras/{id}/vista-en-vivo` also answers `urlWebrtc`, the camera's WHEP endpoint on MediaMTX with the session's viewer token in the query (`TT_VIVO_URL_WEBRTC`, e.g. `https://<host>/vivo-webrtc/camaras/{camaraId}/whep`; null when blank, the default, so the app keeps LL-HLS). `urlTransmision` (LL-HLS) stays as the fallback.
 - `POST /api/vista-en-vivo/preparar` (`{camaraId}` → `204`, same rules as opening a session): sends the new control message `{"preparar":true}` to the camera's agent, so it warms up capture and encoder (no frame leaves the PC) before `transmitir`; nothing is sent while the camera already streams. Earlier agents ignore it.
