@@ -9,7 +9,8 @@
 #   2. it becomes `confirmada: true` (the agent's `caida_confirmada`, 30 s on the floor);
 #   3. its clip becomes DISPONIBLE and the pre-signed URL serves the MP4 from Floci's S3;
 #   4. live view wiring: a live view session opens, and MediaMTX asks this API before serving the
-#      session's LL-HLS playlist (authorized with the session's token, 401 without it).
+#      session's LL-HLS playlist and its WebRTC (WHEP) endpoint (authorized with the session's token,
+#      401 without it).
 # Everything is torn down on exit. It prints a PASS/FAIL summary and the detection → alert latency.
 #
 # Usage: scripts/e2e.sh
@@ -24,7 +25,8 @@
 #   TT_E2E_PUERTO_API   API port                           (default: 18080)
 #   TT_POSTGRES_PUERTO  PostgreSQL host port               (default: 15432)
 #   TT_FLOCI_PUERTO     Floci host port                    (default: 14566)
-#   TT_MEDIAMTX_PUERTO_RTSP / _HLS / _API  MediaMTX host ports (default: 18554 / 18888 / 19997)
+#   TT_MEDIAMTX_PUERTO_RTSP / _HLS / _WEBRTC / _ICE / _API  MediaMTX host ports
+#                       (default: 18554 / 18888 / 18889 / 18189 / 19997)
 #   TT_E2E_PROYECTO     compose project name               (default: tt-e2e)
 #   TT_E2E_DIR          work directory for logs and files  (default: a new temporary directory)
 #   TT_E2E_ESPERA       seconds each assertion may wait    (default: 120)
@@ -43,6 +45,8 @@ export TT_POSTGRES_PUERTO="${TT_POSTGRES_PUERTO:-15432}"
 export TT_FLOCI_PUERTO="${TT_FLOCI_PUERTO:-14566}"
 export TT_MEDIAMTX_PUERTO_RTSP="${TT_MEDIAMTX_PUERTO_RTSP:-18554}"
 export TT_MEDIAMTX_PUERTO_HLS="${TT_MEDIAMTX_PUERTO_HLS:-18888}"
+export TT_MEDIAMTX_PUERTO_WEBRTC="${TT_MEDIAMTX_PUERTO_WEBRTC:-18889}"
+export TT_MEDIAMTX_PUERTO_ICE="${TT_MEDIAMTX_PUERTO_ICE:-18189}"
 export TT_MEDIAMTX_PUERTO_API="${TT_MEDIAMTX_PUERTO_API:-19997}"
 # MediaMTX (compose.yaml) authorizes through this API on the host, with a throwaway shared secret.
 export TT_API_PUERTO="$PUERTO_API"
@@ -143,7 +147,7 @@ for herramienta in "${herramientas[@]}"; do
 done
 [ -f "$ESCRITORIO/pyproject.toml" ] || falla "requirement: desktop agent repository not found at $ESCRITORIO"
 for puerto in "$PUERTO_API" "$TT_POSTGRES_PUERTO" "$TT_FLOCI_PUERTO" "$TT_MEDIAMTX_PUERTO_RTSP" \
-  "$TT_MEDIAMTX_PUERTO_HLS" "$TT_MEDIAMTX_PUERTO_API"; do
+  "$TT_MEDIAMTX_PUERTO_HLS" "$TT_MEDIAMTX_PUERTO_WEBRTC" "$TT_MEDIAMTX_PUERTO_ICE" "$TT_MEDIAMTX_PUERTO_API"; do
   if (exec 3<>"/dev/tcp/127.0.0.1/$puerto") 2>/dev/null; then
     falla "requirement: port $puerto is already in use (override it, see the top of this script)"
   fi
@@ -215,6 +219,7 @@ API_ENTORNO=(
   TT_CORREO_PROVEEDOR=registro
   TT_VIVO_URL_PUBLICACION="rtsp://localhost:$TT_MEDIAMTX_PUERTO_RTSP/camaras/{camaraId}"
   TT_VIVO_URL_HLS="http://localhost:$TT_MEDIAMTX_PUERTO_HLS"
+  TT_VIVO_URL_WEBRTC="http://localhost:$TT_MEDIAMTX_PUERTO_WEBRTC/camaras/{camaraId}/whep"
   TT_VIVO_MEDIAMTX_API="http://localhost:$TT_MEDIAMTX_PUERTO_API"
 )
 
@@ -344,12 +349,32 @@ SESION="$(llamar POST "/api/camaras/$CAMARA_ID/vista-en-vivo" '{"alertaId":null}
 URL_VIVO="$(jq -r .urlTransmision <<<"$SESION")"
 [[ "$URL_VIVO" == "http://localhost:$TT_MEDIAMTX_PUERTO_HLS/camaras/$CAMARA_ID/index.m3u8?token="* ]] ||
   falla "live view session with an LL-HLS urlTransmision (got: $SESION)"
+URL_WEBRTC="$(jq -r .urlWebrtc <<<"$SESION")"
+[[ "$URL_WEBRTC" == "http://localhost:$TT_MEDIAMTX_PUERTO_WEBRTC/camaras/$CAMARA_ID/whep?token="* ]] ||
+  falla "live view session with a WHEP urlWebrtc (got: $SESION)"
 leer_vivo() { curl -sL -o /dev/null -w '%{http_code}' "$1"; }
+# A recvonly H.264 offer, as a browser sends it (MediaMTX checks the token before the stream). SDP
+# lines end with CRLF, the last one too, so it is piped rather than captured with $(...).
+oferta_sdp() {
+  printf '%s\r\n' 'v=0' 'o=- 1 2 IN IP4 127.0.0.1' 's=-' 't=0 0' 'a=group:BUNDLE 0' \
+    'm=video 9 UDP/TLS/RTP/SAVPF 96' 'c=IN IP4 0.0.0.0' 'a=ice-ufrag:ttee' 'a=ice-pwd:tetengoendtoendtestpwd0' \
+    'a=fingerprint:sha-256 7B:8B:F0:65:5F:78:E2:51:3B:AC:6F:F3:3F:46:1B:35:DC:B8:5F:64:1A:24:C2:43:F0:A1:58:D0:A1:2C:19:08' \
+    'a=setup:actpass' 'a=mid:0' 'a=recvonly' 'a=rtcp-mux' 'a=rtpmap:96 H264/90000' \
+    'a=fmtp:96 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f'
+}
+leer_webrtc() {
+  oferta_sdp | curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/sdp' --data-binary @- "$1"
+}
 CON_TOKEN="$(leer_vivo "$URL_VIVO")"
 SIN_TOKEN="$(leer_vivo "${URL_VIVO%%\?*}")"
 [[ "$CON_TOKEN" =~ ^(200|404)$ ]] && [ "$SIN_TOKEN" = 401 ] ||
   falla "MediaMTX authorizes through the API (with token: $CON_TOKEN, expected 200 or 404; without: $SIN_TOKEN, expected 401)"
+WHEP_CON_TOKEN="$(leer_webrtc "$URL_WEBRTC")"
+WHEP_SIN_TOKEN="$(leer_webrtc "${URL_WEBRTC%%\?*}")"
+[[ "$WHEP_CON_TOKEN" =~ ^(201|404)$ ]] && [ "$WHEP_SIN_TOKEN" = 401 ] ||
+  falla "MediaMTX authorizes WHEP through the API (with token: $WHEP_CON_TOKEN, expected 201 or 404; without: $WHEP_SIN_TOKEN, expected 401)"
 [ "$(llamar DELETE "/api/vista-en-vivo/$(jq -r .sesionId <<<"$SESION")" '' -o /dev/null -w '%{http_code}')" = 204 ] ||
   falla "close the live view session"
 [ "$(leer_vivo "$URL_VIVO")" = 401 ] || falla "MediaMTX denies the token of a closed session"
-ok "live view: session opened, MediaMTX authorized its token through the API (HTTP $CON_TOKEN) and denied it once closed"
+[ "$(leer_webrtc "$URL_WEBRTC")" = 401 ] || falla "MediaMTX denies the token of a closed session over WHEP"
+ok "live view: session opened, MediaMTX authorized its token through the API (HLS $CON_TOKEN, WHEP $WHEP_CON_TOKEN) and denied it once closed"

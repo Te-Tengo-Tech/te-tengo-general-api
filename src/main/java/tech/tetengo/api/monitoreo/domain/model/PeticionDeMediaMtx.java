@@ -4,6 +4,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -14,9 +15,11 @@ import java.util.regex.Pattern;
  * reading it with the token of an open session (API contract §4, ADR 0007).
  *
  * @param accion {@code publish}, {@code read}, {@code playback}, {@code api}, {@code metrics} or {@code pprof}
- * @param query the query string of the request, e.g. {@code token=…} for an HLS read
+ * @param query the query string of the request, e.g. {@code token=…} for an HLS or WebRTC (WHEP) read
+ * @param protocolo {@code rtsp}, {@code rtmp}, {@code hls}, {@code webrtc}, {@code srt} or {@code moq}
  */
-public record PeticionDeMediaMtx(String accion, String usuario, String clave, String ruta, String query) {
+public record PeticionDeMediaMtx(
+        String accion, String usuario, String clave, String ruta, String query, String protocolo) {
 
     /** The user name the agent publishes with; the password is its publish token. */
     public static final String USUARIO_AGENTE = "agente";
@@ -26,6 +29,13 @@ public record PeticionDeMediaMtx(String accion, String usuario, String clave, St
             Pattern.compile("camaras/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})");
 
     private static final String PARAMETRO_TOKEN = "token";
+
+    /**
+     * The protocols a viewer may read with: the app plays WebRTC (WHEP) first and LL-HLS as the fallback.
+     * The API lists and kicks exactly these readers (inactivity, closed sessions); a read over RTSP would
+     * escape that, so it is not a read.
+     */
+    private static final Set<String> PROTOCOLOS_DE_LECTURA = Set.of("hls", "webrtc");
 
     public enum Tipo {
         PUBLICAR,
@@ -37,7 +47,8 @@ public record PeticionDeMediaMtx(String accion, String usuario, String clave, St
         if ("publish".equals(accion)) {
             return Tipo.PUBLICAR;
         }
-        if ("read".equals(accion) || "playback".equals(accion)) {
+        if (("read".equals(accion) && protocolo != null && PROTOCOLOS_DE_LECTURA.contains(protocolo))
+                || "playback".equals(accion)) {
             return Tipo.LEER;
         }
         return Tipo.OTRA;
@@ -59,7 +70,11 @@ public record PeticionDeMediaMtx(String accion, String usuario, String clave, St
                 : Optional.empty();
     }
 
-    /** The viewer token of the {@code token} query parameter. */
+    /**
+     * The viewer token of the {@code token} query parameter, for HLS and WebRTC alike. An
+     * {@code Authorization} header is not used: MediaMTX lists a session's query, not its credentials, and
+     * the API finds the readers of a session by its token.
+     */
     public Optional<String> tokenDeEspectador() {
         return tokenDeQuery(query);
     }

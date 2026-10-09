@@ -53,7 +53,8 @@ import tech.tetengo.api.support.TestcontainersConfiguration;
 /**
  * Live view end to end with a real MediaMTX, configured by the repository's {@code mediamtx.yml}: its
  * authorization hook calls this API, an ffmpeg container plays the household agent (publishing what the
- * control channel tells it), and the HLS playlist is read like the app does. The API runs on a fixed
+ * control channel tells it), and the HLS playlist and the WebRTC (WHEP) endpoint are read like the app
+ * does. The API runs on a fixed
  * free port that MediaMTX reaches through Testcontainers' host port forwarding.
  */
 @Tag("integration")
@@ -93,7 +94,7 @@ class MediaMtxIntegrationTest {
                                 .formatted(PUERTO_API, SECRETO))
                 .withNetwork(RED)
                 .withNetworkAliases("mediamtx")
-                .withExposedPorts(8888, 9997)
+                .withExposedPorts(8888, 8889, 9997)
                 .waitingFor(Wait.forLogMessage(".*\\[API\\] started.*", 1))
                 .withStartupTimeout(Duration.ofMinutes(2));
         contenedor.start();
@@ -115,6 +116,10 @@ class MediaMtxIntegrationTest {
         registro.add(
                 "tetengo.vista-en-vivo.url-hls",
                 () -> "http://%s:%d".formatted(mediamtx.getHost(), mediamtx.getMappedPort(8888)));
+        registro.add(
+                "tetengo.vista-en-vivo.url-webrtc",
+                () -> "http://%s:%d/camaras/{camaraId}/whep"
+                        .formatted(mediamtx.getHost(), mediamtx.getMappedPort(8889)));
         registro.add(
                 "tetengo.vista-en-vivo.mediamtx-api",
                 () -> "http://%s:%d".formatted(mediamtx.getHost(), mediamtx.getMappedPort(9997)));
@@ -259,6 +264,43 @@ class MediaMtxIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
     }
 
+    /**
+     * A browser-like recvonly offer (no trickle: it carries no candidates) with H.264 Constrained Baseline,
+     * the only H.264 profile MediaMTX offers over WebRTC (profile-level-id 42e01f).
+     */
+    static final String OFERTA_SDP = String.join(
+            "\r\n",
+            "v=0",
+            "o=- 4215775240449105457 2 IN IP4 127.0.0.1",
+            "s=-",
+            "t=0 0",
+            "a=group:BUNDLE 0",
+            "a=msid-semantic: WMS",
+            "m=video 9 UDP/TLS/RTP/SAVPF 96",
+            "c=IN IP4 0.0.0.0",
+            "a=rtcp:9 IN IP4 0.0.0.0",
+            "a=ice-ufrag:ttit",
+            "a=ice-pwd:tetengointegrationtestpwd",
+            "a=fingerprint:sha-256 7B:8B:F0:65:5F:78:E2:51:3B:AC:6F:F3:3F:46:1B:35:DC:B8:5F:64:1A:24:C2:43:F0:A1:58:D0:A1:2C:19:08",
+            "a=setup:actpass",
+            "a=mid:0",
+            "a=recvonly",
+            "a=rtcp-mux",
+            "a=rtpmap:96 H264/90000",
+            "a=rtcp-fb:96 nack pli",
+            "a=fmtp:96 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
+            "");
+
+    private HttpResponse<String> whep(String url) throws Exception {
+        return http.send(
+                HttpRequest.newBuilder(URI.create(url))
+                        .timeout(Duration.ofSeconds(20))
+                        .header("Content-Type", "application/sdp")
+                        .POST(HttpRequest.BodyPublishers.ofString(OFERTA_SDP))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     private static String sinToken(String url) {
         return url.substring(0, url.indexOf('?'));
     }
@@ -303,6 +345,45 @@ class MediaMtxIntegrationTest {
         mvc.perform(delete("/api/vista-en-vivo/" + campo(sesion, "$.sesionId")).header("Authorization", bearer(token)))
                 .andExpect(status().isNoContent());
         assertThat(obtener(url).statusCode()).isEqualTo(401);
+    }
+
+    @Test
+    void laAplicacionAbreWebRtcPorWhepConElMismoTokenYSinTokenRecibe401() throws Exception {
+        String sesion = abrirVistaEnVivo();
+        publicar(ordenDeTransmitir());
+        String url = campo(sesion, "$.urlWebrtc");
+        assertThat(url)
+                .startsWith("http://%s:%d/camaras/%s/whep?token="
+                        .formatted(mediamtx.getHost(), mediamtx.getMappedPort(8889), camara));
+
+        HttpResponse<String> respuesta = whep(url);
+        assertThat(respuesta.statusCode()).isEqualTo(201);
+        assertThat(respuesta.headers().firstValue("Content-Type")).contains("application/sdp");
+        assertThat(respuesta.headers().firstValue("Location"))
+                .hasValueSatisfying(ubicacion -> assertThat(ubicacion).startsWith("/camaras/" + camara + "/whep/"));
+        // The answer announces the fixed ICE port of mediamtx.yml, over UDP and over TCP.
+        assertThat(respuesta.body())
+                .startsWith("v=0")
+                .contains("a=sendonly", "profile-level-id=42e01f")
+                .containsPattern("a=candidate:\\S+ 1 udp \\d+ 127\\.0\\.0\\.1 8189 typ host")
+                .containsPattern("a=candidate:\\S+ 1 tcp \\d+ 127\\.0\\.0\\.1 8189 typ host tcptype passive");
+
+        String huella = Secretos.huella(URI.create(url).getQuery().substring("token=".length()));
+        assertThat(servicio.lectores()).anySatisfy(lector -> {
+            assertThat(lector.tipo()).isEqualTo(ServicioDeTransmision.Lector.WEBRTC);
+            assertThat(lector.camaraId()).hasToString(camara);
+            assertThat(lector.huellaToken()).isEqualTo(huella);
+        });
+
+        assertThat(whep(sinToken(url)).statusCode()).isEqualTo(401);
+        assertThat(whep(sinToken(url) + "?token=otro").statusCode()).isEqualTo(401);
+
+        // Closing the session kicks its WebRTC reader (before MediaMTX's own 10 s handshake timeout).
+        mvc.perform(delete("/api/vista-en-vivo/" + campo(sesion, "$.sesionId")).header("Authorization", bearer(token)))
+                .andExpect(status().isNoContent());
+        assertThat(servicio.lectores())
+                .noneSatisfy(lector -> assertThat(lector.huellaToken()).isEqualTo(huella));
+        assertThat(whep(url).statusCode()).isEqualTo(401);
     }
 
     @Test

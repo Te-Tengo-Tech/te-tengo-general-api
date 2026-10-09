@@ -25,8 +25,9 @@ import tech.tetengo.api.shared.infrastructure.security.Secretos;
  *   <li>the request must carry the shared secret;
  *   <li>{@code publish} only on {@code camaras/<camaraId>}, as user {@code agente} with the publish token of
  *       the camera's current transmission;
- *   <li>{@code read} and {@code playback} only with the viewer token of an open session of that camera,
- *       which also counts as the viewer's activity;
+ *   <li>{@code read} over HLS or WebRTC (WHEP), and {@code playback}, only with the viewer token
+ *       ({@code ?token=}) of an open session of that camera, which also counts as the viewer's activity;
+ *       a read over any other protocol is denied;
  *   <li>never while the camera may not capture (pause, no consent);
  *   <li>anything else ({@code api}, {@code metrics}, {@code pprof}) is denied.
  * </ul>
@@ -74,7 +75,7 @@ public class AutorizarMediaMtx {
                     case OTRA -> false;
                 };
         if (!permitido) {
-            log.info("MediaMTX: {} denegado en {}", peticion.accion(), peticion.ruta());
+            log.info("MediaMTX: {} ({}) denegado en {}", peticion.accion(), peticion.protocolo(), peticion.ruta());
         }
         return permitido;
     }
