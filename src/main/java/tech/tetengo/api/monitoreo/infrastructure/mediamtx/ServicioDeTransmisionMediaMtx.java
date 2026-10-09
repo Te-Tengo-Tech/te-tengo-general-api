@@ -60,21 +60,35 @@ class ServicioDeTransmisionMediaMtx implements ServicioDeTransmision {
         this.api = RestClient.builder().baseUrl(base).requestFactory(fabrica).build();
     }
 
+    /** Lists of the reader sessions the app can open: LL-HLS and WebRTC (WHEP). */
+    private static final Map<String, String> LISTAS_DE_LECTORES = Map.of(
+            Lector.HLS, "/v3/hls/sessions/list?itemsPerPage=1000",
+            Lector.WEBRTC, "/v3/webrtc/sessions/list?itemsPerPage=1000");
+
     @Override
     public List<Lector> lectores() {
         if (api == null) {
             return List.of();
         }
         List<Lector> lectores = new ArrayList<>();
+        LISTAS_DE_LECTORES.forEach((tipo, lista) -> lectores.addAll(lectores(tipo, lista)));
+        return lectores;
+    }
+
+    private List<Lector> lectores(String tipo, String uri) {
+        List<Lector> lectores = new ArrayList<>();
         try {
-            JsonNode lista = leer(api.get()
-                    .uri("/v3/hls/sessions/list?itemsPerPage=1000")
-                    .retrieve()
-                    .body(String.class));
+            JsonNode lista = leer(api.get().uri(uri).retrieve().body(String.class));
             for (JsonNode sesion : lista.path("items")) {
+                // A WebRTC session also lists publishers; only readers count (HLS sessions always read).
+                if (Lector.WEBRTC.equals(tipo)
+                        && !"read".equals(sesion.path("state").asString("read"))) {
+                    continue;
+                }
                 camara(sesion.path("path").asString(""))
                         .ifPresent(camara -> lectores.add(new Lector(
                                 sesion.path("id").asString(),
+                                tipo,
                                 camara,
                                 PeticionDeMediaMtx.tokenDeQuery(
                                                 sesion.path("query").asString(""))
@@ -83,7 +97,7 @@ class ServicioDeTransmisionMediaMtx implements ServicioDeTransmision {
                                 sesion.path("outboundBytes").asLong(0))));
             }
         } catch (RestClientException | JacksonException e) {
-            log.warn("No se pudo consultar los lectores de MediaMTX: {}", e.getMessage());
+            log.warn("No se pudo consultar los lectores {} de MediaMTX: {}", tipo, e.getMessage());
         }
         return lectores;
     }
@@ -120,7 +134,7 @@ class ServicioDeTransmisionMediaMtx implements ServicioDeTransmision {
         Set<String> huellas = new HashSet<>(huellasDeToken);
         lectores().stream()
                 .filter(lector -> huellas.contains(lector.huellaToken()))
-                .forEach(lector -> expulsar("hlsSession", lector.id()));
+                .forEach(lector -> expulsar(lector.tipo(), lector.id()));
     }
 
     private void expulsar(String tipo, String id) {
@@ -138,7 +152,7 @@ class ServicioDeTransmisionMediaMtx implements ServicioDeTransmision {
     }
 
     private static Optional<UUID> camara(String ruta) {
-        return new PeticionDeMediaMtx(null, null, null, ruta, null).camara();
+        return new PeticionDeMediaMtx(null, null, null, ruta, null, null).camara();
     }
 
     private static JsonNode leer(String cuerpo) {

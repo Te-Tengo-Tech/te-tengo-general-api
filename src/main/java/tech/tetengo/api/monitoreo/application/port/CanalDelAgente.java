@@ -13,7 +13,14 @@ public interface CanalDelAgente {
 
     void enviar(UUID camaraId, Mensaje mensaje);
 
-    sealed interface Mensaje permits Transmitir, CambiarModo, Detener {}
+    sealed interface Mensaje permits Preparar, Transmitir, CambiarModo, Detener {}
+
+    /**
+     * {@code {"preparar":true}}: a member opened the camera screen, a live view may start soon. The agent
+     * warms up what stays on the PC (capture, encoder, name resolution) for a while; no frame leaves the PC
+     * until {@link Transmitir}. Agents that do not know it ignore it.
+     */
+    record Preparar() implements Mensaje {}
 
     /** {@code {"transmitir":true,"urlPublicacion":…,"usuario":"agente","clave":…,"modo":…}}. */
     record Transmitir(URI urlPublicacion, String usuario, String clave, ModoDeVista modo) implements Mensaje {}

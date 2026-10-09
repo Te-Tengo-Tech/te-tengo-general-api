@@ -9,7 +9,7 @@ plugins {
 
 group = "tech.tetengo"
 
-version = "0.2.0"
+version = "0.3.0"
 
 description = "Backend API del sistema Te Tengo"
 
@@ -74,12 +74,12 @@ dependencies {
   // Push: Amazon SNS mobile push, or Firebase Cloud Messaging (HTTP v1) through the Admin SDK.
   // Only messaging is used, so Firestore and Cloud Storage (and their gRPC stack) are left out.
   implementation("software.amazon.awssdk:sns")
-  implementation("com.google.firebase:firebase-admin:9.9.0") {
+  implementation("com.google.firebase:firebase-admin:9.11.0") {
     exclude(group = "com.google.cloud", module = "google-cloud-firestore")
     exclude(group = "com.google.cloud", module = "google-cloud-storage")
   }
   // FirebaseMessaging parses FCM answers with it; it used to come with the excluded modules.
-  implementation("com.google.http-client:google-http-client-jackson2:2.1.1")
+  implementation("com.google.http-client:google-http-client-jackson2:2.2.0")
 
   // Utilidades: UUID v7
   implementation("com.github.f4b6a3:uuid-creator:6.1.1")

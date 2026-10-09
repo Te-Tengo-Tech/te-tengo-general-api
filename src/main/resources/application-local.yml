@@ -42,3 +42,5 @@ tetengo:
   vista-en-vivo:
     # Same default as the MediaMTX service of compose.yaml (its auth hook calls this API on the host).
     secreto-autorizacion: ${TT_VIVO_SECRETO_AUTORIZACION:secreto-local-de-vista-en-vivo}
+    # WHEP on the MediaMTX service of compose.yaml (port TT_MEDIAMTX_PUERTO_WEBRTC, default 8889).
+    url-webrtc: ${TT_VIVO_URL_WEBRTC:http://localhost:8889/camaras/{camaraId}/whep}

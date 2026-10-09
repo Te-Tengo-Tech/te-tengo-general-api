@@ -60,17 +60,21 @@ class AutorizarMediaMtxTest {
     }
 
     private AutorizarMediaMtx autorizar(String secreto) {
-        var propiedades = new PropiedadesDeVistaEnVivo(null, null, null, secreto, null, null);
+        var propiedades = new PropiedadesDeVistaEnVivo(null, null, null, null, secreto, null, null);
         return new AutorizarMediaMtx(
                 accesos, transmisiones, camaras, enHogar, propiedades, Clock.fixed(AHORA, ZoneOffset.UTC));
     }
 
     private static PeticionDeMediaMtx publicar(String usuario, String clave, String ruta) {
-        return new PeticionDeMediaMtx("publish", usuario, clave, ruta, "");
+        return new PeticionDeMediaMtx("publish", usuario, clave, ruta, "", "rtsp");
     }
 
     private static PeticionDeMediaMtx leer(String accion, String ruta, String query) {
-        return new PeticionDeMediaMtx(accion, "", "", ruta, query);
+        return leer(accion, ruta, query, "hls");
+    }
+
+    private static PeticionDeMediaMtx leer(String accion, String ruta, String query, String protocolo) {
+        return new PeticionDeMediaMtx(accion, "", "", ruta, query, protocolo);
     }
 
     @Test
@@ -154,9 +158,39 @@ class AutorizarMediaMtxTest {
             assertThat(autorizar.ejecutar(
                             SECRETO,
                             new PeticionDeMediaMtx(
-                                    accion, "agente", "clave-publicacion", ruta, "token=token-espectador")))
+                                    accion, "agente", "clave-publicacion", ruta, "token=token-espectador", "hls")))
                     .as(accion)
                     .isFalse();
         }
+    }
+
+    @Test
+    void elEspectadorLeePorWebRtcConElMismoTokenEnLaQueryDelWhep() {
+        assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, "token=token-espectador", "webrtc")))
+                .isTrue();
+        assertThat(sesion.getUltimaActividad()).isEqualTo(AHORA);
+        assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, "", "webrtc")))
+                .isFalse();
+        assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, "token=otro", "webrtc")))
+                .isFalse();
+    }
+
+    @Test
+    void elTokenSoloSeAceptaEnLaQueryNoComoCredencialDeWhep() {
+        // Authorization: Bearer <token> reaches the hook as "token"/"password", never in the query: the API
+        // could not find that WebRTC session to end it, so such a read is denied.
+        assertThat(autorizar.ejecutar(
+                        SECRETO, new PeticionDeMediaMtx("read", "", "token-espectador", ruta, "", "webrtc")))
+                .isFalse();
+    }
+
+    @Test
+    void seNiegaLeerPorOtrosProtocolosAunqueElTokenSeaValido() {
+        for (String protocolo : new String[] {"rtsp", "rtmp", "srt", "moq", "", null}) {
+            assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, "token=token-espectador", protocolo)))
+                    .as(String.valueOf(protocolo))
+                    .isFalse();
+        }
+        verify(accesos, never()).guardar(any());
     }
 }

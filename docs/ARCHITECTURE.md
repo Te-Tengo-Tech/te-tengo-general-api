@@ -13,7 +13,7 @@ Mobile app ───────────────────────
                           ├─ Amazon SNS (Servicio de notificaciones push)
                           └─ MediaMTX (Servicio de transmisión en vivo): authorizes it, kicks clients
 
-Household agent ──RTSP(S): live video──► MediaMTX ──LL-HLS──► Mobile app      (ADR 0007)
+Household agent ──RTSP(S): live video──► MediaMTX ──WebRTC (WHEP), LL-HLS fallback──► Mobile app      (ADR 0007, 0008)
 ```
 
 ## Modules

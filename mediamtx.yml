@@ -4,7 +4,10 @@
 #
 # - The household agent publishes H.264 to rtsp://<host>:8554/camaras/<camaraId> (TCP), as user `agente`
 #   with the publish token the API sent it over its control channel.
-# - The app plays LL-HLS from http://<host>:8888/camaras/<camaraId>/index.m3u8?token=<viewer token>.
+# - The app plays WebRTC (WHEP) first: POST of an SDP offer to
+#   http://<host>:8889/camaras/<camaraId>/whep?token=<viewer token>; the media then flows over ICE on
+#   8189 (UDP, or TCP where UDP is blocked).
+# - It falls back to LL-HLS: http://<host>:8888/camaras/<camaraId>/index.m3u8?token=<viewer token>.
 # - Every publish and every new reader is authorized by the API (authMethod http). compose.yaml overrides
 #   the address with MTX_AUTHHTTPADDRESS, so the API port and the secret come from the environment.
 # - The control API (9997) lets the API kick clients out; compose.yaml publishes it on 127.0.0.1 only and
@@ -53,9 +56,24 @@ hlsSegmentDuration: 1s
 # duration, so the part must be a whole number of frames.
 hlsPartDuration: 250ms
 
+# WebRTC for the app (live view v3): WHEP signalling on 8889, media on one fixed ICE port, 8189, over UDP
+# and over TCP for networks that block UDP (MediaMTX docs, "WebRTC-specific features" > "Solving WebRTC
+# connectivity issues", v1.21). The same viewer token as HLS goes in the query (?token=), which MediaMTX
+# hands to the authorization hook (protocol webrtc) and lists with each session.
+webrtc: true
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: :8189
+# The container's own addresses are useless to the app; the ICE candidates carry webrtcAdditionalHosts.
+# compose.yaml overrides it with MTX_WEBRTCADDITIONALHOSTS (TT_MEDIAMTX_WEBRTC_HOSTS, comma-separated:
+# 127.0.0.1 by default; add the Mac's LAN address to play on a phone).
+webrtcIPsFromInterfaces: false
+webrtcAdditionalHosts: [127.0.0.1]
+# Browser origins (CORS) of the WHEP requests, like hlsAllowOrigins (MTX_WEBRTCALLOWORIGINS).
+webrtcAllowOrigins: ["*"]
+
 # Protocols live view does not use.
 rtmp: false
-webrtc: false
 srt: false
 moq: false
 playback: false

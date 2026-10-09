@@ -25,6 +25,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import tech.tetengo.api.monitoreo.application.FinalizarSesionesDeVistaEnVivo;
+import tech.tetengo.api.monitoreo.application.port.ServicioDeTransmision.Lector;
 import tech.tetengo.api.shared.domain.model.Rol;
 import tech.tetengo.api.shared.infrastructure.security.Secretos;
 import tech.tetengo.api.support.AbstractIntegrationTest;
@@ -84,11 +85,24 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
 
     private ResultActions autorizar(
             String secreto, String accion, String usuario, String clave, String ruta, String query) throws Exception {
+        return autorizar(secreto, accion, usuario, clave, ruta, query, "publish".equals(accion) ? "rtsp" : "hls");
+    }
+
+    private ResultActions autorizar(
+            String secreto, String accion, String usuario, String clave, String ruta, String query, String protocolo)
+            throws Exception {
         return mvc.perform(post("/api/interno/mediamtx/autorizar?secreto=" + secreto)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"user":"%s","password":"%s","token":"%s","ip":"172.17.0.1","action":"%s","path":"%s",\
-                        "protocol":"hls","id":"5ee83fbf-23ab-414b-99d1-362e9917ed6e","query":"%s"}""".formatted(usuario, clave, clave, accion, ruta, query)));
+                        "protocol":"%s","id":"5ee83fbf-23ab-414b-99d1-362e9917ed6e","query":"%s"}""".formatted(usuario, clave, clave, accion, ruta, protocolo, query)));
+    }
+
+    private ResultActions preparar(String token, String cuerpo) throws Exception {
+        return mvc.perform(post("/api/vista-en-vivo/preparar")
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(cuerpo));
     }
 
     private ResultActions leer(String sesion) throws Exception {
@@ -130,6 +144,9 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         assertThat(campo(sesion, "$.expiraEn"))
                 .isEqualTo(reloj.instant().plus(Duration.ofMinutes(10)).toString());
         assertThat(campo(sesion, "$.modo")).isEqualTo("VIDEO");
+        // WebRTC playback is off in this configuration (no tetengo.vista-en-vivo.url-webrtc): the field is
+        // there, null, and the app plays HLS. MediaMtxIntegrationTest covers it on.
+        assertThat(sesion).contains("\"urlWebrtc\":null");
 
         Map<String, Object> acceso = acceso(campo(sesion, "$.sesionId"));
         assertThat(acceso.get("usuario_id")).hasToString(campo(titular, "$.usuario.id"));
@@ -291,6 +308,26 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void mediaMtxDejaLeerPorWebRtcConElMismoTokenYNoPorOtrosProtocolos() throws Exception {
+        String sesion = sesion(token, camara, "{}");
+        String query = "token=" + tokenDe(sesion);
+        autorizar("secreto-de-prueba", "read", "", "", "camaras/" + camara, query, "webrtc")
+                .andExpect(status().isOk());
+        assertThat(((Timestamp) acceso(campo(sesion, "$.sesionId")).get("ultima_actividad")).toInstant())
+                .isEqualTo(reloj.instant());
+        autorizar("secreto-de-prueba", "read", "", "", "camaras/" + camara, "", "webrtc")
+                .andExpect(status().isUnauthorized());
+        for (String protocolo : List.of("rtsp", "rtmp", "srt")) {
+            autorizar("secreto-de-prueba", "read", "", "", "camaras/" + camara, query, protocolo)
+                    .andExpect(status().isUnauthorized());
+        }
+
+        mvc.perform(delete("/api/vista-en-vivo/" + campo(sesion, "$.sesionId")).header("Authorization", bearer(token)));
+        autorizar("secreto-de-prueba", "read", "", "", "camaras/" + camara, query, "webrtc")
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void mediaMtxDejaPublicarSoloAlAgenteConLaClaveDeLaTransmision() throws Exception {
         sesion(token, camara, "{}");
         jdbc.update("update transmisiones_en_vivo set clave_hash = ?", Secretos.huella("clave-de-prueba"));
@@ -333,6 +370,23 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         assertThat(transmisiones()).isEmpty();
         assertThat(transmision.lectoresExpulsados()).contains(huella);
         leer(sesion).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void unEspectadorWebRtcQueSigueRecibiendoBytesMantieneLaSesionYAlTerminarSeLeExpulsa() throws Exception {
+        String sesion = sesion(token, camara, "{}");
+        String id = campo(sesion, "$.sesionId");
+        String huella = Secretos.huella(tokenDe(sesion));
+        for (int i = 1; i <= 6; i++) {
+            reloj.avanzar(Duration.ofSeconds(10));
+            transmision.leyendo("webrtc-1", Lector.WEBRTC, UUID.fromString(camara), huella, 5000L * i);
+            finalizarSesiones.ejecutar();
+        }
+        assertThat(fin(id)).isNull();
+
+        mvc.perform(delete("/api/vista-en-vivo/" + id).header("Authorization", bearer(token)))
+                .andExpect(status().isNoContent());
+        assertThat(transmision.lectoresExpulsados()).containsExactly(huella);
     }
 
     @Test
@@ -432,5 +486,60 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         assertThat(fin(campo(deBeto, "$.sesionId"))).isNull();
         assertThat(jdbc.queryForObject("select count(*) from transmisiones_en_vivo", Integer.class))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void prepararNoAbreNiRegistraUnaSesion() throws Exception {
+        preparar(token, "{\"camaraId\":\"%s\"}".formatted(camara)).andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject("select count(*) from accesos_vista_en_vivo", Integer.class))
+                .isZero();
+        assertThat(transmisiones()).isEmpty();
+    }
+
+    @Test
+    void prepararSigueLasReglasDeAbrir() throws Exception {
+        preparar(token, "{}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("VALIDACION"))
+                .andExpect(jsonPath("$.campos.camaraId").isNotEmpty());
+        preparar(token, "{\"camaraId\":\"%s\"}".formatted(UUID.randomUUID()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.codigo").value("CAMARA_NO_ENCONTRADA"));
+
+        String cuerpo = "{\"camaraId\":\"%s\"}".formatted(camara);
+        jdbc.update("update estados_de_captura set consentimiento_vigente = false");
+        preparar(token, cuerpo)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("SIN_CONSENTIMIENTO"));
+        jdbc.update("update estados_de_captura set consentimiento_vigente = true");
+
+        jdbc.update(
+                "update camaras set pausada_hasta = ?",
+                Timestamp.from(reloj.instant().plus(Duration.ofHours(1))));
+        preparar(token, cuerpo)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("CAMARA_EN_PAUSA"))
+                .andExpect(jsonPath("$.pausadaHasta")
+                        .value(reloj.instant().plus(Duration.ofHours(1)).toString()));
+        jdbc.update("update camaras set pausada_hasta = null");
+
+        jdbc.update("update camaras set estado_conexion = 'DESCONECTADA'");
+        preparar(token, cuerpo)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("CAMARA_DESCONECTADA"));
+    }
+
+    @Test
+    void elInvitadoTambienPreparaYOtroHogarNoVeLaCamara() throws Exception {
+        UUID invitado = UUID.randomUUID();
+        UUID hogar = UUID.fromString(campo(titular, "$.hogarId"));
+        DatosDePrueba.membresia(jdbc, hogar, invitado, Rol.INVITADO);
+        String cuerpo = "{\"camaraId\":\"%s\"}".formatted(camara);
+        preparar(JwtDePrueba.token(invitado, hogar, Rol.INVITADO), cuerpo).andExpect(status().isNoContent());
+
+        String otro = ApiDePrueba.titularConHogar(mvc, "beto@correo.pe", "Beto");
+        preparar(campo(otro, "$.tokenAcceso"), cuerpo)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.codigo").value("CAMARA_NO_ENCONTRADA"));
     }
 }
