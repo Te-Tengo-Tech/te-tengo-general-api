@@ -7,6 +7,14 @@ name: Container image
 # (repository_dispatch `desplegar-api`); the deploy waits there for approval on the `produccion`
 # environment. A tag `api-v<version>` or a manual run with `push: true` only pushes. Pushing uses the
 # workflow's own GITHUB_TOKEN; the dispatch needs the DISPATCH_TOKEN secret (docs/DEPLOYMENT.md).
+#
+# Switches (organization variables, Te-Tengo-Tech → Settings → Secrets and variables → Actions →
+# Variables; explicit opt-in, unset means off). The pull request build and smoke test always run.
+#   ENABLE_API_IMAGE    'true' allows pushing the image to GHCR (main, tags and manual runs); otherwise
+#                       the image is only built and smoke-tested.
+#   ENABLE_API_DEPLOY   'true' sends desplegar-api to te-tengo-infra after a push to main (it also needs
+#                       ENABLE_API_IMAGE, since there is no new image to deploy otherwise). te-tengo-infra
+#                       gates its deploy job with the same variable.
 on:
   pull_request:
     paths:
@@ -40,12 +48,13 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/te-tengo-tech/te-tengo-general-api
-  # Push on main, on a release tag, or when a manual run asks for it.
-  PUSH: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push) }}
+  # Push on main, on a release tag, or when a manual run asks for it, and only with the ENABLE_API_IMAGE
+  # switch on.
+  PUSH: ${{ vars.ENABLE_API_IMAGE == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push)) }}
 
 jobs:
   image:
-    name: Build${{ (github.event_name == 'push' || inputs.push) && ' and push' || '' }} (amd64, arm64)
+    name: Build${{ vars.ENABLE_API_IMAGE == 'true' && (github.event_name == 'push' || inputs.push) && ' and push' || '' }} (amd64, arm64)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -157,6 +166,9 @@ jobs:
         if: always()
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
+          WANTS_PUSH: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push) }}
+          ENABLE_API_IMAGE: ${{ vars.ENABLE_API_IMAGE }}
+          ENABLE_API_DEPLOY: ${{ vars.ENABLE_API_DEPLOY }}
         run: |
           {
             echo "## Container image"
@@ -164,16 +176,32 @@ jobs:
             echo '```'
             echo "$TAGS"
             echo '```'
+            if [ "$WANTS_PUSH" = true ] && [ "$ENABLE_API_IMAGE" != true ]; then
+              echo "- Push to GHCR: **off**, skipped (organization variable \`ENABLE_API_IMAGE\` is not \`true\`)."
+            fi
+            if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then
+              if [ "$ENABLE_API_IMAGE" = true ] && [ "$ENABLE_API_DEPLOY" = true ]; then
+                echo "- Production deploy request: on (job *Request the production deploy*)."
+              else
+                echo "- Production deploy request: **off**, skipped (needs the organization variables \`ENABLE_API_IMAGE\` and \`ENABLE_API_DEPLOY\` set to \`true\`)."
+              fi
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Continuous deployment: a push to main asks te-tengo-infra to deploy the new image. The infra Deploy
   # workflow pauses on its `produccion` environment until a required reviewer approves, so nothing
   # reaches the VM without a human. Pushing an image is not a deploy, so this job uses no environment
   # (the API repository's `produccion` environment would add a second, redundant approval).
+  # Switches: ENABLE_API_DEPLOY, and ENABLE_API_IMAGE because without a pushed image there is nothing
+  # to deploy; the image job's summary says when it is skipped.
   dispatch:
     name: Request the production deploy (te-tengo-infra)
     needs: image
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && vars.ENABLE_API_IMAGE == 'true'
+      && vars.ENABLE_API_DEPLOY == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
