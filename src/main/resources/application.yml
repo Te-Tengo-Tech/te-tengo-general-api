@@ -10,12 +10,153 @@ spring:
       ddl-auto: validate
   flyway:
     locations: classpath:db/migration
+  # SMTP relay of tetengo.correo.proveedor=smtp: host, port and credentials come from the standard
+  # SPRING_MAIL_HOST, SPRING_MAIL_PORT (e.g. 587), SPRING_MAIL_USERNAME and SPRING_MAIL_PASSWORD.
+  # Spring Boot creates the mail sender (and its health indicator) only when the host is set, so the
+  # other providers need none of this. STARTTLS is required (TT_SMTP_STARTTLS=false only for a local
+  # relay without TLS); timeouts in ms keep a slow relay from holding a request.
+  mail:
+    properties:
+      "[mail.smtp.starttls.enable]": ${TT_SMTP_STARTTLS:true}
+      "[mail.smtp.starttls.required]": ${TT_SMTP_STARTTLS:true}
+      "[mail.smtp.connectiontimeout]": 10000
+      "[mail.smtp.timeout]": 10000
+      "[mail.smtp.writetimeout]": 10000
   security:
     oauth2:
       resourceserver:
         jwt:
           # RS256 public key of the tokens. Locally: scripts/generate-keys.sh
           public-key-location: ${TT_JWT_CLAVE_PUBLICA:file:.claves/publica.pem}
+
+tetengo:
+  cors:
+    # Origins of browser clients (the PWA build of the app) allowed to call /api/**: scheme, host and
+    # port, never a path; patterns such as http://localhost:* work. Comma-separated, e.g.
+    # TT_CORS_ORIGENES=https://te-tengo.pages.dev. Empty (default): CORS is off; the native app and
+    # the household agent need none. The `local` profile allows localhost.
+    origenes: ${TT_CORS_ORIGENES:}
+  jwt:
+    # RS256 private key that signs the tokens this API issues (PKCS#8 PEM). Locally: scripts/generate-keys.sh
+    clave-privada-location: ${TT_JWT_CLAVE_PRIVADA:file:.claves/privada.pem}
+  sesiones:
+    # API contract, implementation choice: access token 60 min, refresh token 30 days.
+    vigencia-acceso: 60m
+    vigencia-refresco: 30d
+  agente:
+    # Lifetime of the per-camera token; the agent registers again at startup or on 401
+    # (AGENT_CONTRACT.md, implementation choice).
+    vigencia-token: 30d
+    # Heartbeat every 30 s; 3 missed heartbeats mean the camera is disconnected (AGENT_CONTRACT.md).
+    intervalo-senal: 30s
+    senales-perdidas: 3
+    # GET /api/agente/configuracion (AGENT_CONTRACT.md). The agent only logs a different version.
+    # Default: the current release of te-tengo-desktop-pywebview.
+    version-publicada: ${TT_AGENTE_VERSION_PUBLICADA:0.2.0}
+    # Classification thresholds by the field names of the agent's `Umbrales`. Empty by default, so
+    # every agent keeps the thresholds calibrated at installation; never set values that were not
+    # calibrated (docs/BLOCKERS.md). Example:
+    # umbrales:
+    #   "[velocidad_descenso_min]": 0.5
+  correo:
+    # E-mail adapter: registro (default, only logs), ses (Amazon SES) or smtp (any SMTP relay,
+    # spring.mail above). docs/NOTIFICATIONS.md
+    proveedor: ${TT_CORREO_PROVEEDOR:registro}
+    smtp:
+      # Sender the relay accepts, e.g. "Te Tengo <no-responder@example.com>"; required with smtp.
+      remitente: ${TT_SMTP_REMITENTE:}
+    ses:
+      # Sender: a verified SES identity, e.g. "Te Tengo <no-responder@example.com>" (docs/BLOCKERS.md).
+      remitente: ${TT_SES_REMITENTE:}
+      # Blank: the AWS SDK's default region chain.
+      region: ${TT_SES_REGION:}
+      # Blank is AWS; locally Floci (application-local.yml).
+      endpoint: ${TT_SES_ENDPOINT:}
+  push:
+    # CA-16.4: a push the service did not accept is retried every 15 s, up to 20 attempts
+    # (implementation choice: the backlog only says "retries").
+    reintento-cada: 15s
+    intentos-maximos: 20
+    # Push adapter: registro (default, only logs), fcm, sns or simulador. docs/NOTIFICATIONS.md
+    proveedor: ${TT_PUSH_PROVEEDOR:registro}
+    fcm:
+      # Path of the Firebase service-account JSON key; never commit it.
+      credenciales: ${TT_FCM_CREDENCIALES:}
+    sns:
+      # Platform applications (ARNs). iOS: an FCM application while the app registers FCM tokens on iOS
+      # (it may be the same ARN as Android), or APNS / APNS_SANDBOX for APNs device tokens.
+      arn-android: ${TT_SNS_ARN_ANDROID:}
+      arn-ios: ${TT_SNS_ARN_IOS:}
+      # Blank: the AWS SDK's default region chain.
+      region: ${TT_SNS_REGION:}
+      # Blank is AWS; locally Floci (application-local.yml).
+      endpoint: ${TT_SNS_ENDPOINT:}
+      # Optional: platform application of the PWA's web push tokens, an FCM (GCM) application of the
+      # same Firebase project (it may be the same ARN as Android). Blank: SNS skips web devices.
+      arn-web: ${TT_SNS_ARN_WEB:}
+      crear-aplicaciones: false
+    web:
+      # The PWA's URL, opened when a web push notification is clicked (webpush.fcm_options.link, sent by
+      # fcm and sns). HTTPS only, as FCM requires; blank sends no link. Example:
+      # TT_PWA_URL=https://te-tengo.pages.dev/app/
+      enlace: ${TT_PWA_URL:}
+    simulador:
+      # Local only: `xcrun simctl push booted <bundle-id>`; the default is the bundle id of the app.
+      bundle-id: ${TT_SIMULADOR_BUNDLE_ID:tech.tetengo.teTengo}
+      dispositivo: booted
+  clips:
+    # Pre-signed clip URLs are short-lived (implementation choice).
+    vigencia-url-subida: 10m
+    vigencia-url-lectura: 5m
+    # Amazon S3 (or an S3-compatible store). Without a bucket the in-memory fake is used. Locally,
+    # `./gradlew bootRun` uses Floci from compose.yaml (application-local.yml). Cloudflare R2:
+    # TT_CLIPS_REGION=auto, TT_CLIPS_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com,
+    # TT_CLIPS_PATH_STYLE=true and the R2 API token's keys (docs/DEPLOYMENT.md).
+    s3:
+      bucket: ${TT_CLIPS_BUCKET:}
+      # Blank: the AWS SDK's default region chain (AWS_REGION, ~/.aws/config...).
+      region: ${TT_CLIPS_REGION:}
+      # Endpoint of an S3-compatible store; blank is AWS. It is the host of the pre-signed URLs.
+      endpoint: ${TT_CLIPS_ENDPOINT:}
+      path-style: ${TT_CLIPS_PATH_STYLE:false}
+      # Blank: the AWS SDK's default credentials chain (environment, profile, instance role...).
+      access-key: ${TT_CLIPS_ACCESS_KEY:}
+      secret-key: ${TT_CLIPS_SECRET_KEY:}
+      crear-bucket: false
+  vista-en-vivo:
+    # Live view through MediaMTX (docs/API_CONTRACT.md §4, ADR 0007). The agent publishes to
+    # url-publicacion ({camaraId} is replaced; rtsps:// in production), the app plays LL-HLS from url-hls
+    # (https://<host>/vivo in production), and the API kicks clients through MediaMTX's control API,
+    # which must never be exposed. MediaMTX authorizes through POST /api/interno/mediamtx/autorizar with
+    # this shared secret; blank denies everything (the `local` profile sets one).
+    url-publicacion: ${TT_VIVO_URL_PUBLICACION:rtsp://localhost:8554/camaras/{camaraId}}
+    url-hls: ${TT_VIVO_URL_HLS:http://localhost:8888}
+    mediamtx-api: ${TT_VIVO_MEDIAMTX_API:http://localhost:9997}
+    secreto-autorizacion: ${TT_VIVO_SECRETO_AUTORIZACION:}
+    # Implementation choices: a session ends when its viewer has not read for 30 s, and lasts 10 min at
+    # most (the app opens a new one); the job checks every 10 s.
+    inactividad: 30s
+    duracion-maxima: 10m
+    revision: 10s
+  historial:
+    # Retention of the recordings (CA-26.3): not defined in the backlog, so unset (clips are kept) until
+    # the team decides (docs/BLOCKERS.md). Example: TT_RETENCION_CLIPS=30d
+    retencion-de-clips: ${TT_RETENCION_CLIPS:}
+  enlaces:
+    # Links e-mailed to reset a password and to accept an invitation; {token} is the one-time token.
+    # They open the app's routes (lib/app/rutas.dart of the mobile app) under `base`, which has no
+    # trailing slash:
+    # - native app (default): the custom scheme, tetengo://app/nueva-contrasena?token=...
+    # - PWA with hash routing (example host; any origin works):
+    #   TT_ENLACE_BASE=https://te-tengo.pages.dev/app/#
+    #   gives https://te-tengo.pages.dev/app/#/nueva-contrasena?token=...
+    # TT_ENLACE_RECUPERACION and TT_ENLACE_INVITACION replace a whole template instead.
+    base: ${TT_ENLACE_BASE:tetengo://app}
+    recuperacion: ${TT_ENLACE_RECUPERACION:${tetengo.enlaces.base}/nueva-contrasena?token={token}}
+    invitacion: ${TT_ENLACE_INVITACION:${tetengo.enlaces.base}/invitacion/{token}}
+  invitaciones:
+    # The backlog does not say how long an invitation lasts: placeholder pending (docs/BLOCKERS.md).
+    vigencia: 7d
 
 server:
   error:

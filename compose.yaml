@@ -1,4 +1,7 @@
 # Local infrastructure. Spring Boot starts it with `./gradlew bootRun` (spring-boot-docker-compose).
+# Host ports can be overridden so a second stack (scripts/e2e.sh, with its own project name) runs
+# next to the developer's: TT_POSTGRES_PUERTO (default 0, a free port Spring Boot discovers),
+# TT_FLOCI_PUERTO (default 4566, also read by application-local.yml) and the MediaMTX ports below.
 services:
   postgres:
     image: postgres:18
@@ -7,4 +10,60 @@ services:
       POSTGRES_USER: tetengo
       POSTGRES_PASSWORD: tetengo
     ports:
-      - "5432"
+      - "${TT_POSTGRES_PUERTO:-0}:5432"
+  # Floci, a local AWS emulator (MIT, LocalStack-compatible): S3 for the clips, SES for e-mail and
+  # SNS for push (profile `local`, application-local.yml; ADR 0005). There is no Spring service
+  # connection for it: the API reaches it through tetengo.clips.s3.*, tetengo.correo.ses.* and
+  # tetengo.push.sns.*, signing with Floci's built-in test/test keys. The host port is known (4566
+  # unless TT_FLOCI_PUERTO says otherwise) because the pre-signed clip URLs point to
+  # http://localhost:4566, which the household agent and the iOS simulator must reach. Sent
+  # e-mails: http://localhost:4566/_aws/ses; pushes: http://localhost:4566/_aws/sns/push-notifications.
+  floci:
+    image: floci/floci:2.2.0
+    environment:
+      # Keep the clips across restarts: in-memory reads, flushed to the volume.
+      FLOCI_STORAGE_MODE: hybrid
+      FLOCI_STORAGE_PERSISTENT_PATH: /app/data
+      # Verify the signature of the pre-signed URLs, as Amazon S3 does.
+      FLOCI_AUTH_VALIDATE_SIGNATURES: "true"
+      # No Docker socket is mounted: skip the ECS clean-up that would retry it at startup.
+      FLOCI_SERVICES_ECS_RECONCILE_CONTAINERS_ON_STARTUP: "false"
+    ports:
+      - "${TT_FLOCI_PUERTO:-4566}:4566"
+    volumes:
+      - floci-data:/app/data
+    healthcheck:
+      # The image has bash but no curl or wget.
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/4566 && printf "GET /_localstack/health HTTP/1.0\r\n\r\n" >&3 && read -r l <&3 && [[ $$l == *200* ]]'
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  # MediaMTX, the live view streaming service (ADR 0007), configured by mediamtx.yml. The household
+  # agent publishes RTSP on 8554 and the app plays LL-HLS on 8888; the control API (9997) is published
+  # on 127.0.0.1 only. Every publish and read is authorized by the API running on the host
+  # (./gradlew bootRun on TT_API_PUERTO, default 8080) with the shared TT_VIVO_SECRETO_AUTORIZACION,
+  # whose local default matches application-local.yml. If you change a port here, set the matching
+  # TT_VIVO_URL_PUBLICACION, TT_VIVO_URL_HLS or TT_VIVO_MEDIAMTX_API for the API.
+  # TT_MEDIAMTX_HLS_ORIGENES sets the origins that may read HLS from a browser (the PWA), comma-separated
+  # (hlsAllowOrigins of mediamtx.yml; default * locally).
+  mediamtx:
+    image: bluenviron/mediamtx:1.21.1
+    environment:
+      MTX_AUTHHTTPADDRESS: "http://host.docker.internal:${TT_API_PUERTO:-8080}/api/interno/mediamtx/autorizar?secreto=${TT_VIVO_SECRETO_AUTORIZACION:-secreto-local-de-vista-en-vivo}"
+      MTX_HLSALLOWORIGINS: "${TT_MEDIAMTX_HLS_ORIGENES:-*}"
+    extra_hosts:
+      # Linux has no host.docker.internal by default; Docker Desktop already provides it.
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${TT_MEDIAMTX_PUERTO_RTSP:-8554}:8554"
+      - "${TT_MEDIAMTX_PUERTO_HLS:-8888}:8888"
+      - "127.0.0.1:${TT_MEDIAMTX_PUERTO_API:-9997}:9997"
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+
+volumes:
+  floci-data:

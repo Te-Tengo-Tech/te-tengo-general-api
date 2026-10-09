@@ -1,0 +1,123 @@
+name: Container image
+
+# Builds the API image (Dockerfile) for linux/amd64 (the production Azure VM) and linux/arm64 (the
+# inactive OCI and AWS alternatives), and smoke-tests the amd64 image against PostgreSQL
+# (scripts/smoke-image.sh). Pull requests only build and test. Release candidates (x.y.z-rc.N) are built
+# once by the Release workflow (release.yml) on release/* and hotfix/* branches, and the Produccion workflow
+# (produccion.yml) deploys and re-tags that same digest after the merge to main. A manual run with
+# `push: true` pushes a one-off image (tags sha-<commit> and the branch name) for tests; it is never
+# deployed by itself. Pushing uses the workflow's own GITHUB_TOKEN.
+#
+# Switch (organization variable, Te-Tengo-Tech → Settings → Secrets and variables → Actions →
+# Variables; explicit opt-in, unset means off). The build and smoke test always run.
+#   ENABLE_API_IMAGE    'true' allows the manual push to GHCR; otherwise the image is only built and
+#                       smoke-tested.
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - build.gradle.kts
+      - settings.gradle.kts
+      - gradle.properties
+      - gradle/**
+      - src/main/**
+      - scripts/smoke-image.sh
+      - .github/workflows/image.yml
+  workflow_dispatch:
+    inputs:
+      push:
+        description: Push the image to GHCR (tags sha-<commit> and the branch name; no deploy)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-${{ github.ref }}
+  # Superseded pull request builds are cancelled; a manual push is never cut short.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: ghcr.io/te-tengo-tech/te-tengo-general-api
+  # Push only when a manual run asks for it, and only with the ENABLE_API_IMAGE switch on.
+  PUSH: ${{ vars.ENABLE_API_IMAGE == 'true' && github.event_name == 'workflow_dispatch' && inputs.push }}
+
+jobs:
+  image:
+    name: Build${{ vars.ENABLE_API_IMAGE == 'true' && inputs.push && ' and push' || '' }} (amd64, arm64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v4
+      - name: Image tags and OCI labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+          labels: |
+            org.opencontainers.image.title=te-tengo-general-api
+            org.opencontainers.image.description=Backend API of Te Tengo: fall detection alerts for older adults at home
+            org.opencontainers.image.vendor=Te Tengo
+      # Smoke test first: nothing is pushed unless the amd64 image starts, migrates an empty PostgreSQL 18,
+      # reports healthy and does not run as root (scripts/smoke-image.sh, also used by the Release verification).
+      - name: Build the amd64 image for the smoke test
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: te-tengo-general-api:smoke
+          cache-from: type=gha
+      - name: Smoke test (PostgreSQL + /actuator/health)
+        run: scripts/smoke-image.sh te-tengo-general-api:smoke
+      - name: Log in to GHCR
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build both platforms${{ env.PUSH == 'true' && ' and push' || '' }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Summary
+        if: always()
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          WANTS_PUSH: ${{ github.event_name == 'workflow_dispatch' && inputs.push }}
+          ENABLE_API_IMAGE: ${{ vars.ENABLE_API_IMAGE }}
+        run: |
+          {
+            echo "## Container image"
+            if [ "$PUSH" = true ]; then echo "Pushed to \`$IMAGE\` (linux/amd64, linux/arm64):"; else echo "Built for linux/amd64 and linux/arm64, **not pushed**. Tags it would get:"; fi
+            echo '```'
+            echo "$TAGS"
+            echo '```'
+            if [ "$WANTS_PUSH" = true ] && [ "$ENABLE_API_IMAGE" != true ]; then
+              echo "- Push to GHCR: **off**, skipped (organization variable \`ENABLE_API_IMAGE\` is not \`true\`)."
+            fi
+            echo "- Release candidates are built once by the **Release** workflow on \`release/*\` and \`hotfix/*\` branches and deployed by **Produccion** after the merge to \`main\` (docs/DEPLOYMENT.md)."
+          } >> "$GITHUB_STEP_SUMMARY"

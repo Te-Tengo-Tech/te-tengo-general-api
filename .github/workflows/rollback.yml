@@ -1,0 +1,108 @@
+name: Rollback
+run-name: Rollback the API to ${{ inputs.version }}
+
+# Puts a released version of the API back in production, without building anything (docs/DEPLOYMENT.md,
+# "Rollback"). It reads the image digest from the notes of the GitHub Release vX.Y.Z (written by
+# produccion.yml), asks te-tengo-infra to deploy that digest (approval on its `produccion` environment, which
+# takes a database backup first because the image changes) and waits for the result, then moves `latest`
+# back to that digest, since `latest` names the image in production.
+# Flyway migrations are forward-only: an older image may not start on a schema a newer release migrated.
+# Then restore the dump taken right before that release's deploy (te-tengo-infra docs/deploy.md, "Rollback").
+# Switch: ENABLE_API_DEPLOY must be 'true'.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Released version to put back in production (x.y.z, a GitHub Release vX.Y.Z)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# Shared with produccion.yml: one production change of the API at a time, never cancelled.
+concurrency:
+  group: produccion
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/te-tengo-tech/te-tengo-general-api
+
+jobs:
+  rollback:
+    name: Roll back to ${{ inputs.version }} (deploy through te-tengo-infra, approval there)
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+      ENABLE_API_DEPLOY: ${{ vars.ENABLE_API_DEPLOY }}
+    steps:
+      - name: Check the request
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Run the rollback from main (it was started from $GITHUB_REF)."
+            exit 1
+          fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must be x.y.z (found '$VERSION')"
+            exit 1
+          fi
+          if [ "$ENABLE_API_DEPLOY" != true ]; then
+            echo "::error::The organization variable ENABLE_API_DEPLOY is not 'true': production is frozen, so nothing can be rolled back."
+            exit 1
+          fi
+      - name: Digest of the release v${{ inputs.version }}
+        id: release
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/notes.md"
+          if ! gh release view "v$VERSION" -R "$GITHUB_REPOSITORY" --json body,isPrerelease,isDraft \
+              --jq 'if .isPrerelease or .isDraft then error("not a final release") else .body end' | tr -d '\r' > "$notes"; then
+            echo "::error::v$VERSION is not a final GitHub Release of this repository (candidates vX.Y.Z-rc.N cannot be rolled back to)."
+            exit 1
+          fi
+          digest=$(sed -n 's/^digest=//p' "$notes" | head -n 1)
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::The notes of v$VERSION record no image digest (released before the build-once flow?). Run te-tengo-infra's Deploy by hand with the image tag instead."
+            exit 1
+          fi
+          commit=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$VERSION" --jq '.object.sha')
+          {
+            echo "digest=$digest"
+            echo "commit=$commit"
+          } >> "$GITHUB_OUTPUT"
+          echo "Rolling back to v$VERSION: \`$IMAGE@$digest\` (commit \`$commit\`)." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check that the image exists
+        env:
+          DIGEST: ${{ steps.release.outputs.digest }}
+        run: |
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" >/dev/null \
+            || { echo "::error::$IMAGE@$DIGEST is not in GHCR"; exit 1; }
+      - name: Request the deploy and wait for its result
+        env:
+          DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+          DIGEST: ${{ steps.release.outputs.digest }}
+          TAG: ${{ inputs.version }}
+          REF: ${{ steps.release.outputs.commit }}
+          KIND: rollback
+        run: .github/scripts/request-deploy.sh
+      - name: Move latest to v${{ inputs.version }}
+        env:
+          DIGEST: ${{ steps.release.outputs.digest }}
+        run: |
+          docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE@$DIGEST"
+          echo "\`latest\` now points to \`$IMAGE@$DIGEST\` ($VERSION), the image in production." >> "$GITHUB_STEP_SUMMARY"

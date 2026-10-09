@@ -6,6 +6,9 @@
 
 ## Conventions
 - **Base path** `/api`. **Version header** `Api-Version: 1` (optional; defaults to 1).
+- **Clients:** the native app (Android, iOS) and its web build, a PWA served from another origin (e.g. Cloudflare Pages, `https://te-tengo.pages.dev/app/`, or a custom domain; the backend has no default origin).
+  - **CORS** for `/api/**` is on only for the origins the backend is configured with (`TT_CORS_ORIGENES`; off by default, `http://localhost:*` locally). Allowed request headers: `Authorization`, `Api-Version`, `Content-Type`; exposed: `WWW-Authenticate`; no cookies or credentials; preflight answers are cached for 1 h **[implementation choice]**. A preflight from another origin, or with another header, answers `403` without CORS headers.
+  - **E-mailed links** open the app's `/nueva-contrasena?token={token}` and `/invitacion/{token}` routes under the configured base: `tetengo://app/…` for the native app (default), or the PWA's hash URL, e.g. `https://te-tengo.pages.dev/app/#/nueva-contrasena?token=…` and `…/app/#/invitacion/{token}`.
 - **Auth:** `Authorization: Bearer <accessToken>` (JWT RS256). Claims:
   - `sub`: user id;
   - `hogar_id`: active household, the tenant;
@@ -19,6 +22,7 @@
   - `codigo`: a stable code the app branches on;
   - extra properties where stated.
   - Validation failures use `400 VALIDACION` with `campos: { "<field>": "<message>" }`, so the app can highlight the missing field (CA-01.3, CA-04.3).
+  - A missing, expired or invalid access token on any protected endpoint answers `401 SESION_EXPIRADA` (with the `WWW-Authenticate: Bearer` header); the app refreshes its tokens only on that code.
 
 ## 1. Accounts and sessions (`cuentas`) — US-01, US-02, US-03
 | Method and path | Auth | Body → response | Errors |
@@ -37,15 +41,18 @@
 ## 2. Household, older adult and consent (`hogares`) — US-04, US-05, US-09
 | Method and path | Auth | Body → response | Errors |
 |---|---|---|---|
-| `POST /api/hogar` | user without a household | `{adultoMayor: {nombre, direccion, convivencia}}` → `201 Sesion`. Creates the household with the caller as `TITULAR` and returns tokens that carry its `hogar_id` (CA-04.1) | `409 HOGAR_YA_REGISTRADO`: one older adult per account (CA-04.2) · `400 VALIDACION` (CA-04.3) |
+| `POST /api/hogar` | user without a household | `{adultoMayor: {nombre, edad, direccion, convivencia, telefono?}}` → `201 Sesion`. Creates the household with the caller as `TITULAR` and returns tokens that carry its `hogar_id` (CA-04.1) | `409 HOGAR_YA_REGISTRADO`: one older adult per account (CA-04.2) · `400 VALIDACION` (CA-04.3) |
 | `GET /api/hogar` | member | → `200 {hogarId, adultoMayor, rol, consentimiento: Consentimiento \| null}` | — |
-| `PUT /api/hogar/adulto-mayor` | owner | `{nombre, direccion, convivencia}` → `200 adultoMayor` | `400 VALIDACION` |
+| `PUT /api/hogar/adulto-mayor` | owner | `{nombre, edad, direccion, convivencia, telefono?}` → `200 adultoMayor`. Replaces the whole profile: an omitted `telefono` clears it | `400 VALIDACION` |
 | `GET /api/hogares` | user | → `200 [{hogarId, nombreAdultoMayor, rol}]`, the households the user belongs to | — |
 | `POST /api/sesiones/hogar` | user | `{hogarId}` → `200 Sesion` for that household | `403 SIN_MEMBRESIA` |
 | `POST /api/hogar/consentimiento` | owner | `{otorgadoPor, aceptadoPorAdultoMayor: true, vistaEnVivoAceptada: true}` → `201 Consentimiento`. Stores the date and time (CA-05.3); camera capture may start (CA-05.1) | `422 CONSENTIMIENTO_NO_ACEPTADO`: both flags must be true (CA-05.4) |
 | `GET /api/hogar/consentimiento` | member | → `200 Consentimiento` | `404 SIN_CONSENTIMIENTO` |
-| `DELETE /api/hogar/consentimiento` | owner | → `202 {eliminacionProgramada: true}`. Stops capture and schedules deletion of every recording (CA-09.1); a push `DATOS_ELIMINADOS` is sent when done (CA-09.3) | — |
+| `DELETE /api/hogar/consentimiento` | owner | → `202 {eliminacionProgramada: true}`. Stops capture and schedules deletion of every recording (CA-09.1); a push `DATOS_ELIMINADOS` is sent when done (CA-09.3) | `404 SIN_CONSENTIMIENTO`: there is no current consent to revoke |
 
+`adultoMayor = {nombre, edad, direccion, convivencia, telefono | null}`
+- `edad`: whole years, required, from 50 to 120. The prototype's profile form asks for «Edad» and rejects other values with «Escribe una edad válida, en años.»; the app shows «Rosa Huamán, 78 años». Households registered before this field existed answer `edad: null` until the owner saves the profile again.
+- `telefono`: optional; the number that «Llamar a Rosa · 987 654 321» dials from the alert (prototype alert screen). Digits and spaces with an optional leading `+`, 6 to 20 characters **[implementation choice]**; a blank value is stored as null.
 - `convivencia` values, from the prototype's profile screen:
   - `SOLO`: «Vive solo(a)»;
   - `CON_FAMILIAR`: «Vive conmigo», the older adult lives with the account owner;
@@ -63,7 +70,9 @@
 | `PUT /api/hogar/aviso` | owner | `{principalId, secundarioId \| null, esperaMinutos: 3 \| 5 \| 10}` → `200` (CA-10.1, CA-10.2) | `422 ESPERA_INVALIDA` · `422 CONTACTO_NO_ES_FAMILIAR` |
 
 ## 4. Cameras and monitoring (`camaras`, `monitoreo`) — US-06, US-07, US-15, US-22, US-23, US-24
-`Camara = {id, nombreHabitacion, estadoConexion: "EN_LINEA" | "DESCONECTADA", ultimaSenal | null, pausadaHasta | null, deteccionConfiable: boolean}`
+`Camara = {id, nombreHabitacion, estadoConexion: "EN_LINEA" | "DESCONECTADA", ultimaSenal | null, pausadaHasta | null, deteccionConfiable: boolean, instaladaEn, noConfiableDesde | null}`
+- `instaladaEn`: when the project team installed the camera, that is, the agent's first registration (CA-06.1). The camera header shows it as «Instalada el».
+- `noConfiableDesde`: when detection stopped being reliable, the time of the agent's `deteccion_no_confiable` event (CA-15.3); null while `deteccionConfiable` is true. The camera detail shows «La detección no es confiable desde las 10:36».
 
 | Method and path | Auth | Body → response | Errors |
 |---|---|---|---|
@@ -71,11 +80,23 @@
 | `PATCH /api/camaras/{id}` | owner | `{nombreHabitacion}` (1–40 chars) → `200 Camara`; later alerts use the new name (CA-06.2) | `422 CAMARA_NOMBRE_VACIO` (CA-06.3) · `422 CAMARA_NOMBRE_MUY_LARGO` · `404 CAMARA_NO_ENCONTRADA` |
 | `POST /api/camaras/{id}/pausa` | member | `{duracion: "MIN_30" \| "HORA_1" \| "HORAS_2" \| "HASTA_MANANA"}`, the options of the prototype's pause screen; `HASTA_MANANA` means the next 07:00 in the household time zone, `America/Lima` **[implementation choice]**. → `200 Camara` with `pausadaHasta`. Stops capture and detection (CA-22.1); resumes automatically and sends push `PAUSA_FINALIZADA` (CA-22.3) | `422 DURACION_INVALIDA` |
 | `DELETE /api/camaras/{id}/pausa` | member | → `200 Camara` (resume now) | — |
-| `POST /api/camaras/{id}/vista-en-vivo` | member | `{alertaId \| null}` → `201 {sesionId, urlTransmision, expiraEn}` (CA-23.1, CA-23.2) | `409 CAMARA_DESCONECTADA` (CA-23.3) · `409 CAMARA_EN_PAUSA {pausadaHasta}` (CA-23.4) |
-| `DELETE /api/vista-en-vivo/{sesionId}` | member | → `204`. Records who watched, when it started and how long (CA-24.1) | — |
+| `POST /api/camaras/{id}/vista-en-vivo` | member | `{alertaId \| null, modo?}` → `201 {sesionId, urlTransmision, expiraEn, modo}` (CA-23.1, CA-23.2). `alertaId`: the alert the live view is opened from, which must be of that camera. `modo`: see "Live view" below; omitted keeps the camera's current mode (`VIDEO` when nobody is watching) | `409 CAMARA_DESCONECTADA` (CA-23.3) · `409 CAMARA_EN_PAUSA {pausadaHasta}` (CA-23.4) · `409 SIN_CONSENTIMIENTO`: without a current consent the camera does not stream (CA-05.2) · `400 VALIDACION` with `campos.alertaId` (alert of another camera or unknown) or `campos.modo` |
+| `PATCH /api/vista-en-vivo/{sesionId}` | member | `{modo}` → `200 {sesionId, modo}`. Only the session's viewer, while it is open; the mode applies to the camera's stream, so every viewer sees it | `400 VALIDACION` with `campos.modo` · `404 SESION_NO_ENCONTRADA`: unknown, of another member, or already ended **[implementation choice]** |
+| `DELETE /api/vista-en-vivo/{sesionId}` | member | → `204`. Ends the session and records who watched, when it started and how long (CA-24.1). Closing someone else's session, or one that already ended, changes nothing | — |
 | `GET /api/accesos-vista-en-vivo` | member | → `200 [{usuario: {id, nombre}, inicio, duracionSegundos, desdeAlerta: boolean}]`, newest first (CA-24.2). Empty list when none (CA-24.3) | — |
 
-**Live stream transport [implementation choice, pending team confirmation]:** `urlTransmision` is a `wss://` URL served by the backend that relays binary JPEG frames. Each frame has the same format as the desktop agent's ingestion protocol: `[8-byte big-endian ms timestamp][JPEG]`.
+**Live view (MediaMTX).** Decided by the project owner on 2026-10-07; it replaces the earlier WebSocket JPEG relay proposal.
+- **Playback:** `urlTransmision` is an LL-HLS playlist served by MediaMTX, the system's live streaming service: `<HLS base>/camaras/<camaraId>/index.m3u8?token=<viewer token>`. The app plays it with `video_player`. HLS base: `http://localhost:8888` locally; `https://<host>/vivo` in production. Apple's players only accept low-latency HLS over HTTPS, so the local stack serves standard (fMP4) HLS, a few seconds behind; production serves LL-HLS through Caddy's HTTPS.
+- **Viewer token:** it belongs to one session. It can be used many times (HLS makes many requests) until the session ends. A read without a token, with an unknown token or after the session ended gets `401` from MediaMTX.
+- **Video:** H.264 at 480p and about 8 fps, no audio.
+- **PWA:** the browser reads the HLS playlist from another origin, so MediaMTX answers CORS for the configured origins (`hlsAllowOrigins`: any origin locally, the PWA's origin in production).
+- **`expiraEn`:** the maximum end of the session, 10 min after it opened **[implementation choice]**. Then the app opens a new session.
+- **Session end without `DELETE`:** the API ends a session when its viewer has not read the stream for 30 s **[implementation choice]**, and records the duration until the last read (US-24).
+- **Pause or revoked consent:** every session of the camera ends at once, and MediaMTX disconnects the viewers.
+- **`modo`:** what the household agent draws on the frames it publishes. It applies to the camera's stream, so all viewers see the same mode **[implementation choice]**.
+  - `VIDEO` (default): the camera frame.
+  - `VIDEO_CON_POSTURA`: the frame with the skeleton drawn on top.
+  - `SOLO_POSTURA`: the skeleton on a plain neutral background, in the brand colours. No camera pixels: no image of the home leaves the PC.
 
 ## 5. Alerts and clips (`alertas`) — US-13, US-16 to US-21, US-26
 ```
@@ -116,8 +137,8 @@ Alerta = {
 - `tendencia` compares each type with the previous week (CA-27.3).
 
 ## 7. Push notifications
-- **Device registration:** `POST /api/dispositivos {tokenPush, plataforma: "ANDROID" | "IOS"}` → `201`, and `DELETE /api/dispositivos/{tokenPush}` → `204` (member).
-- **Delivery:** the backend sends through Amazon SNS (FCM on Android, APNs on iOS) to every member device. Fall pushes must arrive **in less than 10 s** from the moment the person is on the floor, with the room and the time (CA-16.1, CA-16.2). On failure the backend logs the error and retries (CA-16.4).
+- **Device registration:** `POST /api/dispositivos {tokenPush, plataforma: "ANDROID" | "IOS" | "WEB"}` → `201`, and `DELETE /api/dispositivos/{tokenPush}` → `204` (member). `WEB` is the PWA, with its FCM web push token (`getToken` with the project's VAPID key). Another `plataforma` is `400 VALIDACION` with `campos.plataforma`.
+- **Delivery:** the backend sends through Amazon SNS (FCM on Android, APNs on iOS) or Firebase Cloud Messaging to every member device. Web devices get an FCM web push with the same title, body and data payload; clicking it opens the PWA. Without a web configuration on the push service the backend skips web devices (they do not count as delivered). Fall pushes must arrive **in less than 10 s** from the moment the person is on the floor, with the room and the time (CA-16.1, CA-16.2). On failure the backend logs the error and retries (CA-16.4).
 
 Data payload: `{tipo, alertaId?, camaraId?, habitacion?, ocurridaEn}`. `tipo` is one of:
 

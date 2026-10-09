@@ -1,8 +1,10 @@
 /**
- * Camera pauses, live view and its access log. Stories US-22 to US-24.
+ * Camera pauses with automatic resume, live view through MediaMTX (sessions, the agent's control channel
+ * and MediaMTX's authorization) and the live view access log. Stories US-22 to US-24.
  *
- * <p>Not implemented yet: follow the reference slice {@code tech.tetengo.api.camaras},
- * {@code docs/USE_CASE_GUIDE.md} and {@code docs/WORK_PLAN.md}.
+ * <p>Public API: the {@code PausaFinalizada} event and the {@code AlertasDeCamara} SPI that
+ * {@code alertas} implements. It works on cameras through {@code CamarasDelHogar} and listens to
+ * {@code ConsentimientoRevocado} of {@code hogares} to stop live view.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Monitoreo")
 package tech.tetengo.api.monitoreo;

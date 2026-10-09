@@ -16,6 +16,26 @@ class CamaraTest {
         assertThat(camara.getNombreHabitacion()).isEqualTo("Sala");
         assertThat(camara.getEstadoConexion()).isEqualTo(EstadoConexion.DESCONECTADA);
         assertThat(camara.getId()).isNotNull();
+        assertThat(camara.getPausadaHasta()).isNull();
+        assertThat(camara.isDeteccionConfiable()).isTrue();
+        assertThat(camara.getNoConfiableDesde()).isNull();
+    }
+
+    @Test
+    void ca15_3_guardaDesdeCuandoLaDeteccionNoEsConfiable() {
+        Camara camara = new Camara("Sala");
+        Instant desde = Instant.parse("2026-10-07T15:36:00Z");
+        assertThat(camara.marcarDeteccionNoConfiable(desde)).isTrue();
+        assertThat(camara.isDeteccionConfiable()).isFalse();
+        assertThat(camara.getNoConfiableDesde()).isEqualTo(desde);
+
+        // A second report is not a change and keeps the first time.
+        assertThat(camara.marcarDeteccionNoConfiable(desde.plusSeconds(300))).isFalse();
+        assertThat(camara.getNoConfiableDesde()).isEqualTo(desde);
+
+        camara.marcarDeteccionConfiable();
+        assertThat(camara.isDeteccionConfiable()).isTrue();
+        assertThat(camara.getNoConfiableDesde()).isNull();
     }
 
     @Test

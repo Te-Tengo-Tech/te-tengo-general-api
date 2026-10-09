@@ -38,3 +38,11 @@ out/
 
 # Local JWT keys
 .claves/
+
+# Cloud credentials: Firebase service-account keys and similar (TT_FCM_CREDENCIALES points outside the repo)
+*-firebase-adminsdk-*.json
+*service-account*.json
+*serviceAccount*.json
+*credenciales*.json
+google-services.json
+GoogleService-Info.plist

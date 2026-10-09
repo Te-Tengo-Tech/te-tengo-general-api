@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a defect in the backend API
+title: "fix: <short description>"
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What is wrong? Do not paste tokens, keys or personal data.
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - cuentas
+        - hogares
+        - camaras
+        - alertas
+        - monitoreo
+        - historial
+        - shared
+        - build / ci
+        - unknown
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Call POST /api/... with Api-Version: 1
+        2. With body ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual behavior
+      description: Reference docs/API_CONTRACT.md or the acceptance criterion (CA-XX.Y) when it applies.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: |
+        - Profile: local / test / prod
+        - Branch or commit:
+        - Client: mobile app / household agent / curl
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or ProblemDetail response
+      render: shell
+    validations:
+      required: false

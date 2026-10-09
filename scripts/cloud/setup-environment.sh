@@ -18,7 +18,12 @@ grep -q "org.gradle.java.installations.paths" "$HOME/.gradle/gradle.properties" 
   || echo "org.gradle.java.installations.paths=$JDK_DIR" >> "$HOME/.gradle/gradle.properties"
 
 # Docker for Testcontainers (integration tests).
+# containerd can take more than a few seconds to start, so wait for the daemon (up to 60 s).
 if ! docker info >/dev/null 2>&1; then
-  (dockerd >/tmp/dockerd.log 2>&1 &) ; sleep 3
+  (dockerd >/tmp/dockerd.log 2>&1 &)
+  for _ in $(seq 1 30); do
+    docker info >/dev/null 2>&1 && break
+    sleep 2
+  done
 fi
 echo "Environment ready: JDK 25 at $JDK_DIR, Docker $(docker info --format '{{.ServerVersion}}' 2>/dev/null || echo 'not available')."
