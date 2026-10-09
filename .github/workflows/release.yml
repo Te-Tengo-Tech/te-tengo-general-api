@@ -1,28 +1,28 @@
 name: Release
 run-name: Release ${{ github.ref_name }}
 
-# Release pipeline of the API, "build once, deploy many" (docs/DEPLOYMENT.md). A push to release/x.y.z or
+# Release candidates of the API, "build once, deploy many" (docs/DEPLOYMENT.md). A push to release/x.y.z or
 # hotfix/x.y.z:
-#   1. build        builds the image once (linux/amd64 + linux/arm64), smoke-tests it and pushes it to GHCR as
-#                   sha-<short commit> and <version>-rc; the digest identifies it from here on. No environment.
-#   2. verify       automatic verification, no environment and no approval (the API has no staging
-#                   environment: there is no second VM). It pulls the SAME image by digest into the runner and
-#                   smoke-tests it against PostgreSQL 18 (scripts/smoke-image.sh); then verify-e2e runs the
-#                   End-to-end workflow (scripts/e2e.sh: PostgreSQL, Floci, MediaMTX and the real desktop
-#                   agent) against that image. Always runs; produccion needs both.
-#   3. produccion   sends repository_dispatch `desplegar-api` to te-tengo-infra with the image tag and digest.
-#                   No environment here: the approval happens in te-tengo-infra's `produccion` environment,
-#                   before its Deploy job touches the VM.
-#   4. pull-request opens the pull request release/x.y.z → main (title `release: x.y.z`). Merging it is a
-#                   human action; on main, etiquetar.yml tags vX.Y.Z and creates the GitHub Release. There
-#                   are no deploys on main.
+#   1. build          builds the image ONCE (linux/amd64 + linux/arm64) with the final version x.y.z inside
+#                     (label org.opencontainers.image.version), smoke-tests it and pushes it to GHCR as
+#                     x.y.z-rc.N and sha-<short commit>. N = 1 + the highest existing candidate of x.y.z (tags
+#                     vX.Y.Z-rc.* and GHCR tags), so an older candidate is never overwritten. The digest
+#                     identifies the candidate from here on.
+#   2. candidate      records it durably as the GitHub pre-release vX.Y.Z-rc.N (tag on the release commit):
+#                     commit, git tree hash, image digest, build number, verification state (pending).
+#   3. verify         automatic verification, no environment and no approval (the API has no staging target:
+#                     there is no second VM). It pulls the SAME image by digest and smoke-tests it against
+#                     PostgreSQL 18; verify-e2e then runs the End-to-end workflow against that image.
+#   4. pull-request   marks the candidate verified and opens (or updates) the pull request
+#                     release/x.y.z → main, titled `release: x.y.z`. A new push builds rc.N+1 and updates it.
+# Nothing is deployed here. Production happens after the merge, on main (produccion.yml): it finds the
+# candidate whose tree hash equals main's, deploys its digest and only then tags vX.Y.Z.
 #
-# Switches (organization variables, Te-Tengo-Tech → Settings → Secrets and variables → Actions → Variables;
-# explicit opt-in, unset means off). A stage that is off is skipped and the build summary says why.
-#   ENABLE_API_IMAGE    'true' pushes the image to GHCR. Off: the image is only built and smoke-tested, and the
-#                       verification and produccion stages are skipped (there is no image to pull).
-#   ENABLE_API_DEPLOY   'true' sends the deploy request to te-tengo-infra (which gates its Deploy job with the
-#                       same variable). Needs the DISPATCH_TOKEN secret: the job fails without it.
+# Switch (organization variable, Te-Tengo-Tech → Settings → Secrets and variables → Actions → Variables;
+# explicit opt-in, unset means off):
+#   ENABLE_API_IMAGE    'true' pushes the candidate to GHCR. Off: the image is only built and smoke-tested;
+#                       there is no candidate, so nothing is verified or proposed for main.
+# The verification jobs have no switch: they always run when there is a candidate.
 on:
   push:
     branches:
@@ -32,8 +32,8 @@ on:
 permissions:
   contents: read
 
-# One release run per branch at a time. A running pipeline is never cancelled (it may be deploying); a newer
-# push waits, and replaces an older run that is still waiting to start.
+# One release run per branch at a time. A running pipeline is never cancelled; a newer push waits, and
+# replaces an older run that is still waiting to start.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -43,7 +43,7 @@ env:
 
 jobs:
   build:
-    name: Build the image once (amd64, arm64)
+    name: Build the candidate once (amd64, arm64)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -51,8 +51,9 @@ jobs:
       packages: write
     outputs:
       version: ${{ steps.version.outputs.version }}
+      candidate: ${{ steps.number.outputs.candidate }}
       sha_tag: ${{ steps.version.outputs.sha_tag }}
-      rc_tag: ${{ steps.version.outputs.rc_tag }}
+      tree: ${{ steps.version.outputs.tree }}
       digest: ${{ steps.push.outputs.digest }}
       image_ref: ${{ vars.ENABLE_API_IMAGE == 'true' && format('{0}@{1}', env.IMAGE, steps.push.outputs.digest) || '' }}
       pushed: ${{ vars.ENABLE_API_IMAGE == 'true' && steps.push.outputs.digest != '' }}
@@ -60,7 +61,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Version and tags
+      - name: Version, tree hash and tags
         id: version
         # `version = "x.y.z"` of build.gradle.kts; the branch name should carry the same version.
         run: |
@@ -71,25 +72,55 @@ jobs:
           fi
           branch_version="${GITHUB_REF_NAME#*/}"
           if [ "$branch_version" != "$version" ]; then
-            echo "::warning::The branch $GITHUB_REF_NAME does not match version $version of build.gradle.kts; the release is tagged v$version."
+            echo "::warning::The branch $GITHUB_REF_NAME does not match version $version of build.gradle.kts; the candidates are $version-rc.N."
           fi
           {
             echo "version=$version"
             echo "sha_tag=sha-${GITHUB_SHA::7}"
-            echo "rc_tag=$version-rc"
+            echo "tree=$(git rev-parse 'HEAD^{tree}')"
           } >> "$GITHUB_OUTPUT"
+      - name: Log in to GHCR
+        if: vars.ENABLE_API_IMAGE == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
       - uses: docker/setup-buildx-action@v4
+      - name: Candidate number
+        id: number
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          ENABLE_API_IMAGE: ${{ vars.ENABLE_API_IMAGE }}
+        # N = 1 + the highest N of the tags vX.Y.Z-rc.N; skip any x.y.z-rc.N already in GHCR (an earlier run
+        # that pushed but failed before creating its pre-release), so a candidate is never overwritten.
+        run: |
+          set -euo pipefail
+          last=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v$VERSION-rc." --jq '.[].ref' \
+            | sed -n "s|^refs/tags/v$VERSION-rc\.\([0-9][0-9]*\)$|\1|p" | sort -n | tail -n 1)
+          n=$(( ${last:-0} + 1 ))
+          if [ "$ENABLE_API_IMAGE" = true ]; then
+            while docker buildx imagetools inspect "$IMAGE:$VERSION-rc.$n" >/dev/null 2>&1; do
+              echo "$IMAGE:$VERSION-rc.$n already exists in GHCR: skipping that number."
+              n=$(( n + 1 ))
+            done
+          fi
+          echo "candidate=$VERSION-rc.$n" >> "$GITHUB_OUTPUT"
+          previous=${last:+$VERSION-rc.$last}
+          echo "Candidate $VERSION-rc.$n (previous: ${previous:-none})"
       - name: Image tags and OCI labels
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
           tags: |
+            type=raw,value=${{ steps.number.outputs.candidate }}
             type=raw,value=${{ steps.version.outputs.sha_tag }}
-            type=raw,value=${{ steps.version.outputs.rc_tag }}
+          # The final version goes inside the image; "rc" only lives in the tag.
           labels: |
             org.opencontainers.image.title=te-tengo-general-api
             org.opencontainers.image.description=Backend API of Te Tengo: fall detection alerts for older adults at home
@@ -107,13 +138,6 @@ jobs:
           cache-from: type=gha
       - name: Smoke test (PostgreSQL + /actuator/health)
         run: scripts/smoke-image.sh te-tengo-general-api:smoke
-      - name: Log in to GHCR
-        if: vars.ENABLE_API_IMAGE == 'true'
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build both platforms${{ vars.ENABLE_API_IMAGE == 'true' && ' and push' || '' }}
         id: push
         uses: docker/build-push-action@v7
@@ -130,40 +154,77 @@ jobs:
         if: always()
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          CANDIDATE: ${{ steps.number.outputs.candidate }}
           SHA_TAG: ${{ steps.version.outputs.sha_tag }}
-          RC_TAG: ${{ steps.version.outputs.rc_tag }}
           DIGEST: ${{ steps.push.outputs.digest }}
           ENABLE_API_IMAGE: ${{ vars.ENABLE_API_IMAGE }}
-          ENABLE_API_DEPLOY: ${{ vars.ENABLE_API_DEPLOY }}
         run: |
-          onoff() { [ "$1" = true ] && echo on || echo "**off**"; }
           {
-            echo "## Release $VERSION ($GITHUB_REF_NAME)"
+            echo "## Release candidate $CANDIDATE ($GITHUB_REF_NAME)"
             if [ "$ENABLE_API_IMAGE" = true ] && [ -n "$DIGEST" ]; then
-              echo "Pushed \`$IMAGE@$DIGEST\` (linux/amd64, linux/arm64) as \`$SHA_TAG\` and \`$RC_TAG\`. Every later stage uses this digest."
+              echo "Pushed \`$IMAGE@$DIGEST\` (linux/amd64, linux/arm64; version $VERSION inside, build $GITHUB_RUN_NUMBER) as \`$CANDIDATE\` and \`$SHA_TAG\`."
+              echo "Every later stage, and production after the merge to \`main\`, uses this digest."
             else
               echo "Built and smoke-tested for linux/amd64 and linux/arm64, **not pushed**."
-            fi
-            echo
-            echo "| Stage | Switch | State |"
-            echo "|---|---|---|"
-            echo "| Push to GHCR | \`ENABLE_API_IMAGE\` | $(onoff "$ENABLE_API_IMAGE") |"
-            echo "| Verification (ephemeral: smoke test + end-to-end with the pushed image) | always, with a pushed image | $(onoff "$ENABLE_API_IMAGE") |"
-            echo "| Produccion (\`desplegar-api\` to te-tengo-infra, approval there) | \`ENABLE_API_DEPLOY\` | $(onoff "$ENABLE_API_DEPLOY") |"
-            echo
-            if [ "$ENABLE_API_IMAGE" != true ]; then
-              echo "- Verification and produccion are **skipped**: the organization variable \`ENABLE_API_IMAGE\` is not \`true\`, so there is no image to pull or deploy."
-            fi
-            if [ "$ENABLE_API_DEPLOY" != true ]; then
-              echo "- Produccion is **skipped**: the organization variable \`ENABLE_API_DEPLOY\` is not \`true\`."
+              echo
+              echo "- **No candidate**: the organization variable \`ENABLE_API_IMAGE\` is not \`true\`, so there is no image to verify, and no pull request to \`main\` is opened (production on \`main\` needs a verified candidate)."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  verify:
-    name: Verify release image (ephemeral)
+  candidate:
+    name: Record the candidate (pre-release)
     needs: build
-    # Always runs when there is a pushed image (ENABLE_API_IMAGE); no environment and no approval.
     if: needs.build.outputs.pushed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.build.outputs.version }}
+      CANDIDATE: ${{ needs.build.outputs.candidate }}
+      SHA_TAG: ${{ needs.build.outputs.sha_tag }}
+      TREE: ${{ needs.build.outputs.tree }}
+      DIGEST: ${{ needs.build.outputs.digest }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Create the pre-release v${{ needs.build.outputs.candidate }}
+        # The block between the markers is read by produccion.yml and rollback.yml: keep its key=value lines.
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/notes.md"
+          cat > "$notes" <<EOF
+          Release candidate **$CANDIDATE** of te-tengo-general-api: final version **$VERSION**, build $GITHUB_RUN_NUMBER, built once from \`$GITHUB_REF_NAME\`.
+
+          | | |
+          |---|---|
+          | Image | \`$IMAGE@$DIGEST\` (linux/amd64, linux/arm64) |
+          | Tags | \`$CANDIDATE\`, \`$SHA_TAG\` |
+          | Commit | $GITHUB_SHA |
+          | Tree | \`$TREE\` |
+          | Verification | pending: [pipeline run]($RUN_URL) |
+
+          Production deploys this digest after the pull request to \`main\` is merged, if \`main\` has the same tree.
+
+          \`\`\`text
+          candidate=$CANDIDATE
+          version=$VERSION
+          build=$GITHUB_RUN_NUMBER
+          commit=$GITHUB_SHA
+          tree=$TREE
+          image=$IMAGE
+          digest=$DIGEST
+          verification=pending
+          \`\`\`
+          EOF
+          gh release create "v$CANDIDATE" -R "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
+            --title "v$CANDIDATE" --notes-file "$notes"
+          echo "Recorded the candidate as the pre-release \`v$CANDIDATE\` (tag on \`$GITHUB_SHA\`, tree \`$TREE\`)." >> "$GITHUB_STEP_SUMMARY"
+
+  verify:
+    name: Verify the candidate (ephemeral)
+    needs: [build, candidate]
+    # Always runs when there is a candidate; no environment and no approval.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -194,11 +255,11 @@ jobs:
           {
             echo "## Verification (ephemeral)"
             echo "Pulled \`$IMAGE_REF\` and started it with PostgreSQL 18 in the runner: migrations, health, readiness and non-root user passed."
-            echo "The end-to-end test against the same image runs next (*Verify release image: end-to-end*)."
+            echo "The end-to-end test against the same image runs next (*Verify the candidate: end-to-end*)."
           } >> "$GITHUB_STEP_SUMMARY"
 
   verify-e2e:
-    name: "Verify release image: end-to-end"
+    name: "Verify the candidate: end-to-end"
     needs: [build, verify]
     uses: ./.github/workflows/e2e.yml
     permissions:
@@ -209,112 +270,61 @@ jobs:
     secrets:
       E2E_REPO_TOKEN: ${{ secrets.E2E_REPO_TOKEN }}
 
-  produccion:
-    name: Produccion (request the deploy from te-tengo-infra)
-    needs: [build, verify, verify-e2e]
-    # Switches: ENABLE_API_DEPLOY and a pushed image. Both verification jobs must have passed.
-    if: >-
-      !cancelled()
-      && needs.build.result == 'success'
-      && needs.build.outputs.pushed == 'true'
-      && vars.ENABLE_API_DEPLOY == 'true'
-      && needs.verify.result == 'success'
-      && needs.verify-e2e.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # No environment: sending the request is not a deploy. te-tengo-infra's Deploy job waits for a required
-    # reviewer on its own `produccion` environment before it touches the VM.
-    permissions: {}
-    env:
-      DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
-      SHA_TAG: ${{ needs.build.outputs.sha_tag }}
-      DIGEST: ${{ needs.build.outputs.digest }}
-      VERSION: ${{ needs.build.outputs.version }}
-      INFRA_REPO: Te-Tengo-Tech/te-tengo-infra
-    steps:
-      - name: Send repository_dispatch desplegar-api
-        run: |
-          set -euo pipefail
-          if [ -z "$DISPATCH_TOKEN" ]; then
-            echo "::error title=Deploy not requested::The DISPATCH_TOKEN secret is missing, so $INFRA_REPO cannot be asked to deploy $IMAGE:$SHA_TAG." \
-              "Add it (docs/DEPLOYMENT.md) and re-run this job, or run the infra Deploy workflow by hand with that tag."
-            exit 1
-          fi
-          payload=$(jq -n --arg tag "$SHA_TAG" --arg digest "$DIGEST" --arg ref "$GITHUB_SHA" --arg version "$VERSION" \
-            '{event_type: "desplegar-api", client_payload: {tag: $tag, digest: $digest, ref: $ref, version: $version}}')
-          curl -fsS -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $DISPATCH_TOKEN" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$INFRA_REPO/dispatches" \
-            --data "$payload"
-          {
-            echo "## Produccion: deploy requested"
-            echo "Sent \`desplegar-api\` to [$INFRA_REPO](https://github.com/$INFRA_REPO/actions/workflows/deploy.yml): tag \`$SHA_TAG\`, digest \`$DIGEST\`, version $VERSION, commit \`$GITHUB_SHA\`."
-            echo "The deploy waits for approval on the \`produccion\` environment there."
-          } >> "$GITHUB_STEP_SUMMARY"
-
   pull-request:
-    name: Open the release pull request (→ main)
-    needs: [build, verify, verify-e2e, produccion]
-    # After every stage that ran passed (skipped stages are fine: their switch is off).
-    if: >-
-      !cancelled()
-      && needs.build.result == 'success'
-      && !contains(needs.*.result, 'failure')
+    name: Mark the candidate verified and open the pull request (→ main)
+    needs: [build, candidate, verify, verify-e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
     env:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.build.outputs.version }}
+      CANDIDATE: ${{ needs.build.outputs.candidate }}
       SHA_TAG: ${{ needs.build.outputs.sha_tag }}
-      RC_TAG: ${{ needs.build.outputs.rc_tag }}
+      TREE: ${{ needs.build.outputs.tree }}
       IMAGE_REF: ${{ needs.build.outputs.image_ref }}
-      VERIFY: ${{ needs.verify.result }}
-      VERIFY_E2E: ${{ needs.verify-e2e.result }}
-      PRODUCCION: ${{ needs.produccion.result }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      - name: Mark v${{ needs.build.outputs.candidate }} verified
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/notes.md"
+          gh release view "v$CANDIDATE" -R "$GITHUB_REPOSITORY" --json body --jq .body | tr -d '\r' > "$notes"
+          grep -qx 'verification=pending' "$notes" || grep -qx 'verification=passed' "$notes" \
+            || { echo "::error::The notes of v$CANDIDATE have no verification= line"; exit 1; }
+          sed -i \
+            -e 's/^verification=pending$/verification=passed/' \
+            -e "s#^| Verification | .*#| Verification | passed: smoke test (PostgreSQL 18) and end-to-end (agent → API → alert) on this digest, [pipeline run]($RUN_URL) |#" \
+            "$notes"
+          gh release edit "v$CANDIDATE" -R "$GITHUB_REPOSITORY" --notes-file "$notes"
       - name: Open or update the pull request
         run: |
           set -euo pipefail
           body="$RUNNER_TEMP/body.md"
-          if [ -n "$IMAGE_REF" ]; then
-            image="\`$IMAGE_REF\` (tags \`$SHA_TAG\`, \`$RC_TAG\`; linux/amd64, linux/arm64)"
-          else
-            image="built and smoke-tested, **not pushed** (\`ENABLE_API_IMAGE\` is off)"
-          fi
-          if [ "$VERIFY" = success ] && [ "$VERIFY_E2E" = success ]; then
-            verification="ephemeral run of that image in the runner: smoke test (PostgreSQL 18) and end-to-end (agent → API → alert) passed"
-          else
-            verification="**skipped** (\`ENABLE_API_IMAGE\` is off: no image to verify)"
-          fi
-          if [ "$PRODUCCION" = success ]; then
-            produccion="\`desplegar-api\` sent to Te-Tengo-Tech/te-tengo-infra with \`$SHA_TAG\`; the deploy waits for approval on its \`produccion\` environment"
-          else
-            produccion="**not requested** (\`ENABLE_API_DEPLOY\` or \`ENABLE_API_IMAGE\` is off)"
-          fi
+          release_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/v$CANDIDATE"
           cat > "$body" <<EOF
-          Release **$VERSION** of te-tengo-general-api from \`$GITHUB_REF_NAME\` at $GITHUB_SHA.
+          Release **$VERSION** of te-tengo-general-api from \`$GITHUB_REF_NAME\`: candidate [\`$CANDIDATE\`]($release_url).
 
-          | Stage | What happened |
+          | | |
           |---|---|
-          | Build | $image |
-          | Verification | $verification |
-          | Produccion | $produccion |
+          | Candidate | \`$CANDIDATE\` (pre-release \`v$CANDIDATE\`), build $GITHUB_RUN_NUMBER |
+          | Image | \`$IMAGE_REF\` (tags \`$CANDIDATE\`, \`$SHA_TAG\`; linux/amd64, linux/arm64) |
+          | Commit | $GITHUB_SHA |
+          | Tree | \`$TREE\` |
+          | Verification | ephemeral run of that digest: smoke test (PostgreSQL 18) and end-to-end (agent → API → alert) passed |
+          | Staging | none: the API has no staging target |
 
-          Merging this pull request tags \`v$VERSION\`, creates the GitHub Release from CHANGELOG.md and adds the tags \`$VERSION\` and \`latest\` to the same image (etiquetar.yml), then opens the back-merge into \`develop\`. Nothing is deployed on \`main\`.
+          After the merge, \`produccion.yml\` on \`main\` checks that \`main\` has this tree, asks te-tengo-infra to deploy this digest (approval on its \`produccion\` environment), waits for the result and only then tags the image \`$VERSION\` and \`latest\`, creates the release \`v$VERSION\` and opens the back-merge into \`develop\`. A new push to \`$GITHUB_REF_NAME\` builds the next candidate and updates this description.
 
           Pipeline run: $RUN_URL
           EOF
           number=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --base main --state open --json number --jq '.[0].number // empty')
           if [ -n "$number" ]; then
             gh pr edit "$number" -R "$GITHUB_REPOSITORY" --body-file "$body"
-            echo "Updated the description of pull request #$number." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Updated the description of pull request #$number to candidate $CANDIDATE." | tee -a "$GITHUB_STEP_SUMMARY"
           else
             url=$(gh pr create -R "$GITHUB_REPOSITORY" --base main --head "$GITHUB_REF_NAME" --title "release: $VERSION" --body-file "$body")
-            echo "Opened $url" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Opened $url for candidate $CANDIDATE." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
