@@ -3,6 +3,8 @@
 Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+
+## [0.2.0] - 2026-10-09
 ### Added
 - Release flow with release candidates (git flow, "build once, deploy many", tag at the end; Mermaid diagram in `docs/DEPLOYMENT.md`). `release.yml`, on pushes to `release/**` and `hotfix/**`: `build` pushes the image once (linux/amd64 + linux/arm64, final version inside) to GHCR as `x.y.z-rc.N` and `sha-<short commit>` (N never reuses an earlier candidate); `candidate` records it as the GitHub pre-release `vX.Y.Z-rc.N` with the commit, git tree hash, digest and build number; `verify` and `verify-e2e` (automatic, no environment: the API has no staging target) run that same digest in an ephemeral stack with PostgreSQL 18 and the end-to-end test; `pull-request` marks the candidate verified and opens or updates the pull request `release/x.y.z → main`. Nothing is deployed from a release branch.
 - Publishing switches: organization Actions variables, explicit opt-in (`true` turns a stage on, unset means off): `ENABLE_API_IMAGE` (push of new images to GHCR, i.e. the release candidate) and `ENABLE_API_DEPLOY` (production through `te-tengo-infra`, which gates its deploy with the same variable). The summaries say when a stage is off. Table in `docs/DEPLOYMENT.md`.
