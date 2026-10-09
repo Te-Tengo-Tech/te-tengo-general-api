@@ -7,7 +7,7 @@
 | `feature/<module>-<topic>` | `develop` | `develop` | New work, e.g. `feature/alertas-escalation` |
 | `bugfix/<module>-<topic>` | `develop` | `develop` | Fixes found during development |
 | `hotfix/<topic>` | `main` | `main` **and** `develop` | Urgent fixes to a release |
-| `release/<version>` | `develop` | `main` and `develop` | Release preparation (no releases are cut yet) |
+| `release/<version>` | `develop` | `main` and `develop` | Release preparation: a push runs the release pipeline (build once, staging, produccion, pull request to `main`; [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#release-flow-build-once-deploy-many)) |
 
 `main` only receives releases and hotfixes. Branch prefixes follow git flow; commit messages keep their Conventional Commit types (`feat:`, `fix:`, `ci:`, `docs:` …).
 
@@ -26,11 +26,13 @@ To add a feature, follow [docs/USE_CASE_GUIDE.md](docs/USE_CASE_GUIDE.md).
 
 | Workflow | Trigger | Jobs |
 |---|---|---|
-| [CI](.github/workflows/ci.yml) | Push to `main`/`develop`, every PR | `Unit tests` → `Integration tests` (Testcontainers) → `Coverage` (JaCoCo report artifact, summary on the run page, 80 % line gate on `domain` and `application`); `Format, architecture and build` (Spotless, ArchUnit and Spring Modulith, `bootJar`) in parallel |
+| [CI](.github/workflows/ci.yml) | Push to `main`/`develop`/`release/**`/`hotfix/**`, every PR | `Unit tests` → `Integration tests` (Testcontainers) → `Coverage` (JaCoCo report artifact, summary on the run page, 80 % line gate on `domain` and `application`); `Format, architecture and build` (Spotless, ArchUnit and Spring Modulith, `bootJar`) in parallel |
 | [OSV-Scanner](.github/workflows/osv-scanner.yml) | Weekly, manual, PRs that change the build | Scans every resolved Gradle dependency; scheduled runs fail on high or critical |
 | [OWASP Dependency-Check](.github/workflows/owasp.yml) | Weekly, manual | NVD scan of runtime dependencies (needs the `NVD_API_KEY` secret); fails on CVSS ≥ 7.0 |
-| [End-to-end](.github/workflows/e2e.yml) | Weekly, manual, PRs that change the agent endpoints or the contract | `scripts/e2e.sh`: the real desktop agent, headless, against this API (needs the `E2E_REPO_TOKEN` secret; skipped with a notice without it) |
-| [Container image](.github/workflows/image.yml) | PRs that change the image inputs, push to `main`, manual, tags `api-v*` | Smoke-tests the amd64 image against PostgreSQL, then builds `linux/amd64` and `linux/arm64`; pushes to `ghcr.io/te-tengo-tech/te-tengo-general-api` on `main`, a tag or a manual run with *push* (switch `ENABLE_API_IMAGE`). On `main` it then requests the production deploy from `te-tengo-infra` (switch `ENABLE_API_DEPLOY`; needs the `DISPATCH_TOKEN` secret; a notice without it), which waits for approval there ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)) |
+| [End-to-end](.github/workflows/e2e.yml) | Weekly, manual, PRs that change the agent endpoints or the contract, called by Release | `scripts/e2e.sh`: the real desktop agent, headless, against this API (a jar built here, or a given image) |
+| [Container image](.github/workflows/image.yml) | PRs that change the image inputs, manual | Smoke-tests the amd64 image against PostgreSQL (`scripts/smoke-image.sh`), then builds `linux/amd64` and `linux/arm64`; a manual run with *push* pushes a test image (switch `ENABLE_API_IMAGE`). Never deploys |
+| [Release](.github/workflows/release.yml) | Push to `release/**`, `hotfix/**` | `build` (image once, GHCR `sha-<short>` + `<version>-rc`) → `staging` (environment `staging`: same image by digest, smoke test) → `staging-e2e` → `produccion` (`desplegar-api` to `te-tengo-infra`, approval there) → pull request to `main`. Switches `ENABLE_API_IMAGE`, `ENABLE_STAGING`, `ENABLE_API_DEPLOY` ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#release-flow-build-once-deploy-many)) |
+| [Tag the release](.github/workflows/etiquetar.yml) | Push to `main` | Tag `vX.Y.Z` + GitHub Release (CHANGELOG section), image tags `X.Y.Z` and `latest` on the released digest, back-merge pull request to `develop`. No deploy |
 
 A new push cancels the superseded CI run of the same branch. Dependabot opens weekly update PRs to `develop`. See [.github/SECURITY.md](.github/SECURITY.md) for vulnerability reporting.
 
