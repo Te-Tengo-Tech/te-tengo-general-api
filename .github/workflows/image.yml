@@ -1,20 +1,16 @@
 name: Container image
 
 # Builds the API image (Dockerfile) for linux/amd64 (the production Azure VM) and linux/arm64 (the
-# inactive OCI and AWS alternatives), and smoke-tests the amd64 image against PostgreSQL before anything
-# is pushed. Pull requests only build and test. A push to `main` (a release or hotfix merge) pushes the
-# image to ghcr.io/te-tengo-tech/te-tengo-general-api and then asks te-tengo-infra to deploy it
-# (repository_dispatch `desplegar-api`); the deploy waits there for approval on the `produccion`
-# environment. A tag `api-v<version>` or a manual run with `push: true` only pushes. Pushing uses the
-# workflow's own GITHUB_TOKEN; the dispatch needs the DISPATCH_TOKEN secret (docs/DEPLOYMENT.md).
+# inactive OCI and AWS alternatives), and smoke-tests the amd64 image against PostgreSQL
+# (scripts/smoke-image.sh). Pull requests only build and test. Releases are published by the Release
+# workflow (release.yml) from release/* and hotfix/* branches, never from main: there are no deploys on
+# main. A manual run with `push: true` pushes a one-off image (tags sha-<commit> and the branch name)
+# for tests; it is never deployed by itself. Pushing uses the workflow's own GITHUB_TOKEN.
 #
-# Switches (organization variables, Te-Tengo-Tech → Settings → Secrets and variables → Actions →
-# Variables; explicit opt-in, unset means off). The pull request build and smoke test always run.
-#   ENABLE_API_IMAGE    'true' allows pushing the image to GHCR (main, tags and manual runs); otherwise
-#                       the image is only built and smoke-tested.
-#   ENABLE_API_DEPLOY   'true' sends desplegar-api to te-tengo-infra after a push to main (it also needs
-#                       ENABLE_API_IMAGE, since there is no new image to deploy otherwise). te-tengo-infra
-#                       gates its deploy job with the same variable.
+# Switch (organization variable, Te-Tengo-Tech → Settings → Secrets and variables → Actions →
+# Variables; explicit opt-in, unset means off). The build and smoke test always run.
+#   ENABLE_API_IMAGE    'true' allows the manual push to GHCR; otherwise the image is only built and
+#                       smoke-tested.
 on:
   pull_request:
     paths:
@@ -25,6 +21,7 @@ on:
       - gradle.properties
       - gradle/**
       - src/main/**
+      - scripts/smoke-image.sh
       - .github/workflows/image.yml
   workflow_dispatch:
     inputs:
@@ -32,36 +29,28 @@ on:
         description: Push the image to GHCR (tags sha-<commit> and the branch name; no deploy)
         type: boolean
         default: false
-  push:
-    branches:
-      - main
-    tags:
-      - "api-v*"
 
 permissions:
   contents: read
 
 concurrency:
   group: image-${{ github.ref }}
-  # Superseded pull request builds are cancelled; every push to main or tag is built and published.
+  # Superseded pull request builds are cancelled; a manual push is never cut short.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   IMAGE: ghcr.io/te-tengo-tech/te-tengo-general-api
-  # Push on main, on a release tag, or when a manual run asks for it, and only with the ENABLE_API_IMAGE
-  # switch on.
-  PUSH: ${{ vars.ENABLE_API_IMAGE == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push)) }}
+  # Push only when a manual run asks for it, and only with the ENABLE_API_IMAGE switch on.
+  PUSH: ${{ vars.ENABLE_API_IMAGE == 'true' && github.event_name == 'workflow_dispatch' && inputs.push }}
 
 jobs:
   image:
-    name: Build${{ vars.ENABLE_API_IMAGE == 'true' && (github.event_name == 'push' || inputs.push) && ' and push' || '' }} (amd64, arm64)
+    name: Build${{ vars.ENABLE_API_IMAGE == 'true' && inputs.push && ' and push' || '' }} (amd64, arm64)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
       contents: read
       packages: write
-    outputs:
-      sha_tag: ${{ steps.tags.outputs.sha_tag }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -70,27 +59,12 @@ jobs:
         with:
           platforms: arm64
       - uses: docker/setup-buildx-action@v4
-      - name: Application version
-        id: version
-        # `version = "x.y.z"` of build.gradle.kts; tagged on pushes to main only (release tags already
-        # carry their version).
-        run: |
-          version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' build.gradle.kts)
-          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][A-Za-z0-9.]+)?$ ]]; then
-            echo "version=$version" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::No application version found in build.gradle.kts; no version tag."
-          fi
       - name: Image tags and OCI labels
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=match,pattern=api-v(.*),group=1
-            type=match,pattern=api-v(\d+\.\d+),group=1
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/api-v') }}
-            type=raw,value=${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' && steps.version.outputs.version != '' }}
             type=ref,event=branch
             type=ref,event=pr
             type=sha
@@ -98,18 +72,8 @@ jobs:
             org.opencontainers.image.title=te-tengo-general-api
             org.opencontainers.image.description=Backend API of Te Tengo: fall detection alerts for older adults at home
             org.opencontainers.image.vendor=Te Tengo
-      - name: Commit tag
-        id: tags
-        # The immutable sha-<short commit> tag that te-tengo-infra deploys.
-        env:
-          META_JSON: ${{ steps.meta.outputs.json }}
-        run: |
-          sha_tag=$(jq -r '.tags[] | select(test(":sha-[0-9a-f]+$")) | sub("^.*:"; "")' <<< "$META_JSON" | head -n 1)
-          [ -n "$sha_tag" ] || { echo "::error::No sha-<commit> tag in the metadata"; exit 1; }
-          echo "sha_tag=$sha_tag" >> "$GITHUB_OUTPUT"
-      # Smoke test first: nothing is pushed unless the amd64 image starts, runs the Flyway migrations
-      # on an empty PostgreSQL 18 and reports healthy. Clips, e-mail and push use their in-memory and
-      # logging adapters, so no AWS emulator is needed.
+      # Smoke test first: nothing is pushed unless the amd64 image starts, migrates an empty PostgreSQL 18,
+      # reports healthy and does not run as root (scripts/smoke-image.sh, also used by the Release verification).
       - name: Build the amd64 image for the smoke test
         uses: docker/build-push-action@v7
         with:
@@ -119,31 +83,7 @@ jobs:
           tags: te-tengo-general-api:smoke
           cache-from: type=gha
       - name: Smoke test (PostgreSQL + /actuator/health)
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/claves"
-          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$RUNNER_TEMP/claves/privada.pem"
-          openssl rsa -in "$RUNNER_TEMP/claves/privada.pem" -pubout -out "$RUNNER_TEMP/claves/publica.pem"
-          chmod 644 "$RUNNER_TEMP"/claves/*.pem
-          docker network create smoke
-          docker run -d --name pg --network smoke -e POSTGRES_DB=tetengo -e POSTGRES_USER=tetengo -e POSTGRES_PASSWORD=tetengo postgres:18
-          docker run -d --name api --network smoke -p 8080:8080 \
-            -v "$RUNNER_TEMP/claves:/run/secrets/tetengo:ro" \
-            -e SPRING_DATASOURCE_URL=jdbc:postgresql://pg:5432/tetengo \
-            -e SPRING_DATASOURCE_USERNAME=tetengo -e SPRING_DATASOURCE_PASSWORD=tetengo \
-            -e TT_JWT_CLAVE_PUBLICA=file:/run/secrets/tetengo/publica.pem \
-            -e TT_JWT_CLAVE_PRIVADA=file:/run/secrets/tetengo/privada.pem \
-            te-tengo-general-api:smoke
-          for _ in $(seq 1 60); do
-            estado=$(docker inspect -f '{{.State.Health.Status}}' api 2>/dev/null || echo exited)
-            [ "$estado" = healthy ] && break
-            [ "$(docker inspect -f '{{.State.Running}}' api)" = true ] || { docker logs api; exit 1; }
-            sleep 3
-          done
-          curl -fsS localhost:8080/actuator/health/readiness
-          echo
-          [ "$estado" = healthy ] || { docker logs api; exit 1; }
-          [ "$(docker exec api id -u)" != 0 ] || { echo "::error::The image runs as root"; exit 1; }
+        run: scripts/smoke-image.sh te-tengo-general-api:smoke
       - name: Log in to GHCR
         if: env.PUSH == 'true'
         uses: docker/login-action@v4
@@ -166,9 +106,8 @@ jobs:
         if: always()
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
-          WANTS_PUSH: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push) }}
+          WANTS_PUSH: ${{ github.event_name == 'workflow_dispatch' && inputs.push }}
           ENABLE_API_IMAGE: ${{ vars.ENABLE_API_IMAGE }}
-          ENABLE_API_DEPLOY: ${{ vars.ENABLE_API_DEPLOY }}
         run: |
           {
             echo "## Container image"
@@ -179,55 +118,5 @@ jobs:
             if [ "$WANTS_PUSH" = true ] && [ "$ENABLE_API_IMAGE" != true ]; then
               echo "- Push to GHCR: **off**, skipped (organization variable \`ENABLE_API_IMAGE\` is not \`true\`)."
             fi
-            if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then
-              if [ "$ENABLE_API_IMAGE" = true ] && [ "$ENABLE_API_DEPLOY" = true ]; then
-                echo "- Production deploy request: on (job *Request the production deploy*)."
-              else
-                echo "- Production deploy request: **off**, skipped (needs the organization variables \`ENABLE_API_IMAGE\` and \`ENABLE_API_DEPLOY\` set to \`true\`)."
-              fi
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  # Continuous deployment: a push to main asks te-tengo-infra to deploy the new image. The infra Deploy
-  # workflow pauses on its `produccion` environment until a required reviewer approves, so nothing
-  # reaches the VM without a human. Pushing an image is not a deploy, so this job uses no environment
-  # (the API repository's `produccion` environment would add a second, redundant approval).
-  # Switches: ENABLE_API_DEPLOY, and ENABLE_API_IMAGE because without a pushed image there is nothing
-  # to deploy; the image job's summary says when it is skipped.
-  dispatch:
-    name: Request the production deploy (te-tengo-infra)
-    needs: image
-    if: >-
-      github.event_name == 'push'
-      && github.ref == 'refs/heads/main'
-      && vars.ENABLE_API_IMAGE == 'true'
-      && vars.ENABLE_API_DEPLOY == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    env:
-      DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
-      SHA_TAG: ${{ needs.image.outputs.sha_tag }}
-      INFRA_REPO: Te-Tengo-Tech/te-tengo-infra
-    steps:
-      - name: Send repository_dispatch desplegar-api
-        run: |
-          set -euo pipefail
-          if [ -z "$DISPATCH_TOKEN" ]; then
-            echo "::notice title=Deploy not requested::The DISPATCH_TOKEN secret is missing, so $INFRA_REPO was not asked to deploy $IMAGE:$SHA_TAG." \
-              "Add it (docs/DEPLOYMENT.md) or run the infra Deploy workflow by hand with that tag."
-            exit 0
-          fi
-          payload=$(jq -n --arg tag "$SHA_TAG" --arg ref "$GITHUB_SHA" \
-            '{event_type: "desplegar-api", client_payload: {tag: $tag, ref: $ref}}')
-          curl -fsS -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $DISPATCH_TOKEN" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$INFRA_REPO/dispatches" \
-            --data "$payload"
-          {
-            echo "## Production deploy requested"
-            echo "Sent \`desplegar-api\` to [$INFRA_REPO](https://github.com/$INFRA_REPO/actions/workflows/deploy.yml) with tag \`$SHA_TAG\` (commit \`$GITHUB_SHA\`)."
-            echo "The deploy waits for approval on the \`produccion\` environment there."
+            echo "- Releases are built, staged and deployed by the **Release** workflow from \`release/*\` and \`hotfix/*\` branches (docs/DEPLOYMENT.md)."
           } >> "$GITHUB_STEP_SUMMARY"

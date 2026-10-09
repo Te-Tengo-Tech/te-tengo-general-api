@@ -13,7 +13,8 @@
 # Everything is torn down on exit. It prints a PASS/FAIL summary and the detection → alert latency.
 #
 # Usage: scripts/e2e.sh
-# Requires: Docker, JDK 25, jq, curl, openssl, python3, uv, and te-tengo-desktop-pywebview checked out.
+# Requires: Docker, JDK 25 (not with TT_E2E_IMAGEN), jq, curl, openssl, python3, uv, and
+# te-tengo-desktop-pywebview checked out.
 #
 # Environment (all optional):
 #   TT_E2E_ESCRITORIO   desktop agent repository           (default: ../te-tengo-desktop-pywebview)
@@ -28,6 +29,10 @@
 #   TT_E2E_DIR          work directory for logs and files  (default: a new temporary directory)
 #   TT_E2E_ESPERA       seconds each assertion may wait    (default: 120)
 #   TT_E2E_SIN_BUILD=1  reuse build/libs/*.jar instead of running `./gradlew bootJar`
+#   TT_E2E_IMAGEN       run the API from this container image instead of the jar (no Gradle build),
+#                       e.g. ghcr.io/te-tengo-tech/te-tengo-general-api@sha256:... (the Release
+#                       workflow's verification). The container uses the host network, so it sees the stack
+#                       on localhost like the jar does: Linux, or Docker Desktop with host networking on.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 API_REPO="$PWD"
@@ -56,6 +61,8 @@ export DEMO_CORREO="e2e@tetengo.test"
 DEMO_CONTRASENA="E2e-$(openssl rand -hex 8)"
 export DEMO_CONTRASENA
 
+IMAGEN="${TT_E2E_IMAGEN:-}"
+CONTENEDOR_API="$COMPOSE_PROJECT_NAME-api"
 API_PID="" AGENTE_PID=""
 INICIO=$SECONDS
 declare -a RESULTADOS=()
@@ -96,6 +103,7 @@ limpiar() {
     for _ in $(seq 1 30); do kill -0 "$API_PID" 2>/dev/null || break; sleep 0.5; done
     kill -KILL "$API_PID" 2>/dev/null || true
   fi
+  [ -z "$IMAGEN" ] || docker rm -f "$CONTENEDOR_API" >/dev/null 2>&1 || true
   docker compose down -v --remove-orphans >"$WORK/compose-down.log" 2>&1 || true
   if [ "$codigo" != 0 ]; then
     echo
@@ -128,7 +136,9 @@ llamar() { # method path [json [extra curl arguments...]]
 }
 
 # ---------------------------------------------------------------- 0. requirements
-for herramienta in docker java jq curl openssl python3 uv; do
+herramientas=(docker jq curl openssl python3 uv)
+[ -n "$IMAGEN" ] || herramientas+=(java)
+for herramienta in "${herramientas[@]}"; do
   command -v "$herramienta" >/dev/null || falla "requirement: $herramienta is not installed"
 done
 [ -f "$ESCRITORIO/pyproject.toml" ] || falla "requirement: desktop agent repository not found at $ESCRITORIO"
@@ -192,27 +202,50 @@ mkdir -p "$WORK/claves"
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$WORK/claves/privada.pem" 2>/dev/null
 openssl rsa -in "$WORK/claves/privada.pem" -pubout -out "$WORK/claves/publica.pem" 2>/dev/null
 
-if [ "${TT_E2E_SIN_BUILD:-}" != 1 ]; then
-  log "building the API (./gradlew bootJar)"
-  ./gradlew bootJar --quiet >"$WORK/gradle.log" 2>&1 || falla "API build (see $WORK/gradle.log)"
-fi
-JAR="$(find build/libs -name '*.jar' ! -name '*-plain.jar' | head -n1)"
-[ -n "$JAR" ] || falla "API jar not found in build/libs"
+# The API's configuration, the same for the jar and the image.
+API_ENTORNO=(
+  SPRING_PROFILES_ACTIVE=local
+  SERVER_PORT="$PUERTO_API"
+  SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:$TT_POSTGRES_PUERTO/tetengo"
+  SPRING_DATASOURCE_USERNAME=tetengo
+  SPRING_DATASOURCE_PASSWORD=tetengo
+  TT_FLOCI_PUERTO="$TT_FLOCI_PUERTO"
+  TT_VIVO_SECRETO_AUTORIZACION="$TT_VIVO_SECRETO_AUTORIZACION"
+  TT_PUSH_PROVEEDOR=registro
+  TT_CORREO_PROVEEDOR=registro
+  TT_VIVO_URL_PUBLICACION="rtsp://localhost:$TT_MEDIAMTX_PUERTO_RTSP/camaras/{camaraId}"
+  TT_VIVO_URL_HLS="http://localhost:$TT_MEDIAMTX_PUERTO_HLS"
+  TT_VIVO_MEDIAMTX_API="http://localhost:$TT_MEDIAMTX_PUERTO_API"
+)
 
-log "starting the API on :$PUERTO_API (profile local, push provider registro)"
-SPRING_PROFILES_ACTIVE=local \
-  SERVER_PORT="$PUERTO_API" \
-  SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:$TT_POSTGRES_PUERTO/tetengo" \
-  SPRING_DATASOURCE_USERNAME=tetengo \
-  SPRING_DATASOURCE_PASSWORD=tetengo \
-  TT_JWT_CLAVE_PUBLICA="file:$WORK/claves/publica.pem" \
-  TT_JWT_CLAVE_PRIVADA="file:$WORK/claves/privada.pem" \
-  TT_PUSH_PROVEEDOR=registro \
-  TT_CORREO_PROVEEDOR=registro \
-  TT_VIVO_URL_PUBLICACION="rtsp://localhost:$TT_MEDIAMTX_PUERTO_RTSP/camaras/{camaraId}" \
-  TT_VIVO_URL_HLS="http://localhost:$TT_MEDIAMTX_PUERTO_HLS" \
-  TT_VIVO_MEDIAMTX_API="http://localhost:$TT_MEDIAMTX_PUERTO_API" \
-  java -jar "$API_REPO/$JAR" >"$WORK/api.log" 2>&1 &
+if [ -n "$IMAGEN" ]; then
+  # The image's user (uid 10001) must read the mounted keys.
+  chmod 755 "$WORK/claves"
+  chmod 644 "$WORK"/claves/*.pem
+  docker_entorno=()
+  for variable in "${API_ENTORNO[@]}"; do docker_entorno+=(-e "$variable"); done
+  log "starting the API from the image $IMAGEN on :$PUERTO_API (profile local, push provider registro)"
+  # Foreground `docker run` in the background: its PID stands for the API (docker forwards SIGTERM),
+  # and its output is the API log.
+  docker run --rm --name "$CONTENEDOR_API" --network host \
+    -v "$WORK/claves:/run/secrets/tetengo:ro" \
+    -e TT_JWT_CLAVE_PUBLICA=file:/run/secrets/tetengo/publica.pem \
+    -e TT_JWT_CLAVE_PRIVADA=file:/run/secrets/tetengo/privada.pem \
+    "${docker_entorno[@]}" "$IMAGEN" >"$WORK/api.log" 2>&1 &
+else
+  if [ "${TT_E2E_SIN_BUILD:-}" != 1 ]; then
+    log "building the API (./gradlew bootJar)"
+    ./gradlew bootJar --quiet >"$WORK/gradle.log" 2>&1 || falla "API build (see $WORK/gradle.log)"
+  fi
+  JAR="$(find build/libs -name '*.jar' ! -name '*-plain.jar' | head -n1)"
+  [ -n "$JAR" ] || falla "API jar not found in build/libs"
+
+  log "starting the API on :$PUERTO_API (profile local, push provider registro)"
+  env "${API_ENTORNO[@]}" \
+    TT_JWT_CLAVE_PUBLICA="file:$WORK/claves/publica.pem" \
+    TT_JWT_CLAVE_PRIVADA="file:$WORK/claves/privada.pem" \
+    java -jar "$API_REPO/$JAR" >"$WORK/api.log" 2>&1 &
+fi
 API_PID=$!
 salud() {
   kill -0 "$API_PID" 2>/dev/null || falla "API process exited (see $WORK/api.log)"

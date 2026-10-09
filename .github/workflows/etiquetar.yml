@@ -1,0 +1,136 @@
+name: Tag the release
+run-name: Tag the release on main (${{ github.sha }})
+
+# Runs when a release or hotfix pull request is merged into main (docs/DEPLOYMENT.md). By then the image was
+# built, staged and deployed from the release branch (release.yml); nothing is built or deployed here.
+#   1. release      creates the tag vX.Y.Z (version of build.gradle.kts) and a GitHub Release whose notes are
+#                   the CHANGELOG.md section of that version. Skipped when the tag already exists.
+#   2. image-tags   adds the tags X.Y.Z and latest to the image already pushed as X.Y.Z-rc, by digest
+#                   (`docker buildx imagetools create`: no rebuild). Switch: ENABLE_API_IMAGE.
+#   3. back-merge   opens the pull request main → develop (title `chore: merge release x.y.z back into
+#                   develop`) when main has commits that develop lacks.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: etiquetar-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/te-tengo-tech/te-tengo-general-api
+
+jobs:
+  release:
+    name: Tag and GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Version
+        id: version
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' build.gradle.kts)
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::build.gradle.kts must declare version = \"x.y.z\" (found '$version')"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Create the tag and the GitHub Release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --silent 2>/dev/null; then
+            echo "::notice title=Release exists::The tag $tag already exists; nothing to create."
+            echo "The tag \`$tag\` already exists: no new tag or release." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          notes="$RUNNER_TEMP/notes.md"
+          # The CHANGELOG.md section "## [x.y.z] ..." up to the next "## [" heading.
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > "$notes"
+          if ! grep -q '[^[:space:]]' "$notes"; then
+            echo "::warning::CHANGELOG.md has no section [$VERSION]; the release notes point to the file."
+            echo "See [CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/$tag/CHANGELOG.md)." > "$notes"
+          fi
+          gh release create "$tag" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$tag" --notes-file "$notes"
+          echo "Created the tag \`$tag\` on \`$GITHUB_SHA\` and its GitHub Release." >> "$GITHUB_STEP_SUMMARY"
+
+  image-tags:
+    name: Tag the released image (X.Y.Z, latest)
+    needs: release
+    if: vars.ENABLE_API_IMAGE == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      - uses: docker/setup-buildx-action@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Add X.Y.Z and latest to the X.Y.Z-rc image
+        run: |
+          set -euo pipefail
+          rc="$IMAGE:$VERSION-rc"
+          if ! digest=$(docker buildx imagetools inspect "$rc" --format '{{json .Manifest}}' | jq -r '.digest'); then
+            echo "::notice title=No release image::$rc does not exist (was the release pipeline run with ENABLE_API_IMAGE on?); no image tags added."
+            echo "No \`$rc\` image: no image tags added." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          docker buildx imagetools create --tag "$IMAGE:$VERSION" --tag "$IMAGE:latest" "$IMAGE@$digest"
+          tagged=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' | jq -r '.digest')
+          [ "$tagged" = "$digest" ] || echo "::warning::$IMAGE:$VERSION has digest $tagged, not $digest"
+          echo "Tagged \`$IMAGE@$digest\` (the image staged and deployed as \`$VERSION-rc\`) as \`$VERSION\` and \`latest\`." >> "$GITHUB_STEP_SUMMARY"
+
+  back-merge:
+    name: Open the back-merge pull request (main → develop)
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      - name: Open the pull request if develop lacks commits of main
+        run: |
+          set -euo pipefail
+          ahead=$(gh api "repos/$GITHUB_REPOSITORY/compare/develop...main" --jq '.ahead_by')
+          if [ "$ahead" = 0 ]; then
+            echo "develop already has every commit of main: no back-merge needed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          number=$(gh pr list -R "$GITHUB_REPOSITORY" --head main --base develop --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            echo "The back-merge pull request #$number is already open." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          url=$(gh pr create -R "$GITHUB_REPOSITORY" --base develop --head main \
+            --title "chore: merge release $VERSION back into develop" \
+            --body "Brings the release $VERSION (tag \`v$VERSION\`) and any fix made on its release branch back into \`develop\`. Merge with a merge commit.")
+          echo "Opened $url" >> "$GITHUB_STEP_SUMMARY"

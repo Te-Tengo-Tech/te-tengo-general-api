@@ -1,0 +1,320 @@
+name: Release
+run-name: Release ${{ github.ref_name }}
+
+# Release pipeline of the API, "build once, deploy many" (docs/DEPLOYMENT.md). A push to release/x.y.z or
+# hotfix/x.y.z:
+#   1. build        builds the image once (linux/amd64 + linux/arm64), smoke-tests it and pushes it to GHCR as
+#                   sha-<short commit> and <version>-rc; the digest identifies it from here on. No environment.
+#   2. verify       automatic verification, no environment and no approval (the API has no staging
+#                   environment: there is no second VM). It pulls the SAME image by digest into the runner and
+#                   smoke-tests it against PostgreSQL 18 (scripts/smoke-image.sh); then verify-e2e runs the
+#                   End-to-end workflow (scripts/e2e.sh: PostgreSQL, Floci, MediaMTX and the real desktop
+#                   agent) against that image. Always runs; produccion needs both.
+#   3. produccion   sends repository_dispatch `desplegar-api` to te-tengo-infra with the image tag and digest.
+#                   No environment here: the approval happens in te-tengo-infra's `produccion` environment,
+#                   before its Deploy job touches the VM.
+#   4. pull-request opens the pull request release/x.y.z → main (title `release: x.y.z`). Merging it is a
+#                   human action; on main, etiquetar.yml tags vX.Y.Z and creates the GitHub Release. There
+#                   are no deploys on main.
+#
+# Switches (organization variables, Te-Tengo-Tech → Settings → Secrets and variables → Actions → Variables;
+# explicit opt-in, unset means off). A stage that is off is skipped and the build summary says why.
+#   ENABLE_API_IMAGE    'true' pushes the image to GHCR. Off: the image is only built and smoke-tested, and the
+#                       verification and produccion stages are skipped (there is no image to pull).
+#   ENABLE_API_DEPLOY   'true' sends the deploy request to te-tengo-infra (which gates its Deploy job with the
+#                       same variable). Needs the DISPATCH_TOKEN secret: the job fails without it.
+on:
+  push:
+    branches:
+      - "release/**"
+      - "hotfix/**"
+
+permissions:
+  contents: read
+
+# One release run per branch at a time. A running pipeline is never cancelled (it may be deploying); a newer
+# push waits, and replaces an older run that is still waiting to start.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/te-tengo-tech/te-tengo-general-api
+
+jobs:
+  build:
+    name: Build the image once (amd64, arm64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha_tag: ${{ steps.version.outputs.sha_tag }}
+      rc_tag: ${{ steps.version.outputs.rc_tag }}
+      digest: ${{ steps.push.outputs.digest }}
+      image_ref: ${{ vars.ENABLE_API_IMAGE == 'true' && format('{0}@{1}', env.IMAGE, steps.push.outputs.digest) || '' }}
+      pushed: ${{ vars.ENABLE_API_IMAGE == 'true' && steps.push.outputs.digest != '' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Version and tags
+        id: version
+        # `version = "x.y.z"` of build.gradle.kts; the branch name should carry the same version.
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' build.gradle.kts)
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::build.gradle.kts must declare version = \"x.y.z\" (found '$version')"
+            exit 1
+          fi
+          branch_version="${GITHUB_REF_NAME#*/}"
+          if [ "$branch_version" != "$version" ]; then
+            echo "::warning::The branch $GITHUB_REF_NAME does not match version $version of build.gradle.kts; the release is tagged v$version."
+          fi
+          {
+            echo "version=$version"
+            echo "sha_tag=sha-${GITHUB_SHA::7}"
+            echo "rc_tag=$version-rc"
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v4
+      - name: Image tags and OCI labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.sha_tag }}
+            type=raw,value=${{ steps.version.outputs.rc_tag }}
+          labels: |
+            org.opencontainers.image.title=te-tengo-general-api
+            org.opencontainers.image.description=Backend API of Te Tengo: fall detection alerts for older adults at home
+            org.opencontainers.image.vendor=Te Tengo
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+      # Nothing is pushed unless the amd64 image starts, migrates an empty PostgreSQL 18, reports healthy and
+      # does not run as root.
+      - name: Build the amd64 image for the smoke test
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: te-tengo-general-api:smoke
+          cache-from: type=gha
+      - name: Smoke test (PostgreSQL + /actuator/health)
+        run: scripts/smoke-image.sh te-tengo-general-api:smoke
+      - name: Log in to GHCR
+        if: vars.ENABLE_API_IMAGE == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build both platforms${{ vars.ENABLE_API_IMAGE == 'true' && ' and push' || '' }}
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ vars.ENABLE_API_IMAGE == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Summary
+        if: always()
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA_TAG: ${{ steps.version.outputs.sha_tag }}
+          RC_TAG: ${{ steps.version.outputs.rc_tag }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+          ENABLE_API_IMAGE: ${{ vars.ENABLE_API_IMAGE }}
+          ENABLE_API_DEPLOY: ${{ vars.ENABLE_API_DEPLOY }}
+        run: |
+          onoff() { [ "$1" = true ] && echo on || echo "**off**"; }
+          {
+            echo "## Release $VERSION ($GITHUB_REF_NAME)"
+            if [ "$ENABLE_API_IMAGE" = true ] && [ -n "$DIGEST" ]; then
+              echo "Pushed \`$IMAGE@$DIGEST\` (linux/amd64, linux/arm64) as \`$SHA_TAG\` and \`$RC_TAG\`. Every later stage uses this digest."
+            else
+              echo "Built and smoke-tested for linux/amd64 and linux/arm64, **not pushed**."
+            fi
+            echo
+            echo "| Stage | Switch | State |"
+            echo "|---|---|---|"
+            echo "| Push to GHCR | \`ENABLE_API_IMAGE\` | $(onoff "$ENABLE_API_IMAGE") |"
+            echo "| Verification (ephemeral: smoke test + end-to-end with the pushed image) | always, with a pushed image | $(onoff "$ENABLE_API_IMAGE") |"
+            echo "| Produccion (\`desplegar-api\` to te-tengo-infra, approval there) | \`ENABLE_API_DEPLOY\` | $(onoff "$ENABLE_API_DEPLOY") |"
+            echo
+            if [ "$ENABLE_API_IMAGE" != true ]; then
+              echo "- Verification and produccion are **skipped**: the organization variable \`ENABLE_API_IMAGE\` is not \`true\`, so there is no image to pull or deploy."
+            fi
+            if [ "$ENABLE_API_DEPLOY" != true ]; then
+              echo "- Produccion is **skipped**: the organization variable \`ENABLE_API_DEPLOY\` is not \`true\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  verify:
+    name: Verify release image (ephemeral)
+    needs: build
+    # Always runs when there is a pushed image (ENABLE_API_IMAGE); no environment and no approval.
+    if: needs.build.outputs.pushed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE_REF: ${{ needs.build.outputs.image_ref }}
+      DIGEST: ${{ needs.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull the image by digest
+        run: |
+          docker pull "$IMAGE_REF"
+          docker image inspect --format '{{join .RepoDigests "\n"}}' "$IMAGE_REF" | grep -qx "$IMAGE@$DIGEST" \
+            || { echo "::error::The pulled image does not carry the digest $DIGEST"; exit 1; }
+      - name: Smoke test (PostgreSQL + /actuator/health)
+        run: scripts/smoke-image.sh "$IMAGE_REF"
+      - name: Summary
+        run: |
+          {
+            echo "## Verification (ephemeral)"
+            echo "Pulled \`$IMAGE_REF\` and started it with PostgreSQL 18 in the runner: migrations, health, readiness and non-root user passed."
+            echo "The end-to-end test against the same image runs next (*Verify release image: end-to-end*)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  verify-e2e:
+    name: "Verify release image: end-to-end"
+    needs: [build, verify]
+    uses: ./.github/workflows/e2e.yml
+    permissions:
+      contents: read
+      packages: read
+    with:
+      imagen: ${{ needs.build.outputs.image_ref }}
+    secrets:
+      E2E_REPO_TOKEN: ${{ secrets.E2E_REPO_TOKEN }}
+
+  produccion:
+    name: Produccion (request the deploy from te-tengo-infra)
+    needs: [build, verify, verify-e2e]
+    # Switches: ENABLE_API_DEPLOY and a pushed image. Both verification jobs must have passed.
+    if: >-
+      !cancelled()
+      && needs.build.result == 'success'
+      && needs.build.outputs.pushed == 'true'
+      && vars.ENABLE_API_DEPLOY == 'true'
+      && needs.verify.result == 'success'
+      && needs.verify-e2e.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # No environment: sending the request is not a deploy. te-tengo-infra's Deploy job waits for a required
+    # reviewer on its own `produccion` environment before it touches the VM.
+    permissions: {}
+    env:
+      DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+      SHA_TAG: ${{ needs.build.outputs.sha_tag }}
+      DIGEST: ${{ needs.build.outputs.digest }}
+      VERSION: ${{ needs.build.outputs.version }}
+      INFRA_REPO: Te-Tengo-Tech/te-tengo-infra
+    steps:
+      - name: Send repository_dispatch desplegar-api
+        run: |
+          set -euo pipefail
+          if [ -z "$DISPATCH_TOKEN" ]; then
+            echo "::error title=Deploy not requested::The DISPATCH_TOKEN secret is missing, so $INFRA_REPO cannot be asked to deploy $IMAGE:$SHA_TAG." \
+              "Add it (docs/DEPLOYMENT.md) and re-run this job, or run the infra Deploy workflow by hand with that tag."
+            exit 1
+          fi
+          payload=$(jq -n --arg tag "$SHA_TAG" --arg digest "$DIGEST" --arg ref "$GITHUB_SHA" --arg version "$VERSION" \
+            '{event_type: "desplegar-api", client_payload: {tag: $tag, digest: $digest, ref: $ref, version: $version}}')
+          curl -fsS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $DISPATCH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$INFRA_REPO/dispatches" \
+            --data "$payload"
+          {
+            echo "## Produccion: deploy requested"
+            echo "Sent \`desplegar-api\` to [$INFRA_REPO](https://github.com/$INFRA_REPO/actions/workflows/deploy.yml): tag \`$SHA_TAG\`, digest \`$DIGEST\`, version $VERSION, commit \`$GITHUB_SHA\`."
+            echo "The deploy waits for approval on the \`produccion\` environment there."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  pull-request:
+    name: Open the release pull request (→ main)
+    needs: [build, verify, verify-e2e, produccion]
+    # After every stage that ran passed (skipped stages are fine: their switch is off).
+    if: >-
+      !cancelled()
+      && needs.build.result == 'success'
+      && !contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.build.outputs.version }}
+      SHA_TAG: ${{ needs.build.outputs.sha_tag }}
+      RC_TAG: ${{ needs.build.outputs.rc_tag }}
+      IMAGE_REF: ${{ needs.build.outputs.image_ref }}
+      VERIFY: ${{ needs.verify.result }}
+      VERIFY_E2E: ${{ needs.verify-e2e.result }}
+      PRODUCCION: ${{ needs.produccion.result }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Open or update the pull request
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/body.md"
+          if [ -n "$IMAGE_REF" ]; then
+            image="\`$IMAGE_REF\` (tags \`$SHA_TAG\`, \`$RC_TAG\`; linux/amd64, linux/arm64)"
+          else
+            image="built and smoke-tested, **not pushed** (\`ENABLE_API_IMAGE\` is off)"
+          fi
+          if [ "$VERIFY" = success ] && [ "$VERIFY_E2E" = success ]; then
+            verification="ephemeral run of that image in the runner: smoke test (PostgreSQL 18) and end-to-end (agent → API → alert) passed"
+          else
+            verification="**skipped** (\`ENABLE_API_IMAGE\` is off: no image to verify)"
+          fi
+          if [ "$PRODUCCION" = success ]; then
+            produccion="\`desplegar-api\` sent to Te-Tengo-Tech/te-tengo-infra with \`$SHA_TAG\`; the deploy waits for approval on its \`produccion\` environment"
+          else
+            produccion="**not requested** (\`ENABLE_API_DEPLOY\` or \`ENABLE_API_IMAGE\` is off)"
+          fi
+          cat > "$body" <<EOF
+          Release **$VERSION** of te-tengo-general-api from \`$GITHUB_REF_NAME\` at $GITHUB_SHA.
+
+          | Stage | What happened |
+          |---|---|
+          | Build | $image |
+          | Verification | $verification |
+          | Produccion | $produccion |
+
+          Merging this pull request tags \`v$VERSION\`, creates the GitHub Release from CHANGELOG.md and adds the tags \`$VERSION\` and \`latest\` to the same image (etiquetar.yml), then opens the back-merge into \`develop\`. Nothing is deployed on \`main\`.
+
+          Pipeline run: $RUN_URL
+          EOF
+          number=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --base main --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh pr edit "$number" -R "$GITHUB_REPOSITORY" --body-file "$body"
+            echo "Updated the description of pull request #$number." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            url=$(gh pr create -R "$GITHUB_REPOSITORY" --base main --head "$GITHUB_REF_NAME" --title "release: $VERSION" --body-file "$body")
+            echo "Opened $url" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi

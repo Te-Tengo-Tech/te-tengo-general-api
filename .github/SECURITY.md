@@ -35,7 +35,7 @@ We acknowledge reports within **72 hours** and aim to fix confirmed issues withi
 | Dependabot version updates (Gradle, GitHub Actions) | [`dependabot.yml`](dependabot.yml) | Weekly, PRs to `develop` |
 | OWASP Dependency-Check (NVD, runtime dependencies, fails on CVSS ≥ 7.0) | [`workflows/owasp.yml`](workflows/owasp.yml) | Weekly and on demand; needs the `NVD_API_KEY` secret, otherwise it is skipped with a notice |
 | OSV-Scanner (all resolved Gradle dependencies, fails on high or critical) | [`workflows/osv-scanner.yml`](workflows/osv-scanner.yml) | Weekly, on demand, and report-only on PRs that change the build |
-| Unit, integration, architecture tests and the coverage gate | [`workflows/ci.yml`](workflows/ci.yml) | Every push to `main`/`develop` and every PR |
+| Unit, integration, architecture tests and the coverage gate | [`workflows/ci.yml`](workflows/ci.yml) | Every push to `main`/`develop`/`release/**`/`hotfix/**` and every PR |
 
 Reports are uploaded as workflow artifacts and summarised on the run page.
 

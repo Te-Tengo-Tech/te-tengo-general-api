@@ -2,14 +2,33 @@ name: End-to-end
 
 # Smoke test of the agent ↔ API contract (scripts/e2e.sh): the real desktop agent, headless, plays a
 # URFD fall clip against this API on an isolated stack, and the test asserts the CAIDA alert, its
-# push, its confirmation and its clip in Floci's S3. The desktop agent repository is private: the
-# job needs the E2E_REPO_TOKEN secret to check it out, and is skipped with a notice without it.
+# push, its confirmation and its clip in Floci's S3. The desktop agent repository is public, so the
+# workflow's own token checks it out; the E2E_REPO_TOKEN secret (read-only Contents) is only needed
+# if that repository becomes private again.
+# With an `imagen` input the API runs from that container image instead of a jar built here: the
+# Release workflow calls this workflow in its verification stage with the image it pushed, by digest.
 on:
+  workflow_call:
+    inputs:
+      imagen:
+        description: API container image to test (by digest), instead of building the jar
+        type: string
+        required: true
+      escritorio_ref:
+        description: Branch, tag or commit of te-tengo-desktop-pywebview
+        type: string
+        default: develop
+    secrets:
+      E2E_REPO_TOKEN:
+        required: false
   workflow_dispatch:
     inputs:
       escritorio_ref:
         description: Branch, tag or commit of te-tengo-desktop-pywebview
         default: develop
+      imagen:
+        description: Optional API image to test instead of the jar (e.g. ghcr.io/te-tengo-tech/te-tengo-general-api:sha-1a2b3c4)
+        default: ""
   schedule:
     - cron: "0 9 * * 3" # Wednesdays 09:00 UTC (scheduled runs use the default branch)
   pull_request:
@@ -31,98 +50,96 @@ permissions:
 
 concurrency:
   group: e2e-${{ github.ref }}
-  cancel-in-progress: true
+  # A release's verification run (called from Release on a push) is never cancelled; the others are superseded.
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   e2e:
-    name: Agent → API → alert
+    name: Agent → API → alert${{ inputs.imagen && ' (container image)' || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      # Pulls inputs.imagen from GHCR (a private package needs it).
+      packages: read
     env:
-      E2E_REPO_TOKEN: ${{ secrets.E2E_REPO_TOKEN }}
       ESCRITORIO_REF: ${{ inputs.escritorio_ref || 'develop' }}
+      IMAGEN: ${{ inputs.imagen }}
     steps:
-      - name: Check for the desktop repository token
-        id: token
-        run: |
-          if [ -z "$E2E_REPO_TOKEN" ]; then
-            echo "::notice title=End-to-end test skipped::Add the E2E_REPO_TOKEN repository secret to run it: a fine-grained personal access token with read-only Contents access to Te-Tengo-Tech/te-tengo-desktop-pywebview (Settings → Secrets and variables → Actions). The agent repository is private, so this workflow cannot check it out without one."
-            {
-              echo "### End-to-end test skipped"
-              echo "The \`E2E_REPO_TOKEN\` secret is not set: a fine-grained token with read-only *Contents* access to \`Te-Tengo-Tech/te-tengo-desktop-pywebview\`. Locally: \`scripts/e2e.sh\` (README)."
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "present=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          fi
       - uses: actions/checkout@v7
-        if: steps.token.outputs.present == 'true'
         with:
           path: te-tengo-general-api
+          persist-credentials: false
       - name: Check out the desktop agent (${{ env.ESCRITORIO_REF }})
-        if: steps.token.outputs.present == 'true'
         uses: actions/checkout@v7
         with:
           repository: Te-Tengo-Tech/te-tengo-desktop-pywebview
           ref: ${{ env.ESCRITORIO_REF }}
-          token: ${{ secrets.E2E_REPO_TOKEN }}
+          token: ${{ secrets.E2E_REPO_TOKEN || github.token }}
           path: te-tengo-desktop-pywebview
           persist-credentials: false
       - uses: actions/setup-java@v6
-        if: steps.token.outputs.present == 'true'
+        if: env.IMAGEN == ''
         with:
           distribution: temurin
           java-version: "25"
       - uses: gradle/actions/setup-gradle@v6
-        if: steps.token.outputs.present == 'true'
+        if: env.IMAGEN == ''
+      - name: Log in to GHCR
+        if: env.IMAGEN != ''
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull the API image
+        if: env.IMAGEN != ''
+        run: docker pull "$IMAGEN"
       - uses: astral-sh/setup-uv@v10.2.0
-        if: steps.token.outputs.present == 'true'
         with:
           enable-cache: true
           cache-dependency-glob: te-tengo-desktop-pywebview/uv.lock
       - name: System libraries for MediaPipe on Linux (OpenGL ES and EGL, even on CPU)
-        if: steps.token.outputs.present == 'true'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgles2 libegl1
       - name: Download the MediaPipe model
-        if: steps.token.outputs.present == 'true'
         working-directory: te-tengo-desktop-pywebview
         run: ./scripts/descargar_modelo.sh
       - name: Cache the URFD fall clip
-        if: steps.token.outputs.present == 'true'
         id: clip
         uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/urfd
           key: urfd-fall-03-cam0
       - name: Download the URFD fall clip
-        if: steps.token.outputs.present == 'true' && steps.clip.outputs.cache-hit != 'true'
+        if: steps.clip.outputs.cache-hit != 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/urfd"
           curl -fsSL --retry 3 -o "$RUNNER_TEMP/urfd/fall-03-cam0.mp4" \
             https://fenix.ur.edu.pl/~mkepski/ds/data/fall-03-cam0.mp4
       - name: Run the end-to-end test
-        if: steps.token.outputs.present == 'true'
         working-directory: te-tengo-general-api
         env:
           TT_E2E_ESCRITORIO: ../te-tengo-desktop-pywebview
           TT_E2E_VIDEO: ${{ runner.temp }}/urfd/fall-03-cam0.mp4
           TT_E2E_DIR: ${{ runner.temp }}/e2e
           TT_E2E_ESPERA: "180"
+          TT_E2E_IMAGEN: ${{ env.IMAGEN }}
         run: ./scripts/e2e.sh
       - name: Summary
-        if: always() && steps.token.outputs.present == 'true'
+        if: always()
         run: |
           {
             echo "## End-to-end (desktop agent \`$ESCRITORIO_REF\`)"
+            if [ -n "$IMAGEN" ]; then echo "API run from the image \`$IMAGEN\`."; else echo "API run from the jar built from this commit."; fi
             echo '```'
             cat "$RUNNER_TEMP/e2e/resumen.txt" 2>/dev/null || echo "No summary: the test did not start."
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload logs
-        if: always() && steps.token.outputs.present == 'true'
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-logs
+          name: e2e-logs${{ inputs.imagen && '-imagen' || '' }}
           # Logs only: the work directory also holds the throwaway JWT keys and agent credential.
           path: |
             ${{ runner.temp }}/e2e/*.log
