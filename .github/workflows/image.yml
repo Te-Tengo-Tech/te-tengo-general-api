@@ -2,10 +2,11 @@ name: Container image
 
 # Builds the API image (Dockerfile) for linux/amd64 (the production Azure VM) and linux/arm64 (the
 # inactive OCI and AWS alternatives), and smoke-tests the amd64 image against PostgreSQL
-# (scripts/smoke-image.sh). Pull requests only build and test. Releases are published by the Release
-# workflow (release.yml) from release/* and hotfix/* branches, never from main: there are no deploys on
-# main. A manual run with `push: true` pushes a one-off image (tags sha-<commit> and the branch name)
-# for tests; it is never deployed by itself. Pushing uses the workflow's own GITHUB_TOKEN.
+# (scripts/smoke-image.sh). Pull requests only build and test. Release candidates (x.y.z-rc.N) are built
+# once by the Release workflow (release.yml) on release/* and hotfix/* branches, and the Produccion workflow
+# (produccion.yml) deploys and re-tags that same digest after the merge to main. A manual run with
+# `push: true` pushes a one-off image (tags sha-<commit> and the branch name) for tests; it is never
+# deployed by itself. Pushing uses the workflow's own GITHUB_TOKEN.
 #
 # Switch (organization variable, Te-Tengo-Tech → Settings → Secrets and variables → Actions →
 # Variables; explicit opt-in, unset means off). The build and smoke test always run.
@@ -118,5 +119,5 @@ jobs:
             if [ "$WANTS_PUSH" = true ] && [ "$ENABLE_API_IMAGE" != true ]; then
               echo "- Push to GHCR: **off**, skipped (organization variable \`ENABLE_API_IMAGE\` is not \`true\`)."
             fi
-            echo "- Releases are built, staged and deployed by the **Release** workflow from \`release/*\` and \`hotfix/*\` branches (docs/DEPLOYMENT.md)."
+            echo "- Release candidates are built once by the **Release** workflow on \`release/*\` and \`hotfix/*\` branches and deployed by **Produccion** after the merge to \`main\` (docs/DEPLOYMENT.md)."
           } >> "$GITHUB_STEP_SUMMARY"
