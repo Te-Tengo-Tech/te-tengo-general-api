@@ -63,14 +63,14 @@ TT_CLIPS_SECRET_KEY=<R2 API token secret access key>
 | Trigger | What happens |
 |---|---|
 | Pull request touching the image inputs | Builds the amd64 image and smoke-tests it (it must migrate an empty PostgreSQL 18, report healthy and not run as root), then builds both platforms. Nothing is pushed |
-| **Push to `main`** (a merged `release/*` or `hotfix/*`) | Same build and smoke test, then pushes `sha-<short commit>`, `main` and the application version of `build.gradle.kts` (e.g. `0.1.0`), and **requests the production deploy** (below) |
+| **Push to `main`** (a merged `release/*` or `hotfix/*`) | Same build and smoke test, then pushes `sha-<short commit>`, `main` and the application version of `build.gradle.kts` (e.g. `0.2.0`), and **requests the production deploy** (below) |
 | Tag `api-v<version>`, e.g. `api-v0.2.0` | Pushes `0.2.0`, `0.2`, `latest` and `sha-<short commit>`; no deploy |
 | Manual run (*Actions → Container image → Run workflow*) | Same build; with **push** checked, pushes `sha-<short commit>` and `<branch>`; no deploy |
 
 - **Order.** The smoke test runs before the push, so a broken image is never published.
 - **Authentication.** Pushing uses the workflow's own `GITHUB_TOKEN` (`packages: write`), so no secret is needed for the image.
 - **Labels.** `docker/metadata-action` adds the OCI labels: source, revision, version and creation date. The `org.opencontainers.image.source` label links the package to this repository.
-- **Version tag.** `0.1.0` is re-pushed by every push to `main` while `build.gradle.kts` keeps that version, so it is a moving tag: bump `version` in each `release/*` branch. Production deploys always use the immutable `sha-<short commit>` tag.
+- **Version tag.** `0.2.0` is re-pushed by every push to `main` while `build.gradle.kts` keeps that version, so it is a moving tag: bump `version` in each `release/*` branch. Production deploys always use the immutable `sha-<short commit>` tag.
 
 ## Continuous deployment (push to `main` → approval → Azure VM)
 ```

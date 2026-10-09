@@ -3,6 +3,8 @@
 Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+
+## [0.2.0] - 2026-10-08
 ### Added
 - Continuous deployment: a push to `main` smoke-tests the image before pushing it to GHCR (`sha-<short commit>`, `main` and the `build.gradle.kts` version), then sends `repository_dispatch` `desplegar-api` with that `sha-` tag to `te-tengo-infra`, whose deploy waits for approval on its `produccion` environment. Needs the `DISPATCH_TOKEN` secret (skipped with a notice without it) and a public GHCR package (docs/DEPLOYMENT.md). The `sha-` tag is now the short commit.
 - Web client (the app's PWA build, served from any configured origin, e.g. Cloudflare Pages):
