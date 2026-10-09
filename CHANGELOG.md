@@ -4,6 +4,7 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 ### Added
+- Publishing switches: organization Actions variables, explicit opt-in (`true` turns a channel on, unset means off). `ENABLE_API_IMAGE` gates pushing the image to GHCR (main, tags and manual runs; the pull request build and smoke test always run); `ENABLE_API_DEPLOY` (together with `ENABLE_API_IMAGE`) gates the `desplegar-api` dispatch to `te-tengo-infra`. The image summary says when a switch is off. Table in `docs/DEPLOYMENT.md`.
 - Continuous deployment: a push to `main` smoke-tests the image before pushing it to GHCR (`sha-<short commit>`, `main` and the `build.gradle.kts` version), then sends `repository_dispatch` `desplegar-api` with that `sha-` tag to `te-tengo-infra`, whose deploy waits for approval on its `produccion` environment. Needs the `DISPATCH_TOKEN` secret (skipped with a notice without it) and a public GHCR package (docs/DEPLOYMENT.md). The `sha-` tag is now the short commit.
 - Web client (the app's PWA build, served from any configured origin, e.g. Cloudflare Pages):
   - CORS for `/api/**` with the origins of `TT_CORS_ORIGENES` (patterns allowed; off when empty, the default; `http://localhost:*` with the `local` profile), handled by Spring Security before authentication so preflights work; allowed headers `Authorization`, `Api-Version`, `Content-Type`, exposed `WWW-Authenticate`.

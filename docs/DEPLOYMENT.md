@@ -63,7 +63,7 @@ TT_CLIPS_SECRET_KEY=<R2 API token secret access key>
 | Trigger | What happens |
 |---|---|
 | Pull request touching the image inputs | Builds the amd64 image and smoke-tests it (it must migrate an empty PostgreSQL 18, report healthy and not run as root), then builds both platforms. Nothing is pushed |
-| **Push to `main`** (a merged `release/*` or `hotfix/*`) | Same build and smoke test, then pushes `sha-<short commit>`, `main` and the application version of `build.gradle.kts` (e.g. `0.1.0`), and **requests the production deploy** (below) |
+| **Push to `main`** (a merged `release/*` or `hotfix/*`) | Same build and smoke test, then, with the switches on (see *Switches*), pushes `sha-<short commit>`, `main` and the application version of `build.gradle.kts` (e.g. `0.1.0`), and **requests the production deploy** (below) |
 | Tag `api-v<version>`, e.g. `api-v0.2.0` | Pushes `0.2.0`, `0.2`, `latest` and `sha-<short commit>`; no deploy |
 | Manual run (*Actions → Container image → Run workflow*) | Same build; with **push** checked, pushes `sha-<short commit>` and `<branch>`; no deploy |
 
@@ -71,6 +71,14 @@ TT_CLIPS_SECRET_KEY=<R2 API token secret access key>
 - **Authentication.** Pushing uses the workflow's own `GITHUB_TOKEN` (`packages: write`), so no secret is needed for the image.
 - **Labels.** `docker/metadata-action` adds the OCI labels: source, revision, version and creation date. The `org.opencontainers.image.source` label links the package to this repository.
 - **Version tag.** `0.1.0` is re-pushed by every push to `main` while `build.gradle.kts` keeps that version, so it is a moving tag: bump `version` in each `release/*` branch. Production deploys always use the immutable `sha-<short commit>` tag.
+
+### Switches
+Each publishing channel has an on/off switch: an **organization** Actions variable of `Te-Tengo-Tech` (*Settings → Secrets and variables → Actions → Variables*), the single control panel for every repository. They are explicit opt-in: only the value `true` turns a channel on, and an unset variable means off. The pull request build and smoke test always run. A channel that is off is skipped and the run summary says why; with the switches on, the deploy still waits for an approval on infra's `produccion` environment.
+
+| Variable | What it controls | Suggested value |
+|---|---|---|
+| `ENABLE_API_IMAGE` | Pushing the image to `ghcr.io/te-tengo-tech/te-tengo-general-api` (push to `main`, `api-v*` tags and manual runs with *push*). Off: the image is only built and smoke-tested | `true` |
+| `ENABLE_API_DEPLOY` | The *Request the production deploy* job (`repository_dispatch` `desplegar-api` to `te-tengo-infra`); it also needs `ENABLE_API_IMAGE`, since otherwise there is no new image. `te-tengo-infra` gates its `Deploy` job with the same variable, so setting it to anything but `true` freezes production | `true` |
 
 ## Continuous deployment (push to `main` → approval → Azure VM)
 ```
@@ -82,6 +90,7 @@ release/* or hotfix/* ──merge──► main
                    ─► waits for a required reviewer to approve ─► Ansible app role over SSH
                    (te_tengo_api_source=registry, te_tengo_api_tag=sha-<short>) ─► /actuator/health is UP
 ```
+- **Switches.** The image push needs `ENABLE_API_IMAGE` and the dispatch needs `ENABLE_API_DEPLOY` as well (see *Switches* above).
 - **Approval lives in `te-tengo-infra`.** Pushing an image is not a deploy, so the job here uses no GitHub environment; this repository's `produccion` environment would only add a second, redundant approval. The infra workflow pauses on its own `produccion` environment before it touches the VM ([te-tengo-infra `docs/deploy.md`](https://github.com/Te-Tengo-Tech/te-tengo-infra/blob/main/docs/deploy.md)).
 - **Secret `DISPATCH_TOKEN`** (repository secret of this repository). A [fine-grained personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token): resource owner **Te-Tengo-Tech**, *Only select repositories* → `te-tengo-infra`, repository permission **Contents: Read and write** (the permission the [`POST /repos/{owner}/{repo}/dispatches`](https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event) endpoint requires, per [Permissions required for fine-grained personal access tokens](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens)); *Metadata: Read* is added automatically. Set an expiry and renew it. If the organization requires approval of fine-grained tokens, an owner approves it first. Without the secret the dispatch job ends with a notice and succeeds: the image is published and the deploy is started by hand (infra *Actions → Deploy → Run workflow* with the tag).
 - **The infra workflow must be on infra's `main`.** GitHub only starts a `repository_dispatch` workflow from the file on the default branch, and runs it on that branch ([Events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#repository_dispatch)).
