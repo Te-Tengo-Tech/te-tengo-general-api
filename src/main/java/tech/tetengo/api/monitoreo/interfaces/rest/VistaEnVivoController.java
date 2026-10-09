@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import tech.tetengo.api.monitoreo.application.AbrirVistaEnVivo;
 import tech.tetengo.api.monitoreo.application.CambiarModoDeVistaEnVivo;
 import tech.tetengo.api.monitoreo.application.CerrarVistaEnVivo;
+import tech.tetengo.api.monitoreo.application.PrepararVistaEnVivo;
 import tech.tetengo.api.monitoreo.application.SesionDeVistaEnVivo;
 import tech.tetengo.api.shared.infrastructure.security.UsuarioActual;
 import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
@@ -28,20 +29,33 @@ class VistaEnVivoController {
     private final AbrirVistaEnVivo abrirVistaEnVivo;
     private final CambiarModoDeVistaEnVivo cambiarModo;
     private final CerrarVistaEnVivo cerrarVistaEnVivo;
+    private final PrepararVistaEnVivo prepararVistaEnVivo;
 
     VistaEnVivoController(
             AbrirVistaEnVivo abrirVistaEnVivo,
             CambiarModoDeVistaEnVivo cambiarModo,
-            CerrarVistaEnVivo cerrarVistaEnVivo) {
+            CerrarVistaEnVivo cerrarVistaEnVivo,
+            PrepararVistaEnVivo prepararVistaEnVivo) {
         this.abrirVistaEnVivo = abrirVistaEnVivo;
         this.cambiarModo = cambiarModo;
         this.cerrarVistaEnVivo = cerrarVistaEnVivo;
+        this.prepararVistaEnVivo = prepararVistaEnVivo;
+    }
+
+    @Operation(
+            summary = "Prepare the live view of a camera",
+            description =
+                    "Body {camaraId}. The camera screen opened: the camera's agent warms up (nothing is published, no session is recorded), so a live view opened next starts sooner. 204. Errors: 400 VALIDACION (campos.camaraId), 404 CAMARA_NO_ENCONTRADA, 409 CAMARA_DESCONECTADA, 409 CAMARA_EN_PAUSA with pausadaHasta, 409 SIN_CONSENTIMIENTO.")
+    @PostMapping(path = API + "/vista-en-vivo/preparar", version = ApiVersioning.V1)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void preparar(@RequestBody(required = false) PrepararVistaEnVivoRequest pedido) {
+        prepararVistaEnVivo.ejecutar(pedido == null ? null : pedido.camaraId());
     }
 
     @Operation(
             summary = "Open the live view (US-23)",
             description =
-                    "Body {alertaId|null, modo?}. Returns {sesionId, urlTransmision, expiraEn, modo}: urlTransmision is the camera's LL-HLS playlist on MediaMTX with the session's viewer token (CA-23.1, CA-23.2). Errors: 400 VALIDACION (alertaId of another camera, unknown modo), 409 CAMARA_DESCONECTADA (CA-23.3), 409 CAMARA_EN_PAUSA with pausadaHasta (CA-23.4), 409 SIN_CONSENTIMIENTO.")
+                    "Body {alertaId|null, modo?}. Returns {sesionId, urlTransmision, urlWebrtc, expiraEn, modo}: urlTransmision is the camera's LL-HLS playlist on MediaMTX with the session's viewer token (CA-23.1, CA-23.2); urlWebrtc is the camera's WebRTC (WHEP) endpoint with the same token, or null when WebRTC playback is off. Errors: 400 VALIDACION (alertaId of another camera, unknown modo), 409 CAMARA_DESCONECTADA (CA-23.3), 409 CAMARA_EN_PAUSA with pausadaHasta (CA-23.4), 409 SIN_CONSENTIMIENTO.")
     @PostMapping(path = API + "/camaras/{id}/vista-en-vivo", version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.CREATED)
     SesionDeVistaEnVivoResponse abrir(
@@ -54,6 +68,7 @@ class VistaEnVivoController {
         return new SesionDeVistaEnVivoResponse(
                 sesion.sesionId(),
                 sesion.urlTransmision(),
+                sesion.urlWebrtc(),
                 sesion.expiraEn(),
                 sesion.modo().name());
     }

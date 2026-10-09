@@ -188,6 +188,35 @@ class TransmisionEnVivoIntegrationTest extends AbstractIntegrationTest {
         }
     }
 
+    private void preparar() throws Exception {
+        mvc.perform(post("/api/vista-en-vivo/preparar")
+                        .header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"camaraId\":\"%s\"}".formatted(camara)))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void alAbrirLaPantallaDeLaCamaraElAgenteRecibePrepararSinCredenciales() throws Exception {
+        preparar();
+        esperarMensajes(delAgente, 1);
+        assertThat(delAgente.textos).containsExactly("{\"preparar\":true}");
+
+        // The live view that follows starts as always.
+        abrir("{}");
+        esperarMensajes(delAgente, 2);
+        assertThat(campo(delAgente.ultimo(), "$.transmitir")).isEqualTo("true");
+    }
+
+    @Test
+    void mientrasLaCamaraTransmiteNoSeEnviaPreparar() throws Exception {
+        abrir("{}");
+        esperarMensajes(delAgente, 1);
+        preparar();
+        Thread.sleep(300);
+        assertThat(delAgente.textos).hasSize(1);
+    }
+
     @Test
     void sinSesionesAbiertasElAgenteQueSeConectaNoRecibeNada() throws Exception {
         Thread.sleep(300);

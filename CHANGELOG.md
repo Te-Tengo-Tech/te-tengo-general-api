@@ -3,6 +3,15 @@
 Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+### Added
+- Live view v3, WebRTC playback (ADR 0008): `POST /api/camaras/{id}/vista-en-vivo` also answers `urlWebrtc`, the camera's WHEP endpoint on MediaMTX with the session's viewer token in the query (`TT_VIVO_URL_WEBRTC`, e.g. `https://<host>/vivo-webrtc/camaras/{camaraId}/whep`; null when blank, the default, so the app keeps LL-HLS). `urlTransmision` (LL-HLS) stays as the fallback.
+- `POST /api/vista-en-vivo/preparar` (`{camaraId}` → `204`, same rules as opening a session): sends the new control message `{"preparar":true}` to the camera's agent, so it warms up capture and encoder (no frame leaves the PC) before `transmitir`; nothing is sent while the camera already streams. Earlier agents ignore it.
+- MediaMTX authorizes WebRTC reads (`protocol: webrtc`) with the same viewer token as HLS, taken from the query. The session job also counts WebRTC readers (`/v3/webrtc/sessions/list`, `outboundBytes`) as activity, and ending a session kicks its WebRTC readers too.
+- Local stack: `mediamtx.yml` turns WebRTC on (WHEP on 8889, ICE on 8189 UDP and TCP, `webrtcAdditionalHosts` 127.0.0.1); `compose.yaml` publishes them (`TT_MEDIAMTX_PUERTO_WEBRTC`, `TT_MEDIAMTX_PUERTO_ICE`, `TT_MEDIAMTX_WEBRTC_HOSTS`) and the `local` profile sets `urlWebrtc`. `MediaMtxIntegrationTest` posts an SDP offer to the real MediaMTX (`201` with the answer, `401` without the token) and `scripts/e2e.sh` checks WHEP too.
+- `docs/API_CONTRACT.md` (§4, playback, `preparar`) and `docs/AGENT_CONTRACT.md` (`preparar`, live view v3 video: Constrained Baseline, about 15 fps, keyframe every 0.5 s).
+
+### Changed
+- MediaMTX `read` requests are allowed only over HLS or WebRTC, the readers the API can find and end; a read over RTSP, RTMP or SRT with a viewer token is now denied.
 
 ## [0.2.0] - 2026-10-09
 ### Added

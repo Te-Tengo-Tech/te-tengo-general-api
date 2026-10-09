@@ -4,4 +4,5 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
 
-record SesionDeVistaEnVivoResponse(UUID sesionId, URI urlTransmision, Instant expiraEn, String modo) {}
+/** {@code urlWebrtc}: the WHEP endpoint with the viewer token, null when WebRTC playback is off. */
+record SesionDeVistaEnVivoResponse(UUID sesionId, URI urlTransmision, URI urlWebrtc, Instant expiraEn, String modo) {}

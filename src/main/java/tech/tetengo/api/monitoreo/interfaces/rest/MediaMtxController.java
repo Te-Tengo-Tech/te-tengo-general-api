@@ -30,7 +30,7 @@ class MediaMtxController {
     @Operation(
             summary = "Authorize a MediaMTX publish or read",
             description =
-                    "MediaMTX authMethod http. 200 allows: publish on camaras/<camaraId> as user agente with the transmission's publish token; read or playback with ?token=<viewer token> of an open session of that camera. 401 for anything else, or without the right secreto.")
+                    "MediaMTX authMethod http. 200 allows: publish on camaras/<camaraId> as user agente with the transmission's publish token; read over HLS or WebRTC (WHEP), or playback, with ?token=<viewer token> of an open session of that camera. 401 for anything else, or without the right secreto.")
     @SecurityRequirements
     @PostMapping(path = ApiVersioning.BASE + "/interno/mediamtx/autorizar", version = ApiVersioning.V1)
     ResponseEntity<Void> autorizar(
@@ -40,7 +40,12 @@ class MediaMtxController {
                 && autorizar.ejecutar(
                         secreto,
                         new PeticionDeMediaMtx(
-                                pedido.action(), pedido.user(), pedido.password(), pedido.path(), pedido.query()));
+                                pedido.action(),
+                                pedido.user(),
+                                pedido.password(),
+                                pedido.path(),
+                                pedido.query(),
+                                pedido.protocol()));
         return ResponseEntity.status(permitido ? HttpStatus.OK : HttpStatus.UNAUTHORIZED)
                 .build();
     }

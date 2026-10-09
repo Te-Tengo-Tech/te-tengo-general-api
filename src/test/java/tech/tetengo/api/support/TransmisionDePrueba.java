@@ -7,8 +7,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import tech.tetengo.api.monitoreo.application.port.ServicioDeTransmision;
 
 /**
- * MediaMTX for tests: records which cameras and viewers were kicked out, and serves the HLS readers the
- * test declares. The real adapter has its own test against a MediaMTX container.
+ * MediaMTX for tests: records which cameras and viewers were kicked out, and serves the HLS and WebRTC readers
+ * the test declares. The real adapter has its own test against a MediaMTX container.
  */
 public class TransmisionDePrueba implements ServicioDeTransmision {
 
@@ -31,10 +31,15 @@ public class TransmisionDePrueba implements ServicioDeTransmision {
         lectoresExpulsados.addAll(huellasDeToken);
     }
 
-    /** A viewer reading the camera with that token, having received {@code bytes} so far. */
+    /** An HLS viewer reading the camera with that token, having received {@code bytes} so far. */
     public void leyendo(String id, UUID camaraId, String huellaToken, long bytes) {
+        leyendo(id, Lector.HLS, camaraId, huellaToken, bytes);
+    }
+
+    /** A viewer of that kind ({@link Lector#HLS} or {@link Lector#WEBRTC}) reading the camera. */
+    public void leyendo(String id, String tipo, UUID camaraId, String huellaToken, long bytes) {
         lectores.removeIf(lector -> lector.id().equals(id));
-        lectores.add(new Lector(id, camaraId, huellaToken, bytes));
+        lectores.add(new Lector(id, tipo, camaraId, huellaToken, bytes));
     }
 
     public List<UUID> camarasExpulsadas() {

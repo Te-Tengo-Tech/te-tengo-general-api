@@ -131,6 +131,10 @@ tetengo:
     # this shared secret; blank denies everything (the `local` profile sets one).
     url-publicacion: ${TT_VIVO_URL_PUBLICACION:rtsp://localhost:8554/camaras/{camaraId}}
     url-hls: ${TT_VIVO_URL_HLS:http://localhost:8888}
+    # WebRTC (WHEP) endpoint of a camera ({camaraId} is replaced), returned as the session's urlWebrtc with
+    # ?token=<viewer token>; https://<host>/vivo-webrtc/camaras/{camaraId}/whep in production. Blank: no
+    # WebRTC playback (urlWebrtc null, the app plays LL-HLS).
+    url-webrtc: ${TT_VIVO_URL_WEBRTC:}
     mediamtx-api: ${TT_VIVO_MEDIAMTX_API:http://localhost:9997}
     secreto-autorizacion: ${TT_VIVO_SECRETO_AUTORIZACION:}
     # Implementation choices: a session ends when its viewer has not read for 30 s, and lasts 10 min at

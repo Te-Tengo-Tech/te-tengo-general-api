@@ -26,7 +26,7 @@ It receives the events detected by the household agent and serves the family mem
 - E-mail and push: sent e-mails are listed at http://localhost:4566/_aws/ses and captured pushes at http://localhost:4566/_aws/sns/push-notifications. To see pushes on the iOS simulator or real phones, see [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md).
 - Live view: [MediaMTX](https://github.com/bluenviron/mediamtx), configured by `mediamtx.yml` ([ADR 0007](docs/adr/0007-live-view-through-mediamtx.md)):
   - the agent publishes RTSP to `rtsp://localhost:8554/camaras/<camaraId>`;
-  - the app plays LL-HLS from `http://localhost:8888/…`;
+  - the app plays WebRTC (WHEP) from `http://localhost:8889/camaras/<camaraId>/whep?token=…` (media over ICE on 8189, UDP and TCP), or LL-HLS from `http://localhost:8888/…` as the fallback ([ADR 0008](docs/adr/0008-live-view-webrtc-whep.md)). To watch from a phone on the same network, set `TT_MEDIAMTX_WEBRTC_HOSTS` to the Mac's LAN address and `TT_VIVO_URL_WEBRTC` to `http://<that address>:8889/camaras/{camaraId}/whep`;
   - its control API listens on `127.0.0.1:9997` only;
   - every publish and read is authorized by this API on the host (`host.docker.internal:8080`; another port: `TT_API_PUERTO`).
 To try the three apps together, seed the prototype's demo household (account, household, consent and one agent installation) into the running API. With a path, the script also writes the desktop agent's configuration:
@@ -73,11 +73,14 @@ To try the three apps together, seed the prototype's demo household (account, ho
 | `TT_POSTGRES_PUERTO` | Host port of PostgreSQL in `compose.yaml` (`0`: a free port, found by Spring Boot) | `0` |
 | `TT_VIVO_URL_PUBLICACION` | Live view: where the agent publishes; `{camaraId}` is replaced (`rtsps://<host>:8322/…` in production) | `rtsp://localhost:8554/camaras/{camaraId}` |
 | `TT_VIVO_URL_HLS` | Live view: base of the app's `urlTransmision` (LL-HLS; `https://<host>/vivo` in production) | `http://localhost:8888` |
+| `TT_VIVO_URL_WEBRTC` | Live view v3: WebRTC (WHEP) endpoint of a camera, `{camaraId}` is replaced; the session's `urlWebrtc` adds `?token=<viewer token>` (`https://<host>/vivo-webrtc/camaras/{camaraId}/whep` in production). Blank turns WebRTC off (`urlWebrtc: null`) | blank; `http://localhost:8889/camaras/{camaraId}/whep` with the `local` profile |
 | `TT_VIVO_MEDIAMTX_API` | MediaMTX control API, used to kick clients and see who is reading; never expose it | `http://localhost:9997` |
 | `TT_VIVO_SECRETO_AUTORIZACION` | Shared secret of MediaMTX's authorization hook (`compose.yaml` passes the same value to MediaMTX); blank denies every publish and read | — (`secreto-local-de-vista-en-vivo` with the `local` profile) |
 | `TT_API_PUERTO` | Port of the API on the host that MediaMTX's hook calls (`compose.yaml` only) | `8080` |
-| `TT_MEDIAMTX_PUERTO_RTSP` / `TT_MEDIAMTX_PUERTO_HLS` / `TT_MEDIAMTX_PUERTO_API` | Host ports of MediaMTX in `compose.yaml` (the API one bound to 127.0.0.1) | `8554` / `8888` / `9997` |
-| `TT_MEDIAMTX_HLS_ORIGENES` | Origins whose browser pages may read HLS (the PWA), comma-separated; `compose.yaml` passes it to MediaMTX as `MTX_HLSALLOWORIGINS` (`hlsAllowOrigins`). Production sets the same variable on its MediaMTX with the PWA's origin, e.g. `MTX_HLSALLOWORIGINS=https://te-tengo.pages.dev` | `*` |
+| `TT_MEDIAMTX_PUERTO_RTSP` / `TT_MEDIAMTX_PUERTO_HLS` / `TT_MEDIAMTX_PUERTO_WEBRTC` / `TT_MEDIAMTX_PUERTO_API` | Host ports of MediaMTX in `compose.yaml` (the API one bound to 127.0.0.1) | `8554` / `8888` / `8889` / `9997` |
+| `TT_MEDIAMTX_PUERTO_ICE` | WebRTC media port (ICE, UDP and TCP) of MediaMTX in `compose.yaml`, the same number inside and outside the container because the ICE candidates announce it | `8189` |
+| `TT_MEDIAMTX_WEBRTC_HOSTS` | Addresses MediaMTX announces in its ICE candidates, comma-separated (`webrtcAdditionalHosts`); add the Mac's LAN address to watch from a phone | `127.0.0.1` |
+| `TT_MEDIAMTX_HLS_ORIGENES` | Origins whose browser pages may read HLS and WebRTC (the PWA), comma-separated; `compose.yaml` passes it to MediaMTX as `MTX_HLSALLOWORIGINS` and `MTX_WEBRTCALLOWORIGINS` (`hlsAllowOrigins`, `webrtcAllowOrigins`). Production sets the same variable on its MediaMTX with the PWA's origin, e.g. `MTX_HLSALLOWORIGINS=https://te-tengo.pages.dev` | `*` |
 
 ## Tests
 ```bash

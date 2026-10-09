@@ -53,29 +53,46 @@ public class AbrirVistaEnVivo {
     public SesionDeVistaEnVivo ejecutar(UUID camaraId, UUID usuarioId, UUID alertaId, String modo) {
         ModoDeVista pedido = modo == null ? null : CambiarModoDeVistaEnVivo.modo(modo);
         Instant ahora = reloj.instant();
-        EstadoDeCamara camara =
-                camaras.estado(camaraId).orElseThrow(() -> new ErrorDeNegocio(MonitoreoError.CAMARA_NO_ENCONTRADA));
+        EstadoDeCamara camara = estado(camaras, camaraId);
         if (alertaId != null && !alertas.esDeLaCamara(alertaId, camaraId)) {
             throw new ErrorDeNegocio(
                     MonitoreoError.VALIDACION, Map.of("campos", Map.of("alertaId", "La alerta no es de esta cámara.")));
         }
-        if ("DESCONECTADA".equals(camara.estadoConexion())) {
-            throw new ErrorDeNegocio(MonitoreoError.CAMARA_DESCONECTADA);
-        }
-        if (camara.pausadaHasta() != null && ahora.isBefore(camara.pausadaHasta())) {
-            throw new ErrorDeNegocio(MonitoreoError.CAMARA_EN_PAUSA, Map.of("pausadaHasta", camara.pausadaHasta()));
-        }
-        boolean capturaPermitida =
-                camaras.buscar(camaraId).map(CamaraDelHogar::capturaPermitida).orElse(false);
-        if (!capturaPermitida) {
-            throw new ErrorDeNegocio(MonitoreoError.SIN_CONSENTIMIENTO);
-        }
+        verificarDisponible(camaras, camara, ahora);
         transmisiones.bloquear(camaraId);
         String token = Secretos.generar();
         AccesoVistaEnVivo acceso = accesos.guardar(new AccesoVistaEnVivo(
                 camaraId, usuarioId, alertaId, ahora, propiedades.duracionMaxima(), Secretos.huella(token)));
         ModoDeVista modoDelStream = transmisiones.asegurar(camaraId, pedido, ahora);
         return new SesionDeVistaEnVivo(
-                acceso.getId(), propiedades.urlTransmisionDe(camaraId, token), acceso.getExpiraEn(), modoDelStream);
+                acceso.getId(),
+                propiedades.urlTransmisionDe(camaraId, token),
+                propiedades.urlWebrtcDe(camaraId, token).orElse(null),
+                acceso.getExpiraEn(),
+                modoDelStream);
+    }
+
+    /** The camera of the household, or {@code 404 CAMARA_NO_ENCONTRADA}. */
+    static EstadoDeCamara estado(CamarasDelHogar camaras, UUID camaraId) {
+        return camaras.estado(camaraId).orElseThrow(() -> new ErrorDeNegocio(MonitoreoError.CAMARA_NO_ENCONTRADA));
+    }
+
+    /**
+     * The camera may stream now: connected (CA-23.3), not paused (CA-23.4, with {@code pausadaHasta}) and with
+     * the older adult's consent (CA-05.2); otherwise the matching {@code 409}.
+     */
+    static void verificarDisponible(CamarasDelHogar camaras, EstadoDeCamara camara, Instant ahora) {
+        if ("DESCONECTADA".equals(camara.estadoConexion())) {
+            throw new ErrorDeNegocio(MonitoreoError.CAMARA_DESCONECTADA);
+        }
+        if (camara.pausadaHasta() != null && ahora.isBefore(camara.pausadaHasta())) {
+            throw new ErrorDeNegocio(MonitoreoError.CAMARA_EN_PAUSA, Map.of("pausadaHasta", camara.pausadaHasta()));
+        }
+        boolean capturaPermitida = camaras.buscar(camara.id())
+                .map(CamaraDelHogar::capturaPermitida)
+                .orElse(false);
+        if (!capturaPermitida) {
+            throw new ErrorDeNegocio(MonitoreoError.SIN_CONSENTIMIENTO);
+        }
     }
 }

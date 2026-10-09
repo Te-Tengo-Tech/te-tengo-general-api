@@ -62,6 +62,7 @@ class CanalDelAgenteWebSocket implements CanalDelAgente {
     static String json(Mensaje mensaje) {
         Map<String, Object> cuerpo = new LinkedHashMap<>();
         switch (mensaje) {
+            case Preparar p -> cuerpo.put("preparar", true);
             case Transmitir t -> {
                 cuerpo.put("transmitir", true);
                 cuerpo.put("urlPublicacion", t.urlPublicacion().toString());

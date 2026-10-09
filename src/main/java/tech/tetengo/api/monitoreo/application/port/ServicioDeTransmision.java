@@ -11,7 +11,7 @@ import java.util.UUID;
  */
 public interface ServicioDeTransmision {
 
-    /** Viewers currently reading camera paths over HLS. Empty when the service cannot be reached. */
+    /** Viewers currently reading camera paths over HLS or WebRTC. Empty when the service cannot be reached. */
     List<Lector> lectores();
 
     /** Disconnects the camera's publisher and every reader of its path. */
@@ -21,9 +21,14 @@ public interface ServicioDeTransmision {
     void expulsarLectores(Collection<String> huellasDeToken);
 
     /**
-     * @param id MediaMTX's id of the HLS session
+     * @param id MediaMTX's id of the HLS or WebRTC session
+     * @param tipo {@code hlsSession} or {@code webRTCSession}, MediaMTX's names (how it is kicked)
      * @param huellaToken SHA-256 of the viewer token it was opened with, or null
      * @param bytesEnviados bytes sent so far: it grows while the viewer keeps reading
      */
-    record Lector(String id, UUID camaraId, String huellaToken, long bytesEnviados) {}
+    record Lector(String id, String tipo, UUID camaraId, String huellaToken, long bytesEnviados) {
+
+        public static final String HLS = "hlsSession";
+        public static final String WEBRTC = "webRTCSession";
+    }
 }
