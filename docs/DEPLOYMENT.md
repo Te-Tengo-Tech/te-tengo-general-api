@@ -60,16 +60,15 @@ TT_CLIPS_SECRET_KEY=<R2 API token secret access key>
 - **Locally nothing changes:** the `local` profile keeps Floci's S3 on port 4566.
 
 ## Release flow (build once, deploy many)
-Releases follow git flow and are promoted **from the release branch**: the image is built once, the same image (by digest) goes through staging and production, and `main` and the tag come **last**, after production was approved. Nothing is built or deployed on a push to `main`.
+Releases follow git flow and are promoted **from the release branch**: the image is built once, the same image (by digest) is verified in an ephemeral stack and then deployed to production, and `main` and the tag come **last**, after production was approved. Nothing is built or deployed on a push to `main`. The API has **no staging environment** (there is no second VM): the verification is automatic, and production has the only approval, in `te-tengo-infra`.
 
 ```mermaid
 flowchart TD
   dev["develop<br/>CI only"] -->|"git flow: release/x.y.z or hotfix/x.y.z"| push["push to release/x.y.z<br/>(release.yml)"]
   push --> build["build<br/>image once: linux/amd64 + linux/arm64<br/>smoke test, push to GHCR<br/>sha-&lt;short&gt; + x.y.z-rc, digest"]
-  build -->|"ENABLE_STAGING"| staging["staging (environment staging, approval)<br/>pull the SAME image by digest<br/>smoke test with PostgreSQL 18"]
-  staging --> e2e["staging-e2e<br/>e2e.yml with the image:<br/>PostgreSQL, Floci, MediaMTX, desktop agent"]
+  build --> verify["verify (automatic, no approval)<br/>pull the SAME image by digest<br/>smoke test with PostgreSQL 18"]
+  verify --> e2e["verify-e2e<br/>e2e.yml with the image:<br/>PostgreSQL, Floci, MediaMTX, desktop agent"]
   e2e --> prod["produccion<br/>repository_dispatch desplegar-api<br/>{tag, digest, ref, version}"]
-  build -.->|"ENABLE_STAGING off"| prod
   prod --> infra["te-tengo-infra deploy.yml<br/>environment produccion (approval)<br/>Ansible app role over SSH, health UP"]
   prod --> pr["pull request release/x.y.z → main<br/>title release: x.y.z"]
   pr -->|"human merge"| main["push to main (etiquetar.yml)<br/>tag vX.Y.Z + GitHub Release<br/>image tags x.y.z + latest (same digest)<br/>back-merge PR main → develop"]
@@ -86,24 +85,23 @@ flowchart TD
 | Job | Environment | What it does |
 |---|---|---|
 | `build` | none | Reads `version` from `build.gradle.kts` (a warning if the branch name differs), builds the image **once** for both platforms, smoke-tests the amd64 image, pushes it to `ghcr.io/te-tengo-tech/te-tengo-general-api` as `sha-<short commit>` and `<version>-rc` and records its **digest**. Its summary lists every switch |
-| `staging` | `staging` (required reviewers) | An **ephemeral staging in the runner**: pulls the same image **by digest** (and checks the digest), starts it with PostgreSQL 18 and runs the smoke test |
-| `staging-e2e` | none (after `staging`) | Calls [`e2e.yml`](../.github/workflows/e2e.yml) with that image: `scripts/e2e.sh` with `TT_E2E_IMAGEN` runs the API container on the host network next to the `compose.yaml` stack (PostgreSQL, Floci, MediaMTX) and the real desktop agent, headless, and asserts the alert, its push, its confirmation, its clip and the live view authorization |
-| `produccion` | none (the approval is in `te-tengo-infra`) | Sends `repository_dispatch` `desplegar-api` to `te-tengo-infra` with `client_payload` `{tag: "sha-<short>", digest, ref: "<full commit>", version}`. Needs `staging` and `staging-e2e`, or only `build` when `ENABLE_STAGING` is off. Fails with a clear error without the `DISPATCH_TOKEN` secret |
+| `verify` (*Verify release image (ephemeral)*) | none, no approval | An **ephemeral run in the runner**: pulls the same image **by digest** (and checks the digest), starts it with PostgreSQL 18 and runs the smoke test. Always runs when the image was pushed |
+| `verify-e2e` | none (after `verify`) | Calls [`e2e.yml`](../.github/workflows/e2e.yml) with that image: `scripts/e2e.sh` with `TT_E2E_IMAGEN` runs the API container on the host network next to the `compose.yaml` stack (PostgreSQL, Floci, MediaMTX) and the real desktop agent, headless, and asserts the alert, its push, its confirmation, its clip and the live view authorization |
+| `produccion` | none (the approval is in `te-tengo-infra`) | Sends `repository_dispatch` `desplegar-api` to `te-tengo-infra` with `client_payload` `{tag: "sha-<short>", digest, ref: "<full commit>", version}`. Needs `verify` and `verify-e2e` to pass. Fails with a clear error without the `DISPATCH_TOKEN` secret |
 | `pull-request` | none | Opens the pull request `release/x.y.z → main` (title `release: x.y.z`) with `GITHUB_TOKEN`, listing what was deployed where, or updates its description when it is already open. Merging it is a human action (the `main` ruleset needs a review and the CI checks) |
 
 - **Required checks of the release pull request.** A pull request opened with `GITHUB_TOKEN` starts no `pull_request` workflow, so CI also runs on pushes to `release/**` and `hotfix/**`; its checks belong to the same commit and satisfy the `main` ruleset.
-- **Re-running.** A new push to the same release branch runs the pipeline again with a new image (new `sha-` tag; `<version>-rc` moves to it). Runs of one branch never overlap (concurrency group per branch) and a running one is never cancelled, since it may be deploying; a newer push waits and replaces an older run that has not started yet. A run still waiting for a staging approval can be rejected on its run page.
+- **Re-running.** A new push to the same release branch runs the pipeline again with a new image (new `sha-` tag; `<version>-rc` moves to it). Runs of one branch never overlap (concurrency group per branch) and a running one is never cancelled, since it may be deploying; a newer push waits and replaces an older run that has not started yet. The production approval itself happens in te-tengo-infra's Deploy run, where a reviewer can also reject it.
 - **Preparing a release.** Branch `release/x.y.z` from `develop`, set `version = "x.y.z"` in `build.gradle.kts` and rename `[Unreleased]` in `CHANGELOG.md` to `[x.y.z] - <date>` (that section becomes the GitHub Release notes), push. Hotfixes branch from `main` as `hotfix/x.y.z`.
 - **Authentication.** Pushing and tagging the image use the workflow's own `GITHUB_TOKEN` (`packages: write`); no secret is needed for the image. `docker/metadata-action` adds the OCI labels (source, revision, version, creation date); `org.opencontainers.image.source` links the package to this repository.
 - **Tags.** Production deploys use the immutable `sha-<short commit>` tag, and the digest travels with it. `<version>-rc` points to the latest image built from the release branch; `X.Y.Z` and `latest` are added on `main` to that same digest.
 
 ### Switches
-Each stage has an on/off switch: an **organization** Actions variable of `Te-Tengo-Tech` (*Settings → Secrets and variables → Actions → Variables*), the single control panel for every repository. They are explicit opt-in: only the value `true` turns a stage on, and an unset variable means off. The pull request build and smoke test always run. A stage that is off is skipped and the `build` job's summary says why; with the switches on, staging waits for an approval on this repository's `staging` environment and the deploy for one on infra's `produccion`.
+Each stage has an on/off switch: an **organization** Actions variable of `Te-Tengo-Tech` (*Settings → Secrets and variables → Actions → Variables*), the single control panel for every repository. They are explicit opt-in: only the value `true` turns a stage on, and an unset variable means off. The pull request build and smoke test always run. A stage that is off is skipped and the `build` job's summary says why. The verification jobs have no switch: they always run when there is an image. With the switches on, the deploy waits for an approval on infra's `produccion`.
 
 | Variable | What it controls | Suggested value |
 |---|---|---|
-| `ENABLE_API_IMAGE` | Pushing the release image to GHCR (and the manual push of `image.yml`, and the `X.Y.Z`/`latest` tags of `etiquetar.yml`). Off: the image is only built and smoke-tested, and staging and produccion are skipped (there is no image to pull) | `true` |
-| `ENABLE_STAGING` | The `staging` and `staging-e2e` jobs. Off: `produccion` only needs the build | `true` |
+| `ENABLE_API_IMAGE` | Pushing the release image to GHCR (and the manual push of `image.yml`, and the `X.Y.Z`/`latest` tags of `etiquetar.yml`). Off: the image is only built and smoke-tested, and the verification and produccion are skipped (there is no image to pull) | `true` |
 | `ENABLE_API_DEPLOY` | The `produccion` job (`repository_dispatch` `desplegar-api` to `te-tengo-infra`). `te-tengo-infra` gates its `Deploy` job with the same variable, so setting it to anything but `true` freezes production | `true` |
 
 ## Production deploy (release branch → approval in te-tengo-infra → Azure VM)
@@ -122,5 +120,5 @@ release.yml produccion: repository_dispatch "desplegar-api" to Te-Tengo-Tech/te-
 ### One-time steps after the first push
 1. **Check the link to this repository.** The `org.opencontainers.image.source` label links the package automatically: check the package page under the organization's *Packages* tab.
 2. **Make the package public, once.** The production VM pulls without credentials (`te_tengo_registry_auth: none` in `te-tengo-infra`). Although this repository is public, the package does **not** become public with it: GitHub's documentation says a package linked to a repository "inherits the access permissions (but not the visibility) of the linked repository", and that a newly published package is private ([Configuring a package's access control and visibility](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility)). So, after the first push: *github.com/orgs/Te-Tengo-Tech/packages/container/package/te-tengo-general-api → Package settings → Danger Zone → Change visibility → Public*, and confirm with the package name. An organization owner may first need to allow public packages (*Organization settings → Packages*). This cannot be undone: a public package cannot be made private again. Check it without credentials: `docker logout ghcr.io; docker pull ghcr.io/te-tengo-tech/te-tengo-general-api:<version>-rc`.
-   - Keeping it private instead means `te_tengo_registry_auth: login` with a `read:packages` token in the infra vault. The staging jobs here log in with `GITHUB_TOKEN`, so they work either way.
+   - Keeping it private instead means `te_tengo_registry_auth: login` with a `read:packages` token in the infra vault. The verification jobs here log in with `GITHUB_TOKEN`, so they work either way.
 3. **Pin the version on the server.** Deploys reference an immutable `sha-<short commit>` tag (or a release tag), never `:latest` or `:<version>-rc`, so a deployment is reproducible and can be rolled back.

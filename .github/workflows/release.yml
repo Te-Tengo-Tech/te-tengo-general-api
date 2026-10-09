@@ -5,10 +5,11 @@ run-name: Release ${{ github.ref_name }}
 # hotfix/x.y.z:
 #   1. build        builds the image once (linux/amd64 + linux/arm64), smoke-tests it and pushes it to GHCR as
 #                   sha-<short commit> and <version>-rc; the digest identifies it from here on. No environment.
-#   2. staging      environment `staging` (approval): an ephemeral staging in the runner. It pulls the SAME
-#                   image by digest and smoke-tests it against PostgreSQL 18 (scripts/smoke-image.sh); then
-#                   staging-e2e runs the End-to-end workflow (scripts/e2e.sh: PostgreSQL, Floci, MediaMTX
-#                   and the real desktop agent) against that image.
+#   2. verify       automatic verification, no environment and no approval (the API has no staging
+#                   environment: there is no second VM). It pulls the SAME image by digest into the runner and
+#                   smoke-tests it against PostgreSQL 18 (scripts/smoke-image.sh); then verify-e2e runs the
+#                   End-to-end workflow (scripts/e2e.sh: PostgreSQL, Floci, MediaMTX and the real desktop
+#                   agent) against that image. Always runs; produccion needs both.
 #   3. produccion   sends repository_dispatch `desplegar-api` to te-tengo-infra with the image tag and digest.
 #                   No environment here: the approval happens in te-tengo-infra's `produccion` environment,
 #                   before its Deploy job touches the VM.
@@ -19,8 +20,7 @@ run-name: Release ${{ github.ref_name }}
 # Switches (organization variables, Te-Tengo-Tech → Settings → Secrets and variables → Actions → Variables;
 # explicit opt-in, unset means off). A stage that is off is skipped and the build summary says why.
 #   ENABLE_API_IMAGE    'true' pushes the image to GHCR. Off: the image is only built and smoke-tested, and the
-#                       staging and produccion stages are skipped (there is no image to pull).
-#   ENABLE_STAGING      'true' runs the staging stage. Off: produccion only needs the build.
+#                       verification and produccion stages are skipped (there is no image to pull).
 #   ENABLE_API_DEPLOY   'true' sends the deploy request to te-tengo-infra (which gates its Deploy job with the
 #                       same variable). Needs the DISPATCH_TOKEN secret: the job fails without it.
 on:
@@ -134,7 +134,6 @@ jobs:
           RC_TAG: ${{ steps.version.outputs.rc_tag }}
           DIGEST: ${{ steps.push.outputs.digest }}
           ENABLE_API_IMAGE: ${{ vars.ENABLE_API_IMAGE }}
-          ENABLE_STAGING: ${{ vars.ENABLE_STAGING }}
           ENABLE_API_DEPLOY: ${{ vars.ENABLE_API_DEPLOY }}
         run: |
           onoff() { [ "$1" = true ] && echo on || echo "**off**"; }
@@ -149,29 +148,24 @@ jobs:
             echo "| Stage | Switch | State |"
             echo "|---|---|---|"
             echo "| Push to GHCR | \`ENABLE_API_IMAGE\` | $(onoff "$ENABLE_API_IMAGE") |"
-            echo "| Staging (ephemeral: smoke test + end-to-end with the pushed image) | \`ENABLE_STAGING\` | $(onoff "$ENABLE_STAGING") |"
+            echo "| Verification (ephemeral: smoke test + end-to-end with the pushed image) | always, with a pushed image | $(onoff "$ENABLE_API_IMAGE") |"
             echo "| Produccion (\`desplegar-api\` to te-tengo-infra, approval there) | \`ENABLE_API_DEPLOY\` | $(onoff "$ENABLE_API_DEPLOY") |"
             echo
             if [ "$ENABLE_API_IMAGE" != true ]; then
-              echo "- Staging and produccion are **skipped**: the organization variable \`ENABLE_API_IMAGE\` is not \`true\`, so there is no image to pull or deploy."
-            fi
-            if [ "$ENABLE_STAGING" != true ]; then
-              echo "- Staging is **skipped**: the organization variable \`ENABLE_STAGING\` is not \`true\`; produccion only needs this build."
+              echo "- Verification and produccion are **skipped**: the organization variable \`ENABLE_API_IMAGE\` is not \`true\`, so there is no image to pull or deploy."
             fi
             if [ "$ENABLE_API_DEPLOY" != true ]; then
               echo "- Produccion is **skipped**: the organization variable \`ENABLE_API_DEPLOY\` is not \`true\`."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  staging:
-    name: Staging (ephemeral, same image)
+  verify:
+    name: Verify release image (ephemeral)
     needs: build
-    # Switches: ENABLE_STAGING, and a pushed image (ENABLE_API_IMAGE).
-    if: vars.ENABLE_STAGING == 'true' && needs.build.outputs.pushed == 'true'
+    # Always runs when there is a pushed image (ENABLE_API_IMAGE); no environment and no approval.
+    if: needs.build.outputs.pushed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Required reviewers of `staging` approve here, before any step runs.
-    environment: staging
     permissions:
       contents: read
       packages: read
@@ -198,14 +192,14 @@ jobs:
       - name: Summary
         run: |
           {
-            echo "## Staging (ephemeral)"
+            echo "## Verification (ephemeral)"
             echo "Pulled \`$IMAGE_REF\` and started it with PostgreSQL 18 in the runner: migrations, health, readiness and non-root user passed."
-            echo "The end-to-end test against the same image runs next (*Staging end-to-end*)."
+            echo "The end-to-end test against the same image runs next (*Verify release image: end-to-end*)."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  staging-e2e:
-    name: Staging end-to-end
-    needs: [build, staging]
+  verify-e2e:
+    name: "Verify release image: end-to-end"
+    needs: [build, verify]
     uses: ./.github/workflows/e2e.yml
     permissions:
       contents: read
@@ -217,15 +211,15 @@ jobs:
 
   produccion:
     name: Produccion (request the deploy from te-tengo-infra)
-    needs: [build, staging, staging-e2e]
-    # Switches: ENABLE_API_DEPLOY and a pushed image. With ENABLE_STAGING on, both staging jobs must pass;
-    # with it off they are skipped and only the build is needed.
+    needs: [build, verify, verify-e2e]
+    # Switches: ENABLE_API_DEPLOY and a pushed image. Both verification jobs must have passed.
     if: >-
       !cancelled()
       && needs.build.result == 'success'
       && needs.build.outputs.pushed == 'true'
       && vars.ENABLE_API_DEPLOY == 'true'
-      && (vars.ENABLE_STAGING != 'true' || (needs.staging.result == 'success' && needs.staging-e2e.result == 'success'))
+      && needs.verify.result == 'success'
+      && needs.verify-e2e.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # No environment: sending the request is not a deploy. te-tengo-infra's Deploy job waits for a required
@@ -262,7 +256,7 @@ jobs:
 
   pull-request:
     name: Open the release pull request (→ main)
-    needs: [build, staging, staging-e2e, produccion]
+    needs: [build, verify, verify-e2e, produccion]
     # After every stage that ran passed (skipped stages are fine: their switch is off).
     if: >-
       !cancelled()
@@ -279,8 +273,8 @@ jobs:
       SHA_TAG: ${{ needs.build.outputs.sha_tag }}
       RC_TAG: ${{ needs.build.outputs.rc_tag }}
       IMAGE_REF: ${{ needs.build.outputs.image_ref }}
-      STAGING: ${{ needs.staging.result }}
-      STAGING_E2E: ${{ needs.staging-e2e.result }}
+      VERIFY: ${{ needs.verify.result }}
+      VERIFY_E2E: ${{ needs.verify-e2e.result }}
       PRODUCCION: ${{ needs.produccion.result }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
@@ -293,10 +287,10 @@ jobs:
           else
             image="built and smoke-tested, **not pushed** (\`ENABLE_API_IMAGE\` is off)"
           fi
-          if [ "$STAGING" = success ] && [ "$STAGING_E2E" = success ]; then
-            staging="ephemeral staging in the runner with that image: smoke test (PostgreSQL 18) and end-to-end (agent → API → alert) passed"
+          if [ "$VERIFY" = success ] && [ "$VERIFY_E2E" = success ]; then
+            verification="ephemeral run of that image in the runner: smoke test (PostgreSQL 18) and end-to-end (agent → API → alert) passed"
           else
-            staging="**skipped** (\`ENABLE_STAGING\` or \`ENABLE_API_IMAGE\` is off)"
+            verification="**skipped** (\`ENABLE_API_IMAGE\` is off: no image to verify)"
           fi
           if [ "$PRODUCCION" = success ]; then
             produccion="\`desplegar-api\` sent to Te-Tengo-Tech/te-tengo-infra with \`$SHA_TAG\`; the deploy waits for approval on its \`produccion\` environment"
@@ -309,7 +303,7 @@ jobs:
           | Stage | What happened |
           |---|---|
           | Build | $image |
-          | Staging | $staging |
+          | Verification | $verification |
           | Produccion | $produccion |
 
           Merging this pull request tags \`v$VERSION\`, creates the GitHub Release from CHANGELOG.md and adds the tags \`$VERSION\` and \`latest\` to the same image (etiquetar.yml), then opens the back-merge into \`develop\`. Nothing is deployed on \`main\`.

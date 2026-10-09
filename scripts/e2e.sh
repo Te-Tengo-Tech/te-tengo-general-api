@@ -31,7 +31,7 @@
 #   TT_E2E_SIN_BUILD=1  reuse build/libs/*.jar instead of running `./gradlew bootJar`
 #   TT_E2E_IMAGEN       run the API from this container image instead of the jar (no Gradle build),
 #                       e.g. ghcr.io/te-tengo-tech/te-tengo-general-api@sha256:... (the Release
-#                       workflow's staging). The container uses the host network, so it sees the stack
+#                       workflow's verification). The container uses the host network, so it sees the stack
 #                       on localhost like the jar does: Linux, or Docker Desktop with host networking on.
 set -euo pipefail
 cd "$(dirname "$0")/.."

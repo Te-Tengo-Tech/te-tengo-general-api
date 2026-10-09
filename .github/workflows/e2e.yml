@@ -6,7 +6,7 @@ name: End-to-end
 # workflow's own token checks it out; the E2E_REPO_TOKEN secret (read-only Contents) is only needed
 # if that repository becomes private again.
 # With an `imagen` input the API runs from that container image instead of a jar built here: the
-# Release workflow calls this workflow in its staging stage with the image it pushed, by digest.
+# Release workflow calls this workflow in its verification stage with the image it pushed, by digest.
 on:
   workflow_call:
     inputs:
@@ -50,7 +50,7 @@ permissions:
 
 concurrency:
   group: e2e-${{ github.ref }}
-  # A release's staging run (called from Release on a push) is never cancelled; the others are superseded.
+  # A release's verification run (called from Release on a push) is never cancelled; the others are superseded.
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:

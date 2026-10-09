@@ -3,7 +3,7 @@
 # migrations, report healthy (the image HEALTHCHECK, then /actuator/health/readiness) and not run as
 # root. Clips, e-mail and push use their in-memory and logging adapters, so no AWS emulator is needed.
 # Used by the Container image workflow (the image built on a pull request) and by the Release
-# workflow's staging job (the image pulled from GHCR by digest). Everything is removed on exit.
+# workflow's verification job (the image pulled from GHCR by digest). Everything is removed on exit.
 #
 # Usage: scripts/smoke-image.sh <image>      e.g. te-tengo-general-api:smoke or ghcr.io/...@sha256:...
 # Requires: Docker, curl and openssl.

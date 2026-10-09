@@ -73,7 +73,7 @@ jobs:
             org.opencontainers.image.description=Backend API of Te Tengo: fall detection alerts for older adults at home
             org.opencontainers.image.vendor=Te Tengo
       # Smoke test first: nothing is pushed unless the amd64 image starts, migrates an empty PostgreSQL 18,
-      # reports healthy and does not run as root (scripts/smoke-image.sh, also used by the Release staging).
+      # reports healthy and does not run as root (scripts/smoke-image.sh, also used by the Release verification).
       - name: Build the amd64 image for the smoke test
         uses: docker/build-push-action@v7
         with:

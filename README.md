@@ -37,7 +37,7 @@ To try the three apps together, seed the prototype's demo household (account, ho
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - Health: http://localhost:8080/actuator/health
 - Container image: `docker build -t te-tengo-general-api .` (Temurin 25 JRE, non-root, arm64 and amd64); running and publishing it to GHCR: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- Releases (build once, deploy many): a push to `release/x.y.z` or `hotfix/x.y.z` builds the image once, pushes it to `ghcr.io/te-tengo-tech/te-tengo-general-api` as `sha-<short commit>` and `x.y.z-rc`, runs an ephemeral **staging** in the runner with that same image by digest (smoke test and the end-to-end test, after an approval on the `staging` environment), asks `te-tengo-infra` to deploy it to **produccion** (approval there) and opens the pull request to `main`. Merging it tags `vX.Y.Z` and creates the GitHub Release; nothing is deployed on `main`. Each stage has an on/off switch, organization variables that must be `true`: `ENABLE_API_IMAGE`, `ENABLE_STAGING` and `ENABLE_API_DEPLOY` (unset means off). Flow, diagram and one-time setup (the `DISPATCH_TOKEN` secret, a public GHCR package): [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#release-flow-build-once-deploy-many)
+- Releases (build once, deploy many): a push to `release/x.y.z` or `hotfix/x.y.z` builds the image once, pushes it to `ghcr.io/te-tengo-tech/te-tengo-general-api` as `sha-<short commit>` and `x.y.z-rc`, verifies that same image by digest in an ephemeral stack in the runner (smoke test and the end-to-end test; automatic, there is no staging environment), asks `te-tengo-infra` to deploy it to **produccion** (approval there) and opens the pull request to `main`. Merging it tags `vX.Y.Z` and creates the GitHub Release; nothing is deployed on `main`. Each stage has an on/off switch, organization variables that must be `true`: `ENABLE_API_IMAGE` and `ENABLE_API_DEPLOY` (unset means off). Flow, diagram and one-time setup (the `DISPATCH_TOKEN` secret, a public GHCR package): [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#release-flow-build-once-deploy-many)
 
 ## Configuration
 | Variable | Purpose | Default |
@@ -105,9 +105,9 @@ TT_E2E_IMAGEN=ghcr.io/te-tengo-tech/te-tengo-general-api:sha-1a2b3c4 ./scripts/e
 
 It takes about 1.5 minutes plus the API build. The fall clip is taken from the agent's `datos/urfd/` or downloaded. The ports, the work directory (logs are kept there) and the timeouts are set with the `TT_E2E_*` variables described at the top of the script.
 
-In CI, the [End-to-end](.github/workflows/e2e.yml) workflow runs it on demand (any branch of the agent, optionally against an image), weekly, on pull requests that change the agent endpoints or the contract, and in the staging stage of every release, against the release image. The agent repository is public, so the workflow's own token checks it out; the `E2E_REPO_TOKEN` secret (a fine-grained token with read-only *Contents* access to `Te-Tengo-Tech/te-tengo-desktop-pywebview`) is only needed if that repository becomes private again.
+In CI, the [End-to-end](.github/workflows/e2e.yml) workflow runs it on demand (any branch of the agent, optionally against an image), weekly, on pull requests that change the agent endpoints or the contract, and in the verification stage of every release, against the release image. The agent repository is public, so the workflow's own token checks it out; the `E2E_REPO_TOKEN` secret (a fine-grained token with read-only *Contents* access to `Te-Tengo-Tech/te-tengo-desktop-pywebview`) is only needed if that repository becomes private again.
 
-`scripts/smoke-image.sh <image>` is the quicker check of an image: it starts it against an empty PostgreSQL 18 and requires it to migrate, report healthy and ready, and not run as root (the image workflow and the release staging use it).
+`scripts/smoke-image.sh <image>` is the quicker check of an image: it starts it against an empty PostgreSQL 18 and requires it to migrate, report healthy and ready, and not run as root (the image workflow and the release verification use it).
 
 ## Documentation
 | Document | Content |
