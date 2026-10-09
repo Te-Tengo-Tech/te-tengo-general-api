@@ -1,9 +1,12 @@
 name: Container image
 
-# Builds the API image (Dockerfile) for linux/arm64 (the EC2 instance is a Graviton t4g) and
-# linux/amd64. Pull requests only build it and smoke-test the amd64 image against PostgreSQL;
-# nothing is pushed. A manual run with `push: true`, or a tag `api-v<version>`, pushes it to
-# ghcr.io/te-tengo-tech/te-tengo-general-api with the workflow's own GITHUB_TOKEN (docs/DEPLOYMENT.md).
+# Builds the API image (Dockerfile) for linux/amd64 (the production Azure VM) and linux/arm64 (the
+# inactive OCI and AWS alternatives), and smoke-tests the amd64 image against PostgreSQL before anything
+# is pushed. Pull requests only build and test. A push to `main` (a release or hotfix merge) pushes the
+# image to ghcr.io/te-tengo-tech/te-tengo-general-api and then asks te-tengo-infra to deploy it
+# (repository_dispatch `desplegar-api`); the deploy waits there for approval on the `produccion`
+# environment. A tag `api-v<version>` or a manual run with `push: true` only pushes. Pushing uses the
+# workflow's own GITHUB_TOKEN; the dispatch needs the DISPATCH_TOKEN secret (docs/DEPLOYMENT.md).
 on:
   pull_request:
     paths:
@@ -18,10 +21,12 @@ on:
   workflow_dispatch:
     inputs:
       push:
-        description: Push the image to GHCR (tags sha-<commit> and the branch name)
+        description: Push the image to GHCR (tags sha-<commit> and the branch name; no deploy)
         type: boolean
         default: false
   push:
+    branches:
+      - main
     tags:
       - "api-v*"
 
@@ -30,27 +35,43 @@ permissions:
 
 concurrency:
   group: image-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded pull request builds are cancelled; every push to main or tag is built and published.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   IMAGE: ghcr.io/te-tengo-tech/te-tengo-general-api
-  # Push only on a release tag or when a manual run asks for it.
+  # Push on main, on a release tag, or when a manual run asks for it.
   PUSH: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push) }}
 
 jobs:
   image:
-    name: Build${{ (github.event_name == 'push' || inputs.push) && ' and push' || '' }} (arm64, amd64)
+    name: Build${{ (github.event_name == 'push' || inputs.push) && ' and push' || '' }} (amd64, arm64)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
       contents: read
       packages: write
+    outputs:
+      sha_tag: ${{ steps.tags.outputs.sha_tag }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
       - uses: docker/setup-buildx-action@v4
+      - name: Application version
+        id: version
+        # `version = "x.y.z"` of build.gradle.kts; tagged on pushes to main only (release tags already
+        # carry their version).
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' build.gradle.kts)
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][A-Za-z0-9.]+)?$ ]]; then
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No application version found in build.gradle.kts; no version tag."
+          fi
       - name: Image tags and OCI labels
         id: meta
         uses: docker/metadata-action@v6
@@ -60,35 +81,27 @@ jobs:
             type=match,pattern=api-v(.*),group=1
             type=match,pattern=api-v(\d+\.\d+),group=1
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/api-v') }}
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' && steps.version.outputs.version != '' }}
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,format=long
+            type=sha
           labels: |
             org.opencontainers.image.title=te-tengo-general-api
             org.opencontainers.image.description=Backend API of Te Tengo: fall detection alerts for older adults at home
             org.opencontainers.image.vendor=Te Tengo
-      - name: Log in to GHCR
-        if: env.PUSH == 'true'
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build${{ env.PUSH == 'true' && ' and push' || '' }}
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          platforms: linux/arm64,linux/amd64
-          push: ${{ env.PUSH == 'true' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          annotations: ${{ steps.meta.outputs.annotations }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      # Smoke test: the amd64 image (from the cache above) must start, run the Flyway migrations
-      # on an empty PostgreSQL 18 and report healthy. Clips, e-mail and push use their in-memory
-      # and logging adapters, so no AWS emulator is needed.
-      - name: Load the amd64 image for the smoke test
+      - name: Commit tag
+        id: tags
+        # The immutable sha-<short commit> tag that te-tengo-infra deploys.
+        env:
+          META_JSON: ${{ steps.meta.outputs.json }}
+        run: |
+          sha_tag=$(jq -r '.tags[] | select(test(":sha-[0-9a-f]+$")) | sub("^.*:"; "")' <<< "$META_JSON" | head -n 1)
+          [ -n "$sha_tag" ] || { echo "::error::No sha-<commit> tag in the metadata"; exit 1; }
+          echo "sha_tag=$sha_tag" >> "$GITHUB_OUTPUT"
+      # Smoke test first: nothing is pushed unless the amd64 image starts, runs the Flyway migrations
+      # on an empty PostgreSQL 18 and reports healthy. Clips, e-mail and push use their in-memory and
+      # logging adapters, so no AWS emulator is needed.
+      - name: Build the amd64 image for the smoke test
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -122,6 +135,24 @@ jobs:
           echo
           [ "$estado" = healthy ] || { docker logs api; exit 1; }
           [ "$(docker exec api id -u)" != 0 ] || { echo "::error::The image runs as root"; exit 1; }
+      - name: Log in to GHCR
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build both platforms${{ env.PUSH == 'true' && ' and push' || '' }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Summary
         if: always()
         env:
@@ -129,8 +160,46 @@ jobs:
         run: |
           {
             echo "## Container image"
-            if [ "$PUSH" = true ]; then echo "Pushed to \`$IMAGE\` (linux/arm64, linux/amd64):"; else echo "Built for linux/arm64 and linux/amd64, **not pushed**. Tags it would get:"; fi
+            if [ "$PUSH" = true ]; then echo "Pushed to \`$IMAGE\` (linux/amd64, linux/arm64):"; else echo "Built for linux/amd64 and linux/arm64, **not pushed**. Tags it would get:"; fi
             echo '```'
             echo "$TAGS"
             echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Continuous deployment: a push to main asks te-tengo-infra to deploy the new image. The infra Deploy
+  # workflow pauses on its `produccion` environment until a required reviewer approves, so nothing
+  # reaches the VM without a human. Pushing an image is not a deploy, so this job uses no environment
+  # (the API repository's `produccion` environment would add a second, redundant approval).
+  dispatch:
+    name: Request the production deploy (te-tengo-infra)
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    env:
+      DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+      SHA_TAG: ${{ needs.image.outputs.sha_tag }}
+      INFRA_REPO: Te-Tengo-Tech/te-tengo-infra
+    steps:
+      - name: Send repository_dispatch desplegar-api
+        run: |
+          set -euo pipefail
+          if [ -z "$DISPATCH_TOKEN" ]; then
+            echo "::notice title=Deploy not requested::The DISPATCH_TOKEN secret is missing, so $INFRA_REPO was not asked to deploy $IMAGE:$SHA_TAG." \
+              "Add it (docs/DEPLOYMENT.md) or run the infra Deploy workflow by hand with that tag."
+            exit 0
+          fi
+          payload=$(jq -n --arg tag "$SHA_TAG" --arg ref "$GITHUB_SHA" \
+            '{event_type: "desplegar-api", client_payload: {tag: $tag, ref: $ref}}')
+          curl -fsS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $DISPATCH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$INFRA_REPO/dispatches" \
+            --data "$payload"
+          {
+            echo "## Production deploy requested"
+            echo "Sent \`desplegar-api\` to [$INFRA_REPO](https://github.com/$INFRA_REPO/actions/workflows/deploy.yml) with tag \`$SHA_TAG\` (commit \`$GITHUB_SHA\`)."
+            echo "The deploy waits for approval on the \`produccion\` environment there."
           } >> "$GITHUB_STEP_SUMMARY"

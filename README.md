@@ -37,6 +37,7 @@ To try the three apps together, seed the prototype's demo household (account, ho
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - Health: http://localhost:8080/actuator/health
 - Container image: `docker build -t te-tengo-general-api .` (Temurin 25 JRE, non-root, arm64 and amd64); running and publishing it to GHCR: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- Continuous deployment: every push to `main` (a merged release or hotfix) smoke-tests the image, pushes it to `ghcr.io/te-tengo-tech/te-tengo-general-api` as `sha-<short commit>`, `main` and the version, and asks `te-tengo-infra` to deploy that `sha-` tag; the deploy waits there for approval on the `produccion` environment. One-time setup: the `DISPATCH_TOKEN` secret and making the GHCR package public ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#continuous-deployment-push-to-main--approval--azure-vm))
 
 ## Configuration
 | Variable | Purpose | Default |
