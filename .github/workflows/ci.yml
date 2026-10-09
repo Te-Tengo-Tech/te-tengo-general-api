@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    # release/* and hotfix/* too: the release pull request to main is opened by the Release workflow with
+    # GITHUB_TOKEN, which starts no pull_request run, so its required checks come from these pushes.
+    branches: [main, develop, "release/**", "hotfix/**"]
   pull_request:
 
 permissions:
