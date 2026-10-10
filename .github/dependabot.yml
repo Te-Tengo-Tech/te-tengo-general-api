@@ -1,4 +1,5 @@
-# Weekly dependency updates, opened against `develop`.
+# Weekly dependency updates, opened against `develop`: Gradle, GitHub Actions (pinned by commit SHA), the
+# Dockerfile base images and the local Compose stack.
 # Minor and patch updates arrive grouped in one pull request; major updates arrive one by one.
 # Branch names: dependabot/<ecosystem>/develop/<group-or-dependency>.
 version: 2
@@ -29,3 +30,29 @@ updates:
         update-types:
           - "minor"
           - "patch"
+
+  # Base images of the Dockerfile, pinned by digest (eclipse-temurin JDK and JRE).
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop"
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  # Images of the local stack (compose.yaml: PostgreSQL, Floci, MediaMTX) used by the tests and e2e.sh.
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop"
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      compose-images:
+        patterns:
+          - "*"
