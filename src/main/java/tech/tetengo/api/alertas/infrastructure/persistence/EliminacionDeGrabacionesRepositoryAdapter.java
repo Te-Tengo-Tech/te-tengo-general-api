@@ -1,6 +1,7 @@
 package tech.tetengo.api.alertas.infrastructure.persistence;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
 import tech.tetengo.api.alertas.application.port.EliminacionDeGrabacionesRepository;
@@ -23,6 +24,11 @@ class EliminacionDeGrabacionesRepositoryAdapter implements EliminacionDeGrabacio
     @Override
     public List<EliminacionDeGrabaciones> pendientes() {
         return jpa.findByCompletadaEnIsNullOrderBySolicitadaEnAsc();
+    }
+
+    @Override
+    public Optional<EliminacionDeGrabaciones> ultima() {
+        return jpa.findFirstByOrderBySolicitadaEnDescCreadoEnDesc();
     }
 
     @Override

@@ -2,6 +2,8 @@ package tech.tetengo.api.hogares.interfaces.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -12,6 +14,7 @@ import static tech.tetengo.api.support.ApiDePrueba.campo;
 import static tech.tetengo.api.support.ApiDePrueba.enviarEvento;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,6 +85,20 @@ class RevocacionIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.eliminacionProgramada").value(true));
     }
 
+    @Test
+    void ca09_1_laRevocacionDiceCuantasGrabacionesElimina() throws Exception {
+        alertaConClip(agente);
+        mvc.perform(delete("/api/hogar/consentimiento").header("Authorization", bearer(token)))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.eliminacionProgramada").value(true))
+                .andExpect(jsonPath("$.clips").value(2));
+        esperarEliminacionProgramada(campo(titular, "$.hogarId"));
+        eliminarGrabaciones.ejecutar();
+
+        assertThat(almacenamiento.eliminadas()).hasSize(2);
+        assertThat(campo(hogar(token), "$.eliminacion.clips")).isEqualTo("2");
+    }
+
     private void esperarEliminacionProgramada(String hogar) {
         await().atMost(Duration.ofSeconds(5))
                 .until(() -> jdbc.queryForObject(
@@ -138,6 +155,91 @@ class RevocacionIntegrationTest extends AbstractIntegrationTest {
         assertThat(push.deTipo(TipoAviso.DATOS_ELIMINADOS)).hasSize(1);
     }
 
+    private String hogar(String token) throws Exception {
+        return mvc.perform(get("/api/hogar").header("Authorization", bearer(token)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+    }
+
+    @Test
+    void sinRevocacionNoHayEliminacion() throws Exception {
+        mvc.perform(get("/api/hogar").header("Authorization", bearer(token)))
+                .andExpect(jsonPath("$", hasKey("eliminacion")))
+                .andExpect(jsonPath("$.eliminacion").value(nullValue()));
+    }
+
+    /** The app polls the deletion, because the push DATOS_ELIMINADOS may never reach its screen. */
+    @Test
+    void ca09_3_elHogarDiceSiLaEliminacionTermino() throws Exception {
+        Instant revocadoEn = reloj.instant();
+        revocar(token);
+
+        // Right away, even before alertas records the deletion on its own thread.
+        String programada = hogar(token);
+        assertThat(campo(programada, "$.eliminacion.estado")).isEqualTo("PROGRAMADA");
+        assertThat(campo(programada, "$.eliminacion.clips")).isEqualTo("1");
+        assertThat(Instant.parse(campo(programada, "$.eliminacion.programadaEn")))
+                .isEqualTo(revocadoEn);
+        mvc.perform(get("/api/hogar").header("Authorization", bearer(token)))
+                .andExpect(jsonPath("$.eliminacion.terminadaEn").value(nullValue()));
+        esperarEliminacionProgramada(campo(titular, "$.hogarId"));
+        assertThat(campo(hogar(token), "$.eliminacion.estado")).isEqualTo("PROGRAMADA");
+
+        reloj.avanzar(Duration.ofMinutes(1));
+        Instant terminadaEn = reloj.instant();
+        eliminarGrabaciones.ejecutar();
+
+        // Any member reads it: the invited member also gets DATOS_ELIMINADOS.
+        UUID invitado = UUID.randomUUID();
+        UUID hogarId = UUID.fromString(campo(titular, "$.hogarId"));
+        DatosDePrueba.membresia(jdbc, hogarId, invitado, Rol.INVITADO);
+        for (String quien : new String[] {token, JwtDePrueba.token(invitado, hogarId, Rol.INVITADO)}) {
+            String terminada = hogar(quien);
+            assertThat(campo(terminada, "$.eliminacion.estado")).isEqualTo("TERMINADA");
+            assertThat(campo(terminada, "$.eliminacion.clips")).isEqualTo("1");
+            assertThat(Instant.parse(campo(terminada, "$.eliminacion.programadaEn")))
+                    .isEqualTo(revocadoEn);
+            assertThat(Instant.parse(campo(terminada, "$.eliminacion.terminadaEn")))
+                    .isEqualTo(terminadaEn);
+        }
+    }
+
+    @Test
+    void unaNuevaRevocacionNoMuestraLaEliminacionAnteriorComoTerminada() throws Exception {
+        revocar(token);
+        esperarEliminacionProgramada(campo(titular, "$.hogarId"));
+        eliminarGrabaciones.ejecutar();
+        assertThat(campo(hogar(token), "$.eliminacion.estado")).isEqualTo("TERMINADA");
+
+        reloj.avanzar(Duration.ofHours(1));
+        ApiDePrueba.otorgarConsentimiento(mvc, token);
+        // With a current consent, the earlier revocation's deletion stays visible as done.
+        assertThat(campo(hogar(token), "$.eliminacion.estado")).isEqualTo("TERMINADA");
+
+        reloj.avanzar(Duration.ofHours(1));
+        Instant otraRevocacion = reloj.instant();
+        revocar(token);
+        String programada = hogar(token);
+        assertThat(campo(programada, "$.eliminacion.estado")).isEqualTo("PROGRAMADA");
+        assertThat(campo(programada, "$.eliminacion.clips")).isEqualTo("0");
+        assertThat(Instant.parse(campo(programada, "$.eliminacion.programadaEn")))
+                .isEqualTo(otraRevocacion);
+
+        await().atMost(Duration.ofSeconds(5))
+                .until(() -> jdbc.queryForObject(
+                                "select count(*) from eliminaciones_de_grabaciones where completada_en is null",
+                                Integer.class)
+                        == 1);
+        eliminarGrabaciones.ejecutar();
+        String terminada = hogar(token);
+        assertThat(campo(terminada, "$.eliminacion.estado")).isEqualTo("TERMINADA");
+        assertThat(campo(terminada, "$.eliminacion.clips")).isEqualTo("0");
+        assertThat(Instant.parse(campo(terminada, "$.eliminacion.programadaEn")))
+                .isEqualTo(otraRevocacion);
+    }
+
     @Test
     void soloElTitularRevocaYSoloSiHayConsentimiento() throws Exception {
         UUID invitado = UUID.randomUUID();
@@ -181,5 +283,8 @@ class RevocacionIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", bearer(campo(otro, "$.tokenAcceso"))))
                 .andExpect(status().isOk());
         assertThat(push.deTipo(TipoAviso.DATOS_ELIMINADOS).getFirst().tokens()).containsExactly("telefono-ana");
+        assertThat(campo(hogar(token), "$.eliminacion.estado")).isEqualTo("TERMINADA");
+        mvc.perform(get("/api/hogar").header("Authorization", bearer(campo(otro, "$.tokenAcceso"))))
+                .andExpect(jsonPath("$.eliminacion").value(nullValue()));
     }
 }

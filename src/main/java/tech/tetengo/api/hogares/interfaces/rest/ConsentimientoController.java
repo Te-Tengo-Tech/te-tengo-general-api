@@ -51,17 +51,17 @@ class ConsentimientoController {
                 pedido.vistaEnVivoAceptada()));
     }
 
-    /** CA-09.1: {@code 202}, the recordings are deleted afterwards. */
+    /** CA-09.1: {@code 202}, the recordings are deleted afterwards; {@code clips}: how many. */
     @Operation(
             summary = "Revoke the consent (owner, US-09)",
             description =
-                    "202 {eliminacionProgramada: true}: capture stops and every recording is deleted (CA-09.1); push DATOS_ELIMINADOS when done (CA-09.3). Errors: 404 SIN_CONSENTIMIENTO, 403 SOLO_TITULAR.")
+                    "202 {eliminacionProgramada: true, clips}: capture stops and every recording (clips: how many) is deleted (CA-09.1); push DATOS_ELIMINADOS when done (CA-09.3), progress in GET /api/hogar eliminacion. Errors: 404 SIN_CONSENTIMIENTO, 403 SOLO_TITULAR.")
     @DeleteMapping(version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.ACCEPTED)
-    Map<String, Boolean> revocar() {
+    Map<String, Object> revocar() {
         UsuarioActual.exigirTitular();
-        revocarConsentimiento.ejecutar(UsuarioActual.id());
-        return Map.of("eliminacionProgramada", true);
+        long clips = revocarConsentimiento.ejecutar(UsuarioActual.id());
+        return Map.of("eliminacionProgramada", true, "clips", clips);
     }
 
     @Operation(summary = "Read the consent (US-05)", description = "Errors: 404 SIN_CONSENTIMIENTO (CA-05.2).")
