@@ -42,13 +42,13 @@
 | Method and path | Auth | Body → response | Errors |
 |---|---|---|---|
 | `POST /api/hogar` | user without a household | `{adultoMayor: {nombre, edad, direccion, convivencia, telefono?}}` → `201 Sesion`. Creates the household with the caller as `TITULAR` and returns tokens that carry its `hogar_id` (CA-04.1) | `409 HOGAR_YA_REGISTRADO`: one older adult per account (CA-04.2) · `400 VALIDACION` (CA-04.3) |
-| `GET /api/hogar` | member | → `200 {hogarId, adultoMayor, rol, consentimiento: Consentimiento \| null, dispositivosActivos}`. `dispositivosActivos`: how many push devices of the household's members are active (§7); `0` means **nobody in the family can receive alerts** on a phone, and the app warns about it. An older backend does not send the field; the app then shows no warning | — |
+| `GET /api/hogar` | member | → `200 {hogarId, adultoMayor, rol, consentimiento: Consentimiento \| null, dispositivosActivos, eliminacion: Eliminacion \| null}`. `dispositivosActivos`: how many push devices of the household's members are active (§7); `0` means **nobody in the family can receive alerts** on a phone, and the app warns about it. An older backend does not send the field; the app then shows no warning. `eliminacion`: the deletion of the recordings after the latest revocation (below); null if the consent was never revoked | — |
 | `PUT /api/hogar/adulto-mayor` | owner | `{nombre, edad, direccion, convivencia, telefono?}` → `200 adultoMayor`. Replaces the whole profile: an omitted `telefono` clears it | `400 VALIDACION` |
 | `GET /api/hogares` | user | → `200 [{hogarId, nombreAdultoMayor, rol}]`, the households the user belongs to | — |
 | `POST /api/sesiones/hogar` | user | `{hogarId}` → `200 Sesion` for that household | `403 SIN_MEMBRESIA` |
 | `POST /api/hogar/consentimiento` | owner | `{otorgadoPor, aceptadoPorAdultoMayor: true, vistaEnVivoAceptada: true}` → `201 Consentimiento`. Stores the date and time (CA-05.3); camera capture may start (CA-05.1) | `422 CONSENTIMIENTO_NO_ACEPTADO`: both flags must be true (CA-05.4) |
 | `GET /api/hogar/consentimiento` | member | → `200 Consentimiento` | `404 SIN_CONSENTIMIENTO` |
-| `DELETE /api/hogar/consentimiento` | owner | → `202 {eliminacionProgramada: true}`. Stops capture and schedules deletion of every recording (CA-09.1); a push `DATOS_ELIMINADOS` is sent when done (CA-09.3) | `404 SIN_CONSENTIMIENTO`: there is no current consent to revoke |
+| `DELETE /api/hogar/consentimiento` | owner | → `202 {eliminacionProgramada: true, clips}`. Stops capture and schedules deletion of every recording (CA-09.1); `clips`: how many recordings it deletes, counted at the revocation. A push `DATOS_ELIMINADOS` is sent when done (CA-09.3), and `GET /api/hogar` `eliminacion` tells the progress. An older backend does not send `clips` | `404 SIN_CONSENTIMIENTO`: there is no current consent to revoke |
 
 `adultoMayor = {nombre, edad, direccion, convivencia, telefono | null}`
 - `edad`: whole years, required, from 50 to 120. The prototype's profile form asks for «Edad» and rejects other values with «Escribe una edad válida, en años.»; the app shows «Rosa Huamán, 78 años». Households registered before this field existed answer `edad: null` until the owner saves the profile again.
@@ -58,6 +58,10 @@
   - `CON_FAMILIAR`: «Vive conmigo», the older adult lives with the account owner;
   - `CON_CUIDADOR`: «Vive con otro cuidador».
 - `Consentimiento = {otorgadoEn, otorgadoPor, registradoPor: {id, nombre}, vistaEnVivoAceptada, vigente}`
+- `Eliminacion = {estado: "PROGRAMADA" | "TERMINADA", clips, programadaEn, terminadaEn | null}`: the deletion of every recording after the **latest** revocation (CA-09.1, CA-09.3).
+  - `PROGRAMADA` from the moment the revocation answers `202` until every recording is deleted; then `TERMINADA`, at the same time as the push `DATOS_ELIMINADOS`. It stays `TERMINADA` after a new consent, until the next revocation.
+  - `clips`: recordings still to delete (`PROGRAMADA`) or deleted (`TERMINADA`). `programadaEn`: when the consent was revoked. `terminadaEn`: when the recordings were deleted.
+  - **The app polls it** on the revocation screen: a push does not reach the app's code when the app is in the background, nor a PWA whose window is hidden. Push or poll, whichever comes first, completes the screen. An older backend does not send the field; the app then waits for the push only.
 
 ## 3. Family and alert routing (`hogares`) — US-08, US-10
 | Method and path | Auth | Body → response | Errors |
@@ -123,7 +127,7 @@ Alerta = {
 ```
 | Method and path | Auth | Body → response | Errors |
 |---|---|---|---|
-| `GET /api/alertas` | member | Query: `tipo`, `estado`, `desde`, `hasta`, `pagina`, `tamano` → `200 {elementos: [Alerta], total}`, newest first (CA-25.1, CA-25.2). Empty list when none (CA-25.3) | — |
+| `GET /api/alertas` | member | Query: `tipo`, `estado`, `desde`, `hasta`, `pagina`, `tamano` → `200 {elementos: [Alerta], total}`, newest first (CA-25.1, CA-25.2). Empty list when none (CA-25.3). `pagina` starts at 0; `tamano` defaults to 20 and is at most 100 | `400 VALIDACION`: `tamano` above 100 |
 | `GET /api/alertas/{id}` | member | → `200 Alerta`. Active alerts must be visible when the app opens, even if the push failed (CA-16.4) | `404 ALERTA_NO_ENCONTRADA` |
 | `POST /api/alertas/{id}/atencion` | member | → `200 Alerta` with `ATENDIDA`, `atendidaPor` and `atendidaEn`. Pushes `ALERTA_ATENDIDA` to the other members (CA-19.1, CA-19.3) | `409 ALERTA_CERRADA` |
 | `POST /api/alertas/{id}/falsa-alarma` | member | → `200 Alerta` with `FALSA_ALARMA`; excluded from the fall count (CA-19.2) | `409 ALERTA_CERRADA` |

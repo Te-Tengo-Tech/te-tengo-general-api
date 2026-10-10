@@ -8,6 +8,7 @@ import tech.tetengo.api.hogares.application.port.ConsentimientoRepository;
 import tech.tetengo.api.hogares.domain.HogarError;
 import tech.tetengo.api.hogares.domain.model.Consentimiento;
 import tech.tetengo.api.hogares.domain.model.Membresia;
+import tech.tetengo.api.shared.application.port.EliminacionesDeGrabaciones;
 import tech.tetengo.api.shared.domain.exception.ErrorComun;
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 
@@ -15,22 +16,30 @@ import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
  * US-09: the owner revokes the consent once the app has asked for confirmation (CA-09.2). The
  * {@code ConsentimientoRevocado} event stops capture in {@code camaras} and schedules the deletion of
  * every recording in {@code alertas} (CA-09.1), which tells the family when it is done (CA-09.3).
+ * It answers how many recordings are to be deleted, counted when the consent is revoked.
  */
 @Service
 public class RevocarConsentimiento {
 
     private final ConsentimientoRepository consentimientos;
     private final MiembroActual miembroActual;
+    private final EliminacionesDeGrabaciones eliminaciones;
     private final Clock reloj;
 
-    public RevocarConsentimiento(ConsentimientoRepository consentimientos, MiembroActual miembroActual, Clock reloj) {
+    public RevocarConsentimiento(
+            ConsentimientoRepository consentimientos,
+            MiembroActual miembroActual,
+            EliminacionesDeGrabaciones eliminaciones,
+            Clock reloj) {
         this.consentimientos = consentimientos;
         this.miembroActual = miembroActual;
+        this.eliminaciones = eliminaciones;
         this.reloj = reloj;
     }
 
+    /** Returns the recordings of the household that the revocation deletes. */
     @Transactional
-    public void ejecutar(UUID usuarioId) {
+    public long ejecutar(UUID usuarioId) {
         Membresia membresia = miembroActual.de(usuarioId);
         if (!membresia.esTitular()) {
             throw new ErrorDeNegocio(ErrorComun.SOLO_TITULAR);
@@ -39,7 +48,9 @@ public class RevocarConsentimiento {
                 .ultimo()
                 .filter(Consentimiento::vigente)
                 .orElseThrow(() -> new ErrorDeNegocio(HogarError.SIN_CONSENTIMIENTO));
+        long clips = eliminaciones.clipsGuardados();
         consentimiento.revocar(reloj.instant());
         consentimientos.guardar(consentimiento);
+        return clips;
     }
 }

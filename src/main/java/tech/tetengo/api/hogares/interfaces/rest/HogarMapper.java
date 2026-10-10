@@ -1,6 +1,7 @@
 package tech.tetengo.api.hogares.interfaces.rest;
 
 import tech.tetengo.api.hogares.application.ConsentimientoConsultado;
+import tech.tetengo.api.hogares.application.EliminacionConsultada;
 import tech.tetengo.api.hogares.application.HogarConsultado;
 import tech.tetengo.api.hogares.application.HogarDelUsuario;
 import tech.tetengo.api.hogares.domain.model.AdultoMayor;
@@ -34,7 +35,16 @@ final class HogarMapper {
                 aRespuesta(consultado.hogar().getAdultoMayor()),
                 consultado.rol().name(),
                 consultado.consentimiento().map(HogarMapper::aRespuesta).orElse(null),
-                consultado.dispositivosActivos());
+                consultado.dispositivosActivos(),
+                consultado.eliminacion().map(HogarMapper::aRespuesta).orElse(null));
+    }
+
+    static HogarResponse.EliminacionResponse aRespuesta(EliminacionConsultada eliminacion) {
+        return new HogarResponse.EliminacionResponse(
+                eliminacion.estado().name(),
+                eliminacion.clips(),
+                eliminacion.programadaEn(),
+                eliminacion.terminadaEn());
     }
 
     static ConsentimientoResponse aRespuesta(ConsentimientoConsultado consultado) {
