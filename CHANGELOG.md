@@ -3,6 +3,9 @@
 Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+
+## [0.3.2] - 2026-10-10
+
 ### Changed
 - CI tests each commit once: `ci.yml` runs on pull requests, on pushes to `develop` and when the Release workflow calls it (`workflow_call`) on the release commit, next to the image build; no candidate is recorded unless it passes. It no longer runs on pushes to `main`, `release/**` or `hotfix/**`, and pull requests into `main` only run `ci-ok`. Only `develop` writes the Gradle cache; pull requests of `image.yml` only read the Docker layer cache.
 - The release pull request, the back-merge and the `desplegar-api` dispatch to te-tengo-infra use the GitHub App te-tengo-release-bot (one-hour tokens minted per job) instead of `GITHUB_TOKEN` and the personal `DISPATCH_TOKEN`; the deploy run is polled with the workflow token. The back-merge turns on auto-merge (merge commit) and, after a hotfix, opens `main → release/*` for newer release branches.
@@ -23,7 +26,6 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 - Every action is pinned by commit SHA; no permissions at workflow level and the minimum per job; checkouts without persisted credentials.
-
 
 ## [0.3.1] - 2026-10-10
 ### Fixed
