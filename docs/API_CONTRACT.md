@@ -164,7 +164,7 @@ Data payload: `{tipo, alertaId?, camaraId?, habitacion?, ocurridaEn}`. `tipo` is
 | `ALERTA_MOVIMIENTO_INESTABLE` | Unstable movement (medium severity) | CA-17.1 |
 | `ALERTA_ACTUALIZADA_A_CAIDA` | An unstable alert became a fall | CA-17.3 |
 | `CAIDA_CONFIRMADA` | 30 s on the floor | CA-13.1 |
-| `SE_LEVANTO` | Recovery after a fall | CA-21.1 |
+| `SE_LEVANTO` | Recovery after a fall, also a confirmed one: the alert stays active until a member attends it (product decision of 2026-10-10, changes CA-21.2) | CA-21.1 |
 | `ALERTA_ATENDIDA` | Another member attended it | CA-19.3 |
 | `ALERTA_ESCALADA` / `SIN_CONTACTO_SECUNDARIO` | Escalation | CA-20.1, CA-20.3 |
 | `CAMARA_DESCONECTADA` / `CAMARA_RECONECTADA` | Connection status; the app shows what to check: cable, PC on and internet | CA-07.2, CA-07.3 |

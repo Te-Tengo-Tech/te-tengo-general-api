@@ -25,7 +25,8 @@ import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
  *       becomes a fall (CA-14.3, CA-17.3).
  *   <li>{@code movimiento_inestable}: a medium-severity alert (CA-14.1, CA-17.1).
  *   <li>{@code caida_confirmada}: the fall is confirmed and stays active (CA-13.1).
- *   <li>{@code recuperacion}: the person got up (CA-13.2) and the family is told (CA-21.1).
+ *   <li>{@code recuperacion}: the person got up (CA-13.2) and the family is told (CA-21.1), also
+ *       after a confirmed fall (product decision of 2026-10-10, docs/BLOCKERS.md).
  *   <li>{@code deteccion_no_confiable}: the camera's detection is not reliable (CA-15.3).
  * </ul>
  *
@@ -127,12 +128,14 @@ public class RecibirEventoDelAgente {
 
     /**
      * CA-13.2 and US-21: the recovery is recorded and the family gets the follow-up notice "se
-     * levantó" (CA-21.1), except for a confirmed fall, which stays active as confirmed (CA-21.2).
+     * levantó" (CA-21.1). A confirmed fall gets it too: the person is no longer on the floor, which
+     * the family must know, but the alert stays active as confirmed until a member attends it
+     * (product decision of 2026-10-10, which changes CA-21.2; docs/BLOCKERS.md).
      */
     private Efecto recuperacion(CamaraDelHogar camara, Instant ocurridoEn) {
         return alertas.caidaSinRecuperacionDe(camara.id())
                 .filter(alerta -> alerta.registrarRecuperacion(ocurridoEn))
-                .map(alerta -> new Efecto(alerta, alerta.isConfirmada() ? null : TipoAviso.SE_LEVANTO))
+                .map(alerta -> new Efecto(alerta, TipoAviso.SE_LEVANTO))
                 .orElse(Efecto.NINGUNO);
     }
 
