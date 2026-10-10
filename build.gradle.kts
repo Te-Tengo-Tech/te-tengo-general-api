@@ -9,7 +9,7 @@ plugins {
 
 group = "tech.tetengo"
 
-version = "0.3.2"
+version = "0.3.3"
 
 description = "Backend API del sistema Te Tengo"
 
