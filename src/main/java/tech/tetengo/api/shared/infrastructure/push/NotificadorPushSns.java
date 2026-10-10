@@ -1,5 +1,6 @@
 package tech.tetengo.api.shared.infrastructure.push;
 
+import java.time.Instant;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -183,8 +184,9 @@ class NotificadorPushSns implements NotificadorPush, AutoCloseable {
         porPlataforma.put("default", contenido.titulo() + ". " + contenido.cuerpo());
         porPlataforma.put(
                 "GCM",
-                JSON.writeValueAsString(
-                        Map.of("fcmV1Message", Map.of("message", CargasPush.mensajeFcm(contenido, enlaceWeb)))));
+                JSON.writeValueAsString(Map.of(
+                        "fcmV1Message",
+                        Map.of("message", CargasPush.mensajeFcm(contenido, enlaceWeb, Instant.now())))));
         porPlataforma.put("APNS", apns);
         porPlataforma.put("APNS_SANDBOX", apns);
         return JSON.writeValueAsString(porPlataforma);

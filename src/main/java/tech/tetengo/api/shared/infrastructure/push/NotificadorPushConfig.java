@@ -1,5 +1,7 @@
 package tech.tetengo.api.shared.infrastructure.push;
 
+import java.time.Clock;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,8 +28,10 @@ class NotificadorPushConfig {
 
     @Bean
     @ConditionalOnProperty(prefix = PREFIJO, name = PROVEEDOR, havingValue = "fcm")
-    NotificadorPush notificadorPushFcm(PropiedadesDeFcm propiedades, PropiedadesDePushWeb web) {
-        return new NotificadorPushFcm(MensajeriaFirebase.crear(propiedades), web.enlace());
+    NotificadorPush notificadorPushFcm(
+            PropiedadesDeFcm propiedades, PropiedadesDePushWeb web, ObjectProvider<Clock> reloj) {
+        return new NotificadorPushFcm(
+                MensajeriaFirebase.crear(propiedades), web.enlace(), reloj.getIfAvailable(Clock::systemUTC));
     }
 
     @Bean
