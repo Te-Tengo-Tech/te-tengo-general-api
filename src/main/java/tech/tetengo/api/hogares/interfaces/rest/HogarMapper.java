@@ -33,7 +33,8 @@ final class HogarMapper {
                 consultado.hogar().getId(),
                 aRespuesta(consultado.hogar().getAdultoMayor()),
                 consultado.rol().name(),
-                consultado.consentimiento().map(HogarMapper::aRespuesta).orElse(null));
+                consultado.consentimiento().map(HogarMapper::aRespuesta).orElse(null),
+                consultado.dispositivosActivos());
     }
 
     static ConsentimientoResponse aRespuesta(ConsentimientoConsultado consultado) {

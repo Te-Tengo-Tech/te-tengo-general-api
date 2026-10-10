@@ -73,10 +73,13 @@ tetengo:
       # Blank is AWS; locally Floci (application-local.yml).
       endpoint: ${TT_SES_ENDPOINT:}
   push:
-    # CA-16.4: a push the service did not accept is retried every 15 s, up to 20 attempts
-    # (implementation choice: the backlog only says "retries").
+    # CA-16.4: a push that was not delivered is retried every 15 s, up to 20 attempts; urgent alert
+    # notices (falls, unstable movements, escalation) for 30 min, also while nobody in the family has
+    # an active device, so a phone that registers again still gets them (implementation choices: the
+    # backlog only says "retries").
     reintento-cada: 15s
     intentos-maximos: 20
+    ventana-urgente: 30m
     # Push adapter: registro (default, only logs), fcm, sns or simulador. docs/NOTIFICATIONS.md
     proveedor: ${TT_PUSH_PROVEEDOR:registro}
     fcm:

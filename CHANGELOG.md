@@ -4,6 +4,24 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-10
+### Fixed
+- Fall notices that reached nobody were treated as done. When no member had an active device, or the push service rejected every token, the API logged it at `INFO`, never retried and left `notificadaEn` empty. Urgent alert notices (`ALERTA_CAIDA`, `ALERTA_MOVIMIENTO_INESTABLE`, `ALERTA_ACTUALIZADA_A_CAIDA`, `CAIDA_CONFIRMADA`, `ALERTA_ESCALADA`, `SIN_CONTACTO_SECUNDARIO`) are now logged at `ERROR` and retried every 15 s for 30 min (`tetengo.push.ventana-urgente`) until a device accepts them, so a phone that registers again still gets the fall; retries stop when the alert is attended. `notificadaEn` is set when one is delivered.
+- Alert delivery state: `Alerta.estadoAviso` (`ENVIANDO`, `ENTREGADO`, `REINTENTANDO`, `NO_ENTREGADO`) says whether the family got the alert's notice and whether the API is still trying (migration `V22`; earlier alerts become `ENTREGADO` or `NO_ENTREGADO`).
+- Pushes were sent inside the household agent's request transaction (and the escalation job's). Every notice is now saved in the outbox (`avisos_pendientes`) with the change that calls for it and sent after the commit, on another thread, with no database transaction open while the push service answers (`DespachoDeAvisos`). A rolled-back change sends nothing; a notice is not lost if the API stops.
+- FCM `INVALID_ARGUMENT` no longer deactivates devices (Firebase also returns it for a payload problem); only `UNREGISTERED` and `SENDER_ID_MISMATCH` do, and every deactivation is logged with the device id and `desactivado_en`.
+- Transient FCM errors (`UNAVAILABLE`, `INTERNAL`, `QUOTA_EXCEEDED`) are retried for the failed devices only, up to 3 sends, honouring `Retry-After` (at most 10 s). Partial failures are logged per device.
+- Every FCM send is logged with the device's platform and token fingerprint (never the token) and FCM's message id or error code.
+- Urgency of the push payload: Android channel `alertas_caida` for alert notices, `tag` per alert and `ttl` 1 h; APNs `apns-push-type: alert`, `apns-expiration`, `apns-collapse-id` and `interruption-level: time-sensitive` for urgent notices; web push `TTL`, `tag` and `requireInteraction` for urgent notices, and a link to the alert's screen (`<TT_PWA_URL>#/alerta/<id>`).
+- `POST /api/dispositivos` with an unchanged token did not record anything, so a phone's last registration was unknown. It now records `vistoEn` every time and answers `201 Dispositivo {id, plataforma, activo, vistoEn, desactivadoEn}`. A registration also sends the household's queued notices right away.
+- The app could not know that the API had stopped sending to it. New `GET /api/dispositivos/{id}` (the caller's own devices; `404 DISPOSITIVO_NO_ENCONTRADO`) returns whether the device is active, and `GET /api/hogar` returns `dispositivosActivos`, the active push devices of the household's members (0: nobody in the family can receive alerts).
+- A late delivery could overwrite the agent's next change to the same alert (e.g. its confirmation): alerts are now updated column by column.
+- `scripts/e2e.sh` waits for the push sent after the commit and checks `estadoAviso`.
+
+### Changed
+- «Se levantó» after a confirmed fall: the recovery of a confirmed fall now sends `SE_LEVANTO` too, with the CA-21.1 copy, while the alert stays active and confirmed until a member attends it. Product decision of 2026-10-10, which changes CA-21.2 (docs/BLOCKERS.md).
+- `docs/API_CONTRACT.md` (§2 `dispositivosActivos`, §5 `estadoAviso`, §7 device registration, `Dispositivo`, delivery and urgency) and `docs/NOTIFICATIONS.md` (delivery outbox, urgency, token handling).
+
 ## [0.3.0] - 2026-10-09
 ### Added
 - Live view v3, WebRTC playback (ADR 0008): `POST /api/camaras/{id}/vista-en-vivo` also answers `urlWebrtc`, the camera's WHEP endpoint on MediaMTX with the session's viewer token in the query (`TT_VIVO_URL_WEBRTC`, e.g. `https://<host>/vivo-webrtc/camaras/{camaraId}/whep`; null when blank, the default, so the app keeps LL-HLS). `urlTransmision` (LL-HLS) stays as the fallback.

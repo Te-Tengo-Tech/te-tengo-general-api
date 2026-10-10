@@ -26,6 +26,7 @@ final class AlertaMapper {
                 a.getHabitacion(),
                 a.getOcurridaEn(),
                 a.getNotificadaEn(),
+                a.getEstadoAviso().name(),
                 a.getRecuperadaEn(),
                 atendidaPor,
                 a.getAtendidaEn(),

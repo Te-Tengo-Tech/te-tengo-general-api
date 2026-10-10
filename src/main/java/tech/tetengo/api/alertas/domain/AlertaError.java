@@ -9,7 +9,9 @@ public enum AlertaError implements CodigoError {
     EVENTO_NO_ENCONTRADO("EVENTO_NO_ENCONTRADO", HttpStatus.NOT_FOUND, "El evento no existe o no generó una alerta."),
     CLIP_NO_DISPONIBLE("CLIP_NO_DISPONIBLE", HttpStatus.NOT_FOUND, "El video de esta alerta no está disponible."),
     CLIP_ELIMINADO("CLIP_ELIMINADO", HttpStatus.GONE, "La grabación ya no está disponible."),
-    ALERTA_CERRADA("ALERTA_CERRADA", HttpStatus.CONFLICT, "La alerta ya fue atendida o marcada como falsa alarma.");
+    ALERTA_CERRADA("ALERTA_CERRADA", HttpStatus.CONFLICT, "La alerta ya fue atendida o marcada como falsa alarma."),
+    DISPOSITIVO_NO_ENCONTRADO(
+            "DISPOSITIVO_NO_ENCONTRADO", HttpStatus.NOT_FOUND, "Este dispositivo no está registrado en tu cuenta.");
 
     private final String codigo;
     private final HttpStatus estado;

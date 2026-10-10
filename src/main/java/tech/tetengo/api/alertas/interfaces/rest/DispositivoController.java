@@ -3,8 +3,10 @@ package tech.tetengo.api.alertas.interfaces.rest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -30,11 +32,22 @@ class DispositivoController {
 
     @Operation(
             summary = "Register a push device",
-            description = "201. plataforma is ANDROID, IOS or WEB (the PWA's FCM web push token).")
+            description =
+                    "201 Dispositivo. Upsert by token: the app calls it on every start and resume; it reactivates the device and records when it was last seen. plataforma is ANDROID, IOS or WEB (the PWA's FCM web push token).")
     @PostMapping(version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.CREATED)
-    void registrar(@Valid @RequestBody RegistrarDispositivoRequest pedido) {
-        registrarDispositivo.ejecutar(UsuarioActual.id(), pedido.tokenPush(), Plataforma.valueOf(pedido.plataforma()));
+    DispositivoResponse registrar(@Valid @RequestBody RegistrarDispositivoRequest pedido) {
+        return DispositivoResponse.de(registrarDispositivo.ejecutar(
+                UsuarioActual.id(), pedido.tokenPush(), Plataforma.valueOf(pedido.plataforma())));
+    }
+
+    @Operation(
+            summary = "Read one of the caller's push devices",
+            description =
+                    "200 Dispositivo: activo is false once the push service said its token no longer exists; the app then gets a new token and registers it. Errors: 404 DISPOSITIVO_NO_ENCONTRADO.")
+    @GetMapping(path = "/{id}", version = ApiVersioning.V1)
+    DispositivoResponse consultar(@PathVariable UUID id) {
+        return DispositivoResponse.de(registrarDispositivo.consultar(UsuarioActual.id(), id));
     }
 
     @Operation(summary = "Remove a push device", description = "204.")

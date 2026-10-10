@@ -8,6 +8,7 @@ import java.util.Map;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Aviso;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Detalle;
 import tech.tetengo.api.shared.application.port.NotificadorPush.TipoDeAlerta;
+import tech.tetengo.api.shared.application.port.TipoAviso;
 import tech.tetengo.api.shared.domain.model.ZonaHoraria;
 
 /**
@@ -183,6 +184,38 @@ public record ContenidoDelAviso(String titulo, String cuerpo, String etiqueta, M
             datos.put("etiqueta", etiqueta);
         }
         return datos;
+    }
+
+    /** The notice's type, from the data payload; null without one. */
+    public TipoAviso tipo() {
+        String tipo = datos.get("tipo");
+        return tipo == null ? null : TipoAviso.valueOf(tipo);
+    }
+
+    /** The alert the notice is about, if any. */
+    public String alertaId() {
+        return datos.get("alertaId");
+    }
+
+    /** {@link TipoAviso#urgente()}. */
+    public boolean urgente() {
+        return tipo() != null && tipo().urgente();
+    }
+
+    /**
+     * What the phone groups the notice under: a later notice of the same alert (or camera) replaces
+     * the earlier one on screen instead of piling up (Android {@code tag}, APNs
+     * {@code apns-collapse-id}, web notification {@code tag}). The alert's id; otherwise
+     * {@code camara-<id>}; otherwise the type.
+     */
+    public String grupo() {
+        if (datos.get("alertaId") != null) {
+            return datos.get("alertaId");
+        }
+        if (datos.get("camaraId") != null) {
+            return "camara-" + datos.get("camaraId");
+        }
+        return tipo() == null ? "te-tengo" : tipo().name();
     }
 
     private static String hora(Instant instante) {

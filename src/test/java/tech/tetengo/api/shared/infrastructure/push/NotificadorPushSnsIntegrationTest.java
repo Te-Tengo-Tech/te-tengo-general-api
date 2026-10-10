@@ -186,8 +186,14 @@ class NotificadorPushSnsIntegrationTest {
                 .isEqualTo("Posible caída de Rosa en la Sala");
         assertThat(mensaje.path("webpush").path("headers").path("Urgency").asString())
                 .isEqualTo("high");
+        // A click opens the alert's screen of the PWA.
         assertThat(mensaje.path("webpush").path("fcm_options").path("link").asString())
-                .isEqualTo(PWA);
+                .isEqualTo(PWA + "#/alerta/" + ALERTA);
+        assertThat(mensaje.path("webpush")
+                        .path("notification")
+                        .path("requireInteraction")
+                        .asBoolean())
+                .isTrue();
         assertThat(mensaje.path("data").path("tipo").asString()).isEqualTo("ALERTA_CAIDA");
     }
 

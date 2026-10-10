@@ -9,8 +9,13 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.MessagingErrorCode;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +30,7 @@ import tech.tetengo.api.shared.application.port.NotificadorPush.Resultado;
 import tech.tetengo.api.shared.application.port.TipoAviso;
 import tools.jackson.databind.json.JsonMapper;
 
-/** The FCM adapter with a fake {@link MensajeriaFcm}: payload, rejected tokens and failures. */
+/** The FCM adapter with a fake {@link MensajeriaFcm}: payload, rejected tokens, retries and failures. */
 class NotificadorPushFcmTest {
 
     private static final Aviso CAIDA = new Aviso(
@@ -41,9 +46,17 @@ class NotificadorPushFcmTest {
 
     private static final String PWA = "https://te-tengo.pages.dev/app/";
 
-    /** Answers each message with the next queued answer. */
+    private static final Instant AHORA = Instant.parse("2026-10-10T15:00:00Z");
+
+    private static final Clock RELOJ = Clock.fixed(AHORA, ZoneOffset.UTC);
+
+    /**
+     * Answers each send with the next queued round ({@link #rondas}), or else with {@link #respuestas}.
+     */
     static class MensajeriaFalsa implements MensajeriaFcm {
         final List<Message> enviados = new ArrayList<>();
+        final List<Integer> lotes = new ArrayList<>();
+        final Deque<List<Respuesta>> rondas = new ArrayDeque<>();
         List<Respuesta> respuestas = List.of();
         RuntimeException falla;
 
@@ -53,12 +66,14 @@ class NotificadorPushFcmTest {
                 throw falla;
             }
             enviados.addAll(mensajes);
-            return respuestas;
+            lotes.add(mensajes.size());
+            return rondas.isEmpty() ? respuestas : rondas.poll();
         }
     }
 
     private final MensajeriaFalsa mensajeria = new MensajeriaFalsa();
-    private final NotificadorPushFcm notificador = new NotificadorPushFcm(mensajeria, PWA);
+    private final List<Duration> esperas = new ArrayList<>();
+    private final NotificadorPushFcm notificador = new NotificadorPushFcm(mensajeria, PWA, RELOJ, esperas::add);
 
     private static MensajeriaFcm.Respuesta aceptada() {
         return new MensajeriaFcm.Respuesta(true, null);
@@ -76,7 +91,8 @@ class NotificadorPushFcmTest {
 
         assertThat(resultado).isEqualTo(new Resultado(2, java.util.Set.of(), Map.of()));
         assertThat(mensajeria.enviados).hasSize(2);
-        Map<String, Object> esperado = new LinkedHashMap<>(CargasPush.mensajeFcm(ContenidoDelAviso.de(CAIDA), PWA));
+        Map<String, Object> esperado =
+                new LinkedHashMap<>(CargasPush.mensajeFcm(ContenidoDelAviso.de(CAIDA), PWA, AHORA));
         esperado.put("token", "token-ana");
         assertThat(json(mensajeria.enviados.getFirst())).isEqualTo(normalizar(esperado));
     }
@@ -113,7 +129,11 @@ class NotificadorPushFcmTest {
                                         "subtitle", "URGENTE · CAÍDA",
                                         "body", "10:42 · Toca para ver qué hacer y llamarla."),
                                 "sound",
-                                "default")));
+                                "default",
+                                "thread-id",
+                                CAIDA.alertaId().toString(),
+                                "interruption-level",
+                                "time-sensitive")));
     }
 
     @Test
@@ -130,13 +150,19 @@ class NotificadorPushFcmTest {
                 .extractingByKey("webpush")
                 .isEqualTo(Map.of(
                         "headers",
-                        Map.of("Urgency", "high"),
+                        Map.of("Urgency", "high", "TTL", "3600"),
                         "notification",
                         Map.of(
-                                "title", "Posible caída de Rosa en la Sala",
-                                "body", "10:42 · Toca para ver qué hacer y llamarla."),
+                                "title",
+                                "Posible caída de Rosa en la Sala",
+                                "body",
+                                "10:42 · Toca para ver qué hacer y llamarla.",
+                                "tag",
+                                CAIDA.alertaId().toString(),
+                                "requireInteraction",
+                                true),
                         "fcm_options",
-                        Map.of("link", PWA)));
+                        Map.of("link", PWA + "#/alerta/" + CAIDA.alertaId())));
         // The contract's data payload reaches the PWA too.
         assertThat(mensaje)
                 .extractingByKey("data")
@@ -149,7 +175,8 @@ class NotificadorPushFcmTest {
     void sinUrlDeLaPwaElAvisoWebNoLlevaEnlace() {
         mensajeria.respuestas = List.of(aceptada());
 
-        new NotificadorPushFcm(mensajeria, null).enviar(List.of(new Destino("token-web", Plataforma.WEB)), CAIDA);
+        new NotificadorPushFcm(mensajeria, null, RELOJ, esperas::add)
+                .enviar(List.of(new Destino("token-web", Plataforma.WEB)), CAIDA);
 
         @SuppressWarnings("unchecked")
         Map<String, Object> mensaje = (Map<String, Object>) json(mensajeria.enviados.getFirst());
@@ -158,7 +185,7 @@ class NotificadorPushFcmTest {
                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
                 .doesNotContainKey("fcm_options")
                 .containsKey("notification");
-        assertThat(CargasPush.mensajeFcm(ContenidoDelAviso.de(CAIDA), null))
+        assertThat(CargasPush.mensajeFcm(ContenidoDelAviso.de(CAIDA), null, AHORA))
                 .extractingByKey("webpush")
                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
                 .doesNotContainKey("fcm_options");
@@ -184,9 +211,9 @@ class NotificadorPushFcmTest {
     }
 
     @Test
-    void siTodosLosTokensSonInvalidosNoEsUnaFalla() {
+    void siTodosLosTokensYaNoExistenNoEsUnaFalla() {
         mensajeria.respuestas =
-                List.of(error(MessagingErrorCode.INVALID_ARGUMENT), error(MessagingErrorCode.SENDER_ID_MISMATCH));
+                List.of(error(MessagingErrorCode.UNREGISTERED), error(MessagingErrorCode.SENDER_ID_MISMATCH));
 
         Resultado resultado = notificador.enviar(DESTINOS, CAIDA);
 
@@ -195,15 +222,138 @@ class NotificadorPushFcmTest {
     }
 
     @Test
-    void ca16_4_siFcmNoAceptaNingunoPorOtraRazonSeReintenta() {
-        mensajeria.respuestas = List.of(error(MessagingErrorCode.UNAVAILABLE), error(MessagingErrorCode.UNREGISTERED));
+    void invalidArgumentNoDesactivaElDispositivo() {
+        // FCM also answers INVALID_ARGUMENT for a payload it rejects: deactivating would silence the phone.
+        mensajeria.respuestas = List.of(aceptada(), error(MessagingErrorCode.INVALID_ARGUMENT));
+
+        Resultado resultado = notificador.enviar(DESTINOS, CAIDA);
+
+        assertThat(resultado.aceptados()).isEqualTo(1);
+        assertThat(resultado.tokensInvalidos()).isEmpty();
+        assertThat(mensajeria.lotes).containsExactly(2);
+    }
+
+    @Test
+    void ca16_4_siTodosDanInvalidArgumentEsUnaFallaQueSeReintentaMasTarde() {
+        mensajeria.respuestas =
+                List.of(error(MessagingErrorCode.INVALID_ARGUMENT), error(MessagingErrorCode.INVALID_ARGUMENT));
         assertThatThrownBy(() -> notificador.enviar(DESTINOS, CAIDA)).isInstanceOf(FallaDePush.class);
     }
 
     @Test
+    void ca16_4_siFcmNoAceptaNingunoPorOtraRazonSeReintenta() {
+        mensajeria.respuestas = List.of(error(MessagingErrorCode.UNAVAILABLE), error(MessagingErrorCode.UNREGISTERED));
+        assertThatThrownBy(() -> notificador.enviar(DESTINOS, CAIDA)).isInstanceOf(FallaDePush.class);
+        // The transient one was retried before giving up; the gone token was not.
+        assertThat(mensajeria.lotes).containsExactly(2, 1, 1);
+        assertThat(esperas).containsExactly(Duration.ofSeconds(1), Duration.ofSeconds(2));
+    }
+
+    @Test
+    void unErrorTransitorioSeReintentaSoloParaElDispositivoQueFallo() {
+        mensajeria.rondas.add(List.of(aceptada(), error(MessagingErrorCode.UNAVAILABLE)));
+        mensajeria.rondas.add(List.of(aceptada()));
+
+        Resultado resultado = notificador.enviar(DESTINOS, CAIDA);
+
+        assertThat(resultado.aceptados()).isEqualTo(2);
+        assertThat(mensajeria.lotes).containsExactly(2, 1);
+        assertThat(json(mensajeria.enviados.get(2)).toString()).contains("token-beto");
+    }
+
+    @Test
+    void seRespetaElRetryAfterDeFcmHastaUnMaximo() {
+        mensajeria.rondas.add(List.of(
+                new MensajeriaFcm.Respuesta(false, MessagingErrorCode.QUOTA_EXCEEDED, null, Duration.ofSeconds(4))));
+        mensajeria.rondas.add(
+                List.of(new MensajeriaFcm.Respuesta(false, MessagingErrorCode.INTERNAL, null, Duration.ofSeconds(90))));
+        mensajeria.rondas.add(List.of(aceptada()));
+
+        Resultado resultado = notificador.enviar(List.of(DESTINOS.getFirst()), CAIDA);
+
+        assertThat(resultado.aceptados()).isEqualTo(1);
+        assertThat(esperas).containsExactly(Duration.ofSeconds(4), NotificadorPushFcm.ESPERA_MAXIMA);
+    }
+
+    @Test
     void unaFallaParcialNoReintentaAQuienesYaLoRecibieron() {
-        mensajeria.respuestas = List.of(aceptada(), error(MessagingErrorCode.INTERNAL));
+        mensajeria.rondas.add(List.of(aceptada(), error(MessagingErrorCode.INTERNAL)));
+        mensajeria.respuestas = List.of(error(MessagingErrorCode.INTERNAL));
         assertThat(notificador.enviar(DESTINOS, CAIDA).aceptados()).isEqualTo(1);
+        assertThat(mensajeria.lotes).containsExactly(2, 1, 1);
+    }
+
+    @Test
+    void laCaidaEsUrgenteEnAndroidIosYLaWeb() {
+        mensajeria.respuestas = List.of(aceptada(), aceptada());
+
+        notificador.enviar(DESTINOS, CAIDA);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> mensaje = (Map<String, Object>) json(mensajeria.enviados.getFirst());
+        String alerta = CAIDA.alertaId().toString();
+        assertThat(mensaje)
+                .extractingByKey("android")
+                .isEqualTo(Map.of(
+                        "priority",
+                        "high",
+                        "ttl",
+                        "3600s",
+                        "notification",
+                        Map.of("sound", "default", "tag", alerta, "channel_id", "alertas_caida")));
+        assertThat(mensaje)
+                .extractingByKey("apns")
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .extractingByKey("headers")
+                .isEqualTo(Map.of(
+                        "apns-priority",
+                        "10",
+                        "apns-push-type",
+                        "alert",
+                        "apns-expiration",
+                        String.valueOf(AHORA.plusSeconds(3600).getEpochSecond()),
+                        "apns-collapse-id",
+                        alerta));
+    }
+
+    @Test
+    void unAvisoDeCamaraNoEsUrgenteNiVaAlCanalDeAlertas() {
+        Aviso desconectada = new Aviso(
+                TipoAviso.CAMARA_DESCONECTADA,
+                null,
+                UUID.fromString("0199c0de-0000-7000-8000-000000000001"),
+                "Sala",
+                AHORA);
+        mensajeria.respuestas = List.of(aceptada());
+
+        notificador.enviar(List.of(new Destino("token-web", Plataforma.WEB)), desconectada);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> mensaje = (Map<String, Object>) json(mensajeria.enviados.getFirst());
+        assertThat(mensaje.toString())
+                .doesNotContain("alertas_caida")
+                .doesNotContain("time-sensitive")
+                .doesNotContain("requireInteraction")
+                .contains("camara-0199c0de-0000-7000-8000-000000000001");
+        assertThat(mensaje)
+                .extractingByKey("webpush")
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .extractingByKey("fcm_options")
+                .isEqualTo(Map.of("link", PWA));
+    }
+
+    @Test
+    void elRetryAfterSeLeeEnSegundosOComoFecha() {
+        assertThat(MensajeriaFirebase.duracion("7", AHORA)).isEqualTo(Duration.ofSeconds(7));
+        assertThat(MensajeriaFirebase.duracion("Sat, 10 Oct 2026 15:00:30 GMT", AHORA))
+                .isEqualTo(Duration.ofSeconds(30));
+        assertThat(MensajeriaFirebase.duracion("pronto", AHORA)).isNull();
+    }
+
+    @Test
+    void laHuellaDelTokenNoLoRevela() {
+        assertThat(HuellaDeToken.de("token-ana")).hasSize(12).doesNotContain("token");
+        assertThat(HuellaDeToken.de("token-ana")).isEqualTo(HuellaDeToken.de("token-ana"));
     }
 
     @Test

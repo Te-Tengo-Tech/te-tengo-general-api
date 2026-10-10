@@ -28,6 +28,16 @@ class DispositivoRepositoryAdapter implements DispositivoRepository {
     }
 
     @Override
+    public Optional<Dispositivo> buscar(UUID id) {
+        return jpa.findById(id);
+    }
+
+    @Override
+    public long activosDe(Collection<UUID> usuarioIds) {
+        return usuarioIds.isEmpty() ? 0 : jpa.countByUsuarioIdInAndActivoTrue(usuarioIds);
+    }
+
+    @Override
     public List<Dispositivo> deUsuarios(Collection<UUID> usuarioIds) {
         return jpa.findByUsuarioIdInAndActivoTrue(usuarioIds);
     }

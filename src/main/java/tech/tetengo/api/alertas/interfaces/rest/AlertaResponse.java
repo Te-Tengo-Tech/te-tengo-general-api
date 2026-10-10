@@ -14,6 +14,7 @@ record AlertaResponse(
         String habitacion,
         Instant ocurridaEn,
         Instant notificadaEn,
+        String estadoAviso,
         Instant recuperadaEn,
         AtendidaPor atendidaPor,
         Instant atendidaEn,

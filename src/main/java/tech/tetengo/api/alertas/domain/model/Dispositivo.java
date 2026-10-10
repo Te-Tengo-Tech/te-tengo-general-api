@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import tech.tetengo.api.shared.domain.model.AggregateRoot;
@@ -34,19 +35,28 @@ public class Dispositivo extends AggregateRoot {
     @Column(name = "referencia_push", length = 1024)
     private String referenciaPush;
 
+    /** Last registration: the app registers its token every time it starts or comes back. */
+    @Column(name = "visto_en", nullable = false)
+    private Instant vistoEn;
+
+    /** When the push service rejected the token; null while active. */
+    @Column(name = "desactivado_en")
+    private Instant desactivadoEn;
+
     protected Dispositivo() {}
 
-    public Dispositivo(String tokenPush, UUID usuarioId, Plataforma plataforma) {
+    public Dispositivo(String tokenPush, UUID usuarioId, Plataforma plataforma, Instant ahora) {
         this.tokenPush = Objects.requireNonNull(tokenPush, "tokenPush");
-        asignar(usuarioId, plataforma);
+        asignar(usuarioId, plataforma, ahora);
     }
 
     /**
      * The phone now belongs to whoever registered it last (e.g. another account signed in). A
-     * registration also reactivates the device; the provider's address is dropped when the device was
-     * inactive or changed platform, so the provider creates or re-enables it on the next push.
+     * registration also reactivates the device and records when it was last seen, even when nothing
+     * else changed; the provider's address is dropped when the device was inactive or changed
+     * platform, so the provider creates or re-enables it on the next push.
      */
-    public void asignar(UUID usuarioId, Plataforma plataforma) {
+    public void asignar(UUID usuarioId, Plataforma plataforma, Instant ahora) {
         Objects.requireNonNull(plataforma, "plataforma");
         if (!activo || (this.plataforma != null && this.plataforma != plataforma)) {
             referenciaPush = null;
@@ -54,11 +64,19 @@ public class Dispositivo extends AggregateRoot {
         this.usuarioId = Objects.requireNonNull(usuarioId, "usuarioId");
         this.plataforma = plataforma;
         this.activo = true;
+        this.desactivadoEn = null;
+        this.vistoEn = Objects.requireNonNull(ahora, "ahora");
     }
 
-    /** The push service rejected the token: no more notices until the phone registers it again. */
-    public void desactivar() {
-        activo = false;
+    /**
+     * The push service says the token is gone ({@code UNREGISTERED}, {@code SENDER_ID_MISMATCH}):
+     * no more notices until the phone registers a token again.
+     */
+    public void desactivar(Instant ahora) {
+        if (activo) {
+            activo = false;
+            desactivadoEn = ahora;
+        }
     }
 
     /** The push provider's address of this device (the Amazon SNS platform endpoint ARN). */
@@ -84,5 +102,13 @@ public class Dispositivo extends AggregateRoot {
 
     public String getReferenciaPush() {
         return referenciaPush;
+    }
+
+    public Instant getVistoEn() {
+        return vistoEn;
+    }
+
+    public Instant getDesactivadoEn() {
+        return desactivadoEn;
     }
 }

@@ -52,11 +52,12 @@ public final class DatosDePrueba {
     public static void dispositivo(JdbcTemplate jdbc, UUID usuario, String tokenPush) {
         Timestamp ahora = Timestamp.from(Instant.now());
         jdbc.update(
-                "insert into dispositivos (id, token_push, usuario_id, plataforma, creado_en, actualizado_en)"
-                        + " values (?, ?, ?, 'ANDROID', ?, ?)",
+                "insert into dispositivos (id, token_push, usuario_id, plataforma, visto_en, creado_en, actualizado_en)"
+                        + " values (?, ?, ?, 'ANDROID', ?, ?, ?)",
                 UUID.randomUUID(),
                 tokenPush,
                 usuario,
+                ahora,
                 ahora,
                 ahora);
     }

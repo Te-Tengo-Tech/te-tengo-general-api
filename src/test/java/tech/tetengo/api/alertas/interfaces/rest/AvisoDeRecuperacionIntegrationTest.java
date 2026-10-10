@@ -69,15 +69,28 @@ class AvisoDeRecuperacionIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void ca21_2_siLaCaidaSeConfirmaNoSeEnviaElAvisoYSigueActivaComoConfirmada() throws Exception {
+    void ca21_2_siLaCaidaConfirmadaSeLevantaSeAvisaYLaAlertaSigueActivaComoConfirmada() throws Exception {
+        // Product decision of 2026-10-10 (docs/BLOCKERS.md): the family must know the person got up,
+        // also after a confirmed fall; the alert stays active until somebody attends it.
         String alerta = evento("caida", cuando);
         evento("caida_confirmada", cuando.plusSeconds(30));
         evento("recuperacion", cuando.plusSeconds(90));
 
-        assertThat(push.deTipo(TipoAviso.SE_LEVANTO)).isEmpty();
+        assertThat(push.deTipo(TipoAviso.SE_LEVANTO)).singleElement().satisfies(e -> {
+            assertThat(e.aviso().alertaId()).hasToString(alerta);
+            assertThat(e.aviso().ocurridaEn()).isEqualTo(cuando.plusSeconds(90));
+        });
         mvc.perform(get("/api/alertas/" + alerta).header("Authorization", bearer(campo(titular, "$.tokenAcceso"))))
                 .andExpect(jsonPath("$.estado").value("ACTIVA"))
-                .andExpect(jsonPath("$.confirmada").value(true));
+                .andExpect(jsonPath("$.confirmada").value(true))
+                .andExpect(jsonPath("$.recuperadaEn").isNotEmpty());
+    }
+
+    @Test
+    void ca21_2_siLaCaidaSigueConfirmadaSinLevantarseNoHayAvisoDeSeguimiento() throws Exception {
+        evento("caida", cuando);
+        evento("caida_confirmada", cuando.plusSeconds(30));
+        assertThat(push.deTipo(TipoAviso.SE_LEVANTO)).isEmpty();
     }
 
     @Test
