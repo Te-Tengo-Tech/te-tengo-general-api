@@ -4,6 +4,15 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-10
+
+### Fixed
+- After a consent revocation the app could not know that the recordings were deleted unless the push `DATOS_ELIMINADOS` reached its screen, which does not happen while the app is in the background or the PWA's window is hidden: the revocation screen stayed on «Eliminando las grabaciones…». `GET /api/hogar` now returns `eliminacion: {estado: PROGRAMADA | TERMINADA, clips, programadaEn, terminadaEn} | null`, the deletion of the latest revocation, for any member, so the app can poll it. It is `PROGRAMADA` from the moment the revocation answers, also before `alertas` records the deletion on its own thread, and never shows an earlier revocation's deletion as the current one. `hogares` reads it through the shared port `EliminacionesDeGrabaciones`, implemented by `alertas` (like `dispositivosActivos`).
+- The app could not tell how many recordings a revocation deletes: it counted them with `GET /api/alertas?tamano=200`, which this API rejects (`tamano` is at most 100), and showed «0 clips» (in production 2 recordings were deleted). `DELETE /api/hogar/consentimiento` now answers `202 {eliminacionProgramada: true, clips}`, counted at the revocation, and a completed deletion stores how many it deleted (`eliminaciones_de_grabaciones.clips_eliminados`, migration `V23`; earlier deletions are filled from the clips they marked).
+
+### Changed
+- `docs/API_CONTRACT.md` §2 (`eliminacion`, `clips` of the revocation) and §5 (`tamano` at most 100, which the API already enforced).
+
 ## [0.3.3] - 2026-10-10
 
 ### Added
