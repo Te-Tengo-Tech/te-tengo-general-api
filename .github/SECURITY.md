@@ -32,12 +32,14 @@ We acknowledge reports within **72 hours** and aim to fix confirmed issues withi
 
 | Check | Where | When |
 |---|---|---|
-| Dependabot version updates (Gradle, GitHub Actions) | [`dependabot.yml`](dependabot.yml) | Weekly, PRs to `develop` |
-| OWASP Dependency-Check (NVD, runtime dependencies, fails on CVSS ≥ 7.0) | [`workflows/owasp.yml`](workflows/owasp.yml) | Weekly and on demand; needs the `NVD_API_KEY` secret, otherwise it is skipped with a notice |
+| Dependabot version updates (Gradle, GitHub Actions, Dockerfile base images, the local Compose stack) | [`dependabot.yml`](dependabot.yml) | Weekly, PRs to `develop` |
 | OSV-Scanner (all resolved Gradle dependencies, fails on high or critical) | [`workflows/osv-scanner.yml`](workflows/osv-scanner.yml) | Weekly, on demand, and report-only on PRs that change the build |
-| Unit, integration, architecture tests and the coverage gate | [`workflows/ci.yml`](workflows/ci.yml) | Every push to `main`/`develop`/`release/**`/`hotfix/**` and every PR |
+| Unit, integration, architecture tests and the coverage gate | [`workflows/ci.yml`](workflows/ci.yml) | Every PR, every push to `develop` and once on each release commit (called by the Release workflow) |
+| Image SBOM (SPDX), build provenance and SBOM attestations, OSV-Scanner report of the SBOM | [`workflows/release.yml`](workflows/release.yml) | Every release candidate; `gh attestation verify oci://ghcr.io/te-tengo-tech/te-tengo-general-api@<digest> --repo Te-Tengo-Tech/te-tengo-general-api` |
 
-Reports are uploaded as workflow artifacts and summarised on the run page.
+Reports are uploaded as workflow artifacts and summarised on the run page. The OWASP Dependency-Check workflow was removed: without an NVD API key it skipped itself and passed while checking nothing; OSV-Scanner covers the same dependencies without a key, and `./gradlew dependencyCheckAnalyze` still runs on demand with `NVD_API_KEY`.
+
+Workflows pin every action by commit SHA (Dependabot updates them), set no permissions at workflow level and the minimum per job, check out without persisted credentials, and read secrets only in the steps that need them. Pull requests and dispatches are made by the GitHub App te-tengo-release-bot with one-hour tokens minted per job; the Dockerfile's base images are pinned by digest.
 
 ## Limitations of the current plan
 

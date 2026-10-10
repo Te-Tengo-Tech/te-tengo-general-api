@@ -3,18 +3,25 @@ run-name: Release ${{ github.ref_name }}
 
 # Release candidates of the API, "build once, deploy many" (docs/DEPLOYMENT.md). A push to release/x.y.z or
 # hotfix/x.y.z:
-#   1. build          builds the image ONCE (linux/amd64 + linux/arm64) with the final version x.y.z inside
-#                     (label org.opencontainers.image.version), smoke-tests it and pushes it to GHCR as
-#                     x.y.z-rc.N and sha-<short commit>. N = 1 + the highest existing candidate of x.y.z (tags
-#                     vX.Y.Z-rc.* and GHCR tags), so an older candidate is never overwritten. The digest
-#                     identifies the candidate from here on.
-#   2. candidate      records it durably as the GitHub pre-release vX.Y.Z-rc.N (tag on the release commit):
-#                     commit, git tree hash, image digest, build number, verification state (pending).
-#   3. verify         automatic verification, no environment and no approval (the API has no staging target:
+#   1. ci             calls ci.yml on this commit (unit, integration and architecture tests, format, coverage):
+#                     the commit is tested once, here; the pull request into main does not test it again.
+#   2. build          (in parallel with ci) the version must match the branch and must not be released. Builds
+#                     the image ONCE (linux/amd64 + linux/arm64) with the final version x.y.z inside (label
+#                     org.opencontainers.image.version), smoke-tests it and pushes it to GHCR as x.y.z-rc.N and
+#                     sha-<short commit>. N = 1 + the highest existing candidate of x.y.z (tags vX.Y.Z-rc.* and
+#                     GHCR tags), so an older candidate is never overwritten. The digest identifies the
+#                     candidate from here on: build provenance and SBOM attestations are pushed to GHCR with it,
+#                     and the SBOM is scanned with OSV-Scanner (report only).
+#   3. candidate      after ci passed: records it durably as the GitHub pre-release vX.Y.Z-rc.N (tag on the
+#                     release commit, SBOM attached): commit, git tree hash, image digest, build number,
+#                     verification state (pending).
+#   4. verify         automatic verification, no environment and no approval (the API has no staging target:
 #                     there is no second VM). It pulls the SAME image by digest and smoke-tests it against
-#                     PostgreSQL 18; verify-e2e then runs the End-to-end workflow against that image.
-#   4. pull-request   marks the candidate verified and opens (or updates) the pull request
-#                     release/x.y.z → main, titled `release: x.y.z`. A new push builds rc.N+1 and updates it.
+#                     PostgreSQL 18; verify-e2e then runs the End-to-end workflow against that image and the
+#                     latest release of the desktop agent (what households run).
+#   5. pull-request   marks the candidate verified and opens (or updates) the pull request release/x.y.z → main,
+#                     titled `release: x.y.z`, as the GitHub App te-tengo-release-bot (so its checks run; the
+#                     edit re-runs release-gate, which turns green now that the candidate is verified).
 # Nothing is deployed here. Production happens after the merge, on main (produccion.yml): it finds the
 # candidate whose tree hash equals main's, deploys its digest and only then tags vX.Y.Z.
 #
@@ -29,8 +36,7 @@ on:
       - "release/**"
       - "hotfix/**"
 
-permissions:
-  contents: read
+permissions: {}
 
 # One release run per branch at a time. A running pipeline is never cancelled; a newer push waits, and
 # replaces an older run that is still waiting to start.
@@ -42,13 +48,21 @@ env:
   IMAGE: ghcr.io/te-tengo-tech/te-tengo-general-api
 
 jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   build:
     name: Build the candidate once (amd64, arm64)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
       contents: read
-      packages: write
+      packages: write # pushes the candidate image and its attestations
+      id-token: write # signs the attestations (Sigstore)
+      attestations: write # stores them
     outputs:
       version: ${{ steps.version.outputs.version }}
       candidate: ${{ steps.number.outputs.candidate }}
@@ -58,21 +72,28 @@ jobs:
       image_ref: ${{ vars.ENABLE_API_IMAGE == 'true' && format('{0}@{1}', env.IMAGE, steps.push.outputs.digest) || '' }}
       pushed: ${{ vars.ENABLE_API_IMAGE == 'true' && steps.push.outputs.digest != '' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Version, tree hash and tags
         id: version
-        # `version = "x.y.z"` of build.gradle.kts; the branch name should carry the same version.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # `version = "x.y.z"` of build.gradle.kts; the branch must carry the same version and it must not be
+        # released yet (a change to a released version is a new version).
         run: |
           version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' build.gradle.kts)
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::build.gradle.kts must declare version = \"x.y.z\" (found '$version')"
             exit 1
           fi
-          branch_version="${GITHUB_REF_NAME#*/}"
-          if [ "$branch_version" != "$version" ]; then
-            echo "::warning::The branch $GITHUB_REF_NAME does not match version $version of build.gradle.kts; the candidates are $version-rc.N."
+          if [ "${GITHUB_REF_NAME#*/}" != "$version" ]; then
+            echo "::error title=Branch and version differ::$GITHUB_REF_NAME must release version ${GITHUB_REF_NAME#*/}, but build.gradle.kts says $version. Bump the version on the branch or rename the branch."
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" > /dev/null 2>&1; then
+            echo "::error title=Already released::v$version exists. A change to a released version is a new version (hotfix/x.y.z+1)."
+            exit 1
           fi
           {
             echo "version=$version"
@@ -81,15 +102,15 @@ jobs:
           } >> "$GITHUB_OUTPUT"
       - name: Log in to GHCR
         if: vars.ENABLE_API_IMAGE == 'true'
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:
           platforms: arm64
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Candidate number
         id: number
         env:
@@ -114,7 +135,7 @@ jobs:
           echo "Candidate $VERSION-rc.$n (previous: ${previous:-none})"
       - name: Image tags and OCI labels
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.IMAGE }}
           tags: |
@@ -129,7 +150,7 @@ jobs:
       # Nothing is pushed unless the amd64 image starts, migrates an empty PostgreSQL 18, reports healthy and
       # does not run as root.
       - name: Build the amd64 image for the smoke test
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64
@@ -140,7 +161,7 @@ jobs:
         run: scripts/smoke-image.sh te-tengo-general-api:smoke
       - name: Build both platforms${{ vars.ENABLE_API_IMAGE == 'true' && ' and push' || '' }}
         id: push
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -150,6 +171,63 @@ jobs:
           annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # Supply chain: who built this digest from which commit (provenance), what is inside it (SBOM), and its
+      # known vulnerabilities. Verify with `gh attestation verify oci://IMAGE@DIGEST --repo <this repository>`.
+      - name: Build provenance attestation
+        if: vars.ENABLE_API_IMAGE == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: SBOM directory
+        if: vars.ENABLE_API_IMAGE == 'true'
+        run: mkdir -p sbom
+      - name: SBOM of the image
+        if: vars.ENABLE_API_IMAGE == 'true'
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+          format: spdx-json
+          output-file: sbom/te-tengo-general-api-${{ steps.number.outputs.candidate }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: SBOM attestation
+        if: vars.ENABLE_API_IMAGE == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: sbom/te-tengo-general-api-${{ steps.number.outputs.candidate }}.spdx.json
+          push-to-registry: true
+      - name: Vulnerability scan of the SBOM (OSV-Scanner, report only)
+        if: vars.ENABLE_API_IMAGE == 'true'
+        uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
+        continue-on-error: true # exits non-zero when it finds vulnerabilities; the summary reports them
+        with:
+          scan-args: |-
+            --lockfile=sbom/te-tengo-general-api-${{ steps.number.outputs.candidate }}.spdx.json
+            --format=json
+            --output-file=osv-image.json
+      # The scanner is a Docker action: it only sees the workspace, so the SBOM and the report live there.
+      - name: Vulnerability summary
+        if: vars.ENABLE_API_IMAGE == 'true'
+        run: |
+          if [ -s osv-image.json ]; then
+            python3 .github/scripts/osv_summary.py osv-image.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "OSV-Scanner wrote no report for the image SBOM." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Keep the SBOM for the candidate
+        if: vars.ENABLE_API_IMAGE == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: sbom/
+          if-no-files-found: error
+          retention-days: 7
       - name: Summary
         if: always()
         env:
@@ -162,7 +240,7 @@ jobs:
           {
             echo "## Release candidate $CANDIDATE ($GITHUB_REF_NAME)"
             if [ "$ENABLE_API_IMAGE" = true ] && [ -n "$DIGEST" ]; then
-              echo "Pushed \`$IMAGE@$DIGEST\` (linux/amd64, linux/arm64; version $VERSION inside, build $GITHUB_RUN_NUMBER) as \`$CANDIDATE\` and \`$SHA_TAG\`."
+              echo "Pushed \`$IMAGE@$DIGEST\` (linux/amd64, linux/arm64; version $VERSION inside, build $GITHUB_RUN_NUMBER) as \`$CANDIDATE\` and \`$SHA_TAG\`, with build provenance and SBOM attestations."
               echo "Every later stage, and production after the merge to \`main\`, uses this digest."
             else
               echo "Built and smoke-tested for linux/amd64 and linux/arm64, **not pushed**."
@@ -173,12 +251,12 @@ jobs:
 
   candidate:
     name: Record the candidate (pre-release)
-    needs: build
+    needs: [ci, build]
     if: needs.build.outputs.pushed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: write
+      contents: write # the pre-release vX.Y.Z-rc.N and its tag
     env:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.build.outputs.version }}
@@ -188,13 +266,18 @@ jobs:
       DIGEST: ${{ needs.build.outputs.digest }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom
+          path: ${{ runner.temp }}/sbom
       - name: Create the pre-release v${{ needs.build.outputs.candidate }}
-        # The block between the markers is read by produccion.yml and rollback.yml: keep its key=value lines.
+        # The block between the markers is read by find-candidate.sh (produccion.yml, release-gate.yml) and
+        # rollback.yml: keep its key=value lines.
         run: |
           set -euo pipefail
           notes="$RUNNER_TEMP/notes.md"
           cat > "$notes" <<EOF
-          Release candidate **$CANDIDATE** of te-tengo-general-api: final version **$VERSION**, build $GITHUB_RUN_NUMBER, built once from \`$GITHUB_REF_NAME\`.
+          Release candidate **$CANDIDATE** of te-tengo-general-api: final version **$VERSION**, build $GITHUB_RUN_NUMBER, built once from \`$GITHUB_REF_NAME\` and tested there by CI.
 
           | | |
           |---|---|
@@ -203,6 +286,7 @@ jobs:
           | Commit | $GITHUB_SHA |
           | Tree | \`$TREE\` |
           | Verification | pending: [pipeline run]($RUN_URL) |
+          | Attestations | build provenance and SBOM (SPDX, attached), in GHCR: \`gh attestation verify oci://$IMAGE@$DIGEST --repo $GITHUB_REPOSITORY\` |
 
           Production deploys this digest after the pull request to \`main\` is merged, if \`main\` has the same tree.
 
@@ -218,7 +302,7 @@ jobs:
           \`\`\`
           EOF
           gh release create "v$CANDIDATE" -R "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
-            --title "v$CANDIDATE" --notes-file "$notes"
+            --title "v$CANDIDATE" --notes-file "$notes" "$RUNNER_TEMP"/sbom/*.spdx.json
           echo "Recorded the candidate as the pre-release \`v$CANDIDATE\` (tag on \`$GITHUB_SHA\`, tree \`$TREE\`)." >> "$GITHUB_STEP_SUMMARY"
 
   verify:
@@ -234,11 +318,11 @@ jobs:
       IMAGE_REF: ${{ needs.build.outputs.image_ref }}
       DIGEST: ${{ needs.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -250,13 +334,28 @@ jobs:
             || { echo "::error::The pulled image does not carry the digest $DIGEST"; exit 1; }
       - name: Smoke test (PostgreSQL + /actuator/health)
         run: scripts/smoke-image.sh "$IMAGE_REF"
+      - name: Latest release of the desktop agent
+        id: escritorio
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # The end-to-end test runs the agent that households have (the latest final release of the public
+        # te-tengo-desktop-pywebview), not its develop branch.
+        run: |
+          tag=$(gh api repos/Te-Tengo-Tech/te-tengo-desktop-pywebview/releases/latest --jq .tag_name)
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Unexpected latest desktop release '$tag'"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Desktop agent for the end-to-end test: $tag (latest release)."
       - name: Summary
+        env:
+          ESCRITORIO: ${{ steps.escritorio.outputs.tag }}
         run: |
           {
             echo "## Verification (ephemeral)"
             echo "Pulled \`$IMAGE_REF\` and started it with PostgreSQL 18 in the runner: migrations, health, readiness and non-root user passed."
-            echo "The end-to-end test against the same image runs next (*Verify the candidate: end-to-end*)."
+            echo "The end-to-end test against the same image and the desktop agent \`$ESCRITORIO\` runs next (*Verify the candidate: end-to-end*)."
           } >> "$GITHUB_STEP_SUMMARY"
+    outputs:
+      escritorio: ${{ steps.escritorio.outputs.tag }}
 
   verify-e2e:
     name: "Verify the candidate: end-to-end"
@@ -267,27 +366,31 @@ jobs:
       packages: read
     with:
       imagen: ${{ needs.build.outputs.image_ref }}
-    secrets:
-      E2E_REPO_TOKEN: ${{ secrets.E2E_REPO_TOKEN }}
+      escritorio_ref: ${{ needs.verify.outputs.escritorio }}
 
   pull-request:
-    name: Mark the candidate verified and open the pull request (→ main)
+    name: Pull request to main
     needs: [build, candidate, verify, verify-e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: write
-      pull-requests: write
+      contents: write # marks the pre-release verified
     env:
-      GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.build.outputs.version }}
       CANDIDATE: ${{ needs.build.outputs.candidate }}
       SHA_TAG: ${{ needs.build.outputs.sha_tag }}
       TREE: ${{ needs.build.outputs.tree }}
       IMAGE_REF: ${{ needs.build.outputs.image_ref }}
+      ESCRITORIO: ${{ needs.verify.outputs.escritorio }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
       - name: Mark v${{ needs.build.outputs.candidate }} verified
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           notes="$RUNNER_TEMP/notes.md"
@@ -296,10 +399,29 @@ jobs:
             || { echo "::error::The notes of v$CANDIDATE have no verification= line"; exit 1; }
           sed -i \
             -e 's/^verification=pending$/verification=passed/' \
-            -e "s#^| Verification | .*#| Verification | passed: smoke test (PostgreSQL 18) and end-to-end (agent → API → alert) on this digest, [pipeline run]($RUN_URL) |#" \
+            -e "s#^| Verification | .*#| Verification | passed: smoke test (PostgreSQL 18) and end-to-end (desktop agent $ESCRITORIO → API → alert) on this digest, [pipeline run]($RUN_URL) |#" \
             "$notes"
           gh release edit "v$CANDIDATE" -R "$GITHUB_REPOSITORY" --notes-file "$notes"
+      - name: Check the release bot configuration
+        env:
+          APP_ID: ${{ vars.RELEASE_APP_ID }}
+          HAS_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ -z "$APP_ID" ] || [ "$HAS_KEY" != true ]; then
+            echo "::error title=Release bot not configured::The organization variable RELEASE_APP_ID and the organization secret RELEASE_APP_PRIVATE_KEY (GitHub App te-tengo-release-bot) are required to open the pull request. Nothing falls back to GITHUB_TOKEN: its pull requests start no workflows."
+            exit 1
+          fi
+      - name: Mint the release bot token
+        id: bot
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          # The App ID; GitHub accepts it as the JWT issuer like the client ID.
+          client-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
       - name: Open or update the pull request
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
         run: |
           set -euo pipefail
           body="$RUNNER_TEMP/body.md"
@@ -310,21 +432,16 @@ jobs:
           | | |
           |---|---|
           | Candidate | \`$CANDIDATE\` (pre-release \`v$CANDIDATE\`), build $GITHUB_RUN_NUMBER |
-          | Image | \`$IMAGE_REF\` (tags \`$CANDIDATE\`, \`$SHA_TAG\`; linux/amd64, linux/arm64) |
+          | Image | \`$IMAGE_REF\` (tags \`$CANDIDATE\`, \`$SHA_TAG\`; linux/amd64, linux/arm64; provenance and SBOM attested) |
           | Commit | $GITHUB_SHA |
           | Tree | \`$TREE\` |
-          | Verification | ephemeral run of that digest: smoke test (PostgreSQL 18) and end-to-end (agent → API → alert) passed |
+          | Tests | CI on this commit (unit, integration, architecture, coverage), in the pipeline run below |
+          | Verification | ephemeral run of that digest: smoke test (PostgreSQL 18) and end-to-end (desktop agent $ESCRITORIO → API → alert) passed |
           | Staging | none: the API has no staging target |
 
-          After the merge, \`produccion.yml\` on \`main\` checks that \`main\` has this tree, asks te-tengo-infra to deploy this digest (approval on its \`produccion\` environment), waits for the result and only then tags the image \`$VERSION\` and \`latest\`, creates the release \`v$VERSION\` and opens the back-merge into \`develop\`. A new push to \`$GITHUB_REF_NAME\` builds the next candidate and updates this description.
+          \`release-gate\` checks that merging puts exactly this tree into \`main\` and that this candidate is verified. Merge with a merge commit. After the merge, \`produccion.yml\` on \`main\` asks te-tengo-infra to deploy this digest (approval on its \`produccion\` environment), waits for the result (infra checks that the running container is this digest) and only then tags the image \`$VERSION\` and \`latest\`, creates the release \`v$VERSION\` and opens the back-merge into \`develop\`. A new push to \`$GITHUB_REF_NAME\` builds the next candidate and updates this description.
 
-          Pipeline run: $RUN_URL
+          Pipeline run: $RUN_URL/attempts/$GITHUB_RUN_ATTEMPT
           EOF
-          number=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --base main --state open --json number --jq '.[0].number // empty')
-          if [ -n "$number" ]; then
-            gh pr edit "$number" -R "$GITHUB_REPOSITORY" --body-file "$body"
-            echo "Updated the description of pull request #$number to candidate $CANDIDATE." | tee -a "$GITHUB_STEP_SUMMARY"
-          else
-            url=$(gh pr create -R "$GITHUB_REPOSITORY" --base main --head "$GITHUB_REF_NAME" --title "release: $VERSION" --body-file "$body")
-            echo "Opened $url for candidate $CANDIDATE." | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
+          .github/scripts/open-release-pr.sh "release: $VERSION" "$body" \
+            "New candidate [\`$CANDIDATE\`]($release_url) (commit \`${GITHUB_SHA:0:12}\`), verified. The description now describes it."

@@ -3,7 +3,8 @@
 # Used by produccion.yml (the verified candidate, after the merge to main) and rollback.yml (a released
 # version). The approval happens in te-tengo-infra: its Deploy workflow (deploy.yml) pauses on its
 # `produccion` environment until a reviewer approves, takes a database backup when the image changes,
-# runs the Ansible app role over SSH and checks /actuator/health. This script:
+# runs the Ansible app role over SSH, checks /actuator/health and checks that the running API container is
+# this digest (a deploy that left another image running fails there). This script:
 #   1. sends repository_dispatch `desplegar-api` with {digest, tag, version, ref, kind, request};
 #      `request` ("api <run id>.<attempt>") goes into the infra run's name, so the run can be found;
 #   2. finds that run and polls it (every TT_POLL_SECONDS, default 30) until it completes;
@@ -13,8 +14,11 @@
 # failed or cancelled one is requested again.
 #
 # Environment:
-#   DISPATCH_TOKEN  fine-grained token on Te-Tengo-Tech/te-tengo-infra: Contents read and write (dispatch)
-#                   and Actions read (find and watch the run)                                  (required)
+#   DISPATCH_TOKEN  installation token of the GitHub App te-tengo-release-bot on Te-Tengo-Tech/te-tengo-infra
+#                   with Contents: write, minted for this job (actions/create-github-app-token); only used
+#                   to send the repository_dispatch                                            (required)
+#   GH_TOKEN        the workflow's GITHUB_TOKEN: reads the runs of te-tengo-infra (a public repository).
+#                   An App token expires after one hour, and the approval can take longer  (required)
 #   DIGEST          sha256:<64 hex> of ghcr.io/te-tengo-tech/te-tengo-general-api              (required)
 #   TAG             tag of that digest, shown on the host (e.g. 0.2.0-rc.1 or 0.1.0)            (required)
 #   VERSION         x.y.z                                                                       (required)
@@ -44,11 +48,11 @@ fail() {
 }
 
 if [ -z "${DISPATCH_TOKEN:-}" ]; then
-  fail "The DISPATCH_TOKEN secret is missing, so $INFRA_REPO cannot be asked to deploy $DIGEST. Add it (docs/DEPLOYMENT.md) and re-run the failed jobs."
+  fail "No release bot token, so $INFRA_REPO cannot be asked to deploy $DIGEST. The job mints it from the organization variable RELEASE_APP_ID and secret RELEASE_APP_PRIVATE_KEY (docs/DEPLOYMENT.md)."
 fi
+: "${GH_TOKEN:?GH_TOKEN (the workflow token, to read the te-tengo-infra runs) is required}"
 [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "Invalid digest: $DIGEST"
 [[ "$KIND" =~ ^(release|rollback)$ ]] || fail "KIND must be release or rollback (found $KIND)"
-export GH_TOKEN="$DISPATCH_TOKEN"
 
 # deploy.yml names a dispatched run "... [<request>]".
 request="api $RUN_ID.$ATTEMPT"
@@ -68,7 +72,7 @@ deploy_job_conclusion() {
 }
 
 run_id=""
-previous=$(newest_run "[api $RUN_ID.") || fail "Cannot list the runs of $INFRA_REPO: DISPATCH_TOKEN needs Actions read on it."
+previous=$(newest_run "[api $RUN_ID.") || fail "Cannot list the runs of $INFRA_REPO with the workflow token (is it still public?)."
 if [ -n "$previous" ]; then
   IFS='|' read -r id status conclusion url <<<"$previous"
   if [ "$status" != completed ]; then
@@ -88,12 +92,12 @@ if [ -z "$run_id" ]; then
     --arg kind "$KIND" --arg request "$request" \
     '{event_type: "desplegar-api",
       client_payload: {digest: $digest, tag: $tag, version: $version, ref: $ref, kind: $kind, request: $request}}' \
-    | gh api --method POST "repos/$INFRA_REPO/dispatches" --input - >/dev/null \
-    || fail "The repository_dispatch to $INFRA_REPO was refused: check that DISPATCH_TOKEN has Contents read and write on it and has not expired."
+    | GH_TOKEN="$DISPATCH_TOKEN" gh api --method POST "repos/$INFRA_REPO/dispatches" --input - >/dev/null \
+    || fail "The repository_dispatch to $INFRA_REPO was refused: the release bot needs Contents: write on it (App te-tengo-release-bot installed on $INFRA_REPO)."
   echo "Sent desplegar-api to $INFRA_REPO: $VERSION ($TAG), $DIGEST, request \"$request\"."
   for _ in $(seq 1 30); do
     sleep 10
-    found=$(newest_run "[$request]") || fail "Cannot list the runs of $INFRA_REPO: DISPATCH_TOKEN needs Actions read on it."
+    found=$(newest_run "[$request]") || fail "Cannot list the runs of $INFRA_REPO with the workflow token (is it still public?)."
     if [ -n "$found" ]; then
       IFS='|' read -r run_id status conclusion url <<<"$found"
       break
@@ -111,6 +115,7 @@ while :; do
   if [ "$status" != "$last" ]; then
     case "$status" in
       waiting) echo "$(date -u +%H:%M:%SZ) waiting for a reviewer on te-tengo-infra's produccion environment: $url" ;;
+      queued | pending) echo "$(date -u +%H:%M:%SZ) $status: waiting for a runner: $url" ;;
       *) echo "$(date -u +%H:%M:%SZ) $status" ;;
     esac
     last="$status"

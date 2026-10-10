@@ -3,6 +3,27 @@
 Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+### Changed
+- CI tests each commit once: `ci.yml` runs on pull requests, on pushes to `develop` and when the Release workflow calls it (`workflow_call`) on the release commit, next to the image build; no candidate is recorded unless it passes. It no longer runs on pushes to `main`, `release/**` or `hotfix/**`, and pull requests into `main` only run `ci-ok`. Only `develop` writes the Gradle cache; pull requests of `image.yml` only read the Docker layer cache.
+- The release pull request, the back-merge and the `desplegar-api` dispatch to te-tengo-infra use the GitHub App te-tengo-release-bot (one-hour tokens minted per job) instead of `GITHUB_TOKEN` and the personal `DISPATCH_TOKEN`; the deploy run is polled with the workflow token. The back-merge turns on auto-merge (merge commit) and, after a hotfix, opens `main → release/*` for newer release branches.
+- `produccion.yml` finds its candidate with `.github/scripts/find-candidate.sh`, the same search as the release gate, and tags `x.y.z`, `latest` and `vX.Y.Z` only after a deploy: with `ENABLE_API_DEPLOY` off nothing is tagged.
+- The end-to-end verification of a candidate runs against the latest release of the desktop agent instead of its `develop`.
+- A release branch whose name differs from `version` in `build.gradle.kts` is an error.
+- The Dockerfile pins its Temurin JDK and JRE base images by digest.
+
+### Added
+- `ci-ok`, the single required check of the rulesets; `release-gate` (pull requests into `main`: the merge must put the tree of a verified candidate into `main`); `pr-title` (Conventional Commits titles).
+- Release candidates carry an SPDX SBOM of the image (attached to the pre-release and the final release), a build provenance attestation and an SBOM attestation in GHCR, and an OSV-Scanner report of the SBOM in the run summary.
+- Dependabot also updates the Dockerfile base images and the images of `compose.yaml`.
+- docs/DEPLOYMENT.md: release gate, release bot, rollback rehearsal.
+
+### Removed
+- `owasp.yml`: without the `NVD_API_KEY` secret it skipped itself and passed while checking nothing. OSV-Scanner covers the dependencies; `./gradlew dependencyCheckAnalyze` still runs on demand.
+- The `DISPATCH_TOKEN` and `E2E_REPO_TOKEN` secrets are no longer read.
+
+### Security
+- Every action is pinned by commit SHA; no permissions at workflow level and the minimum per job; checkouts without persisted credentials.
+
 
 ## [0.3.1] - 2026-10-10
 ### Fixed

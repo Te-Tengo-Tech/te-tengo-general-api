@@ -2,28 +2,32 @@ name: Produccion
 run-name: Produccion (main, ${{ github.sha }})
 
 # Production of the API, on a push to main (the merged release or hotfix pull request): docs/DEPLOYMENT.md.
-# Nothing is built here: production gets the exact image that release.yml built and verified on the
-# release branch, by digest.
-#   1. candidate    finds the approved candidate: the newest pre-release vX.Y.Z-rc.N (X.Y.Z = version of
-#                   build.gradle.kts) whose recorded git tree hash equals main's (`git rev-parse HEAD^{tree}`)
-#                   and whose verification passed. None → the run fails: main differs from what was tested.
-#   2. produccion   sends repository_dispatch `desplegar-api` to te-tengo-infra with the candidate's digest
-#                   and waits for that Deploy run (.github/scripts/request-deploy.sh). The approval happens
-#                   there, on te-tengo-infra's `produccion` environment, which also takes a database backup
-#                   before the image changes. Switch: ENABLE_API_DEPLOY.
-#   3. release      only if every enabled production job succeeded: adds the tags X.Y.Z (and `latest`, which
-#                   always names the image in production, only after a deploy) to the same digest with
-#                   `docker buildx imagetools create` (no rebuild), then creates the tag vX.Y.Z on this commit
-#                   and its GitHub Release (notes: the CHANGELOG.md section and the candidate).
-#   4. back-merge   opens the pull request main → develop (`chore: merge release x.y.z back into develop`).
+# Nothing is built or tested here: production gets the exact image that release.yml built, tested (CI on the
+# release commit) and verified on the release branch, by digest; release-gate proved before the merge that
+# main gets exactly that candidate's tree.
+#   1. candidate    finds the verified candidate with .github/scripts/find-candidate.sh (the same command as
+#                   release-gate): the newest pre-release vX.Y.Z-rc.N (X.Y.Z = version of build.gradle.kts)
+#                   whose recorded git tree hash equals main's and whose verification passed. None → the run
+#                   fails: main differs from what was tested.
+#   2. produccion   sends repository_dispatch `desplegar-api` to te-tengo-infra with the candidate's digest, as
+#                   the GitHub App te-tengo-release-bot, and waits for that Deploy run
+#                   (.github/scripts/request-deploy.sh). The approval happens there, on te-tengo-infra's
+#                   `produccion` environment, which also takes a database backup before the image changes and
+#                   checks afterwards that the running API container is this digest. Switch: ENABLE_API_DEPLOY.
+#   3. release      only after that deploy succeeded: adds the tags X.Y.Z and `latest` (which always names the
+#                   image in production) to the same digest with `docker buildx imagetools create` (no
+#                   rebuild), then creates the tag vX.Y.Z on this commit and its GitHub Release (notes: the
+#                   CHANGELOG.md section and the candidate, SBOM attached). Not deployed (switch off, failed,
+#                   rejected) → no tag.
+#   4. back-merge   the pull request main → develop as te-tengo-release-bot, with auto-merge (merge commit);
+#                   after a hotfix also main → any newer open release/* branch.
 # If produccion fails there is no tag: fix it and use "Re-run failed jobs", which reuses the same candidate.
 # Rollback: rollback.yml.
 on:
   push:
     branches: [main]
 
-permissions:
-  contents: read
+permissions: {}
 
 # Shared with rollback.yml: one production change of the API at a time, never cancelled.
 concurrency:
@@ -43,6 +47,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       released: ${{ steps.find.outputs.released }}
+      tag: ${{ steps.find.outputs.tag }}
       candidate: ${{ steps.find.outputs.candidate }}
       build: ${{ steps.find.outputs.build }}
       commit: ${{ steps.find.outputs.commit }}
@@ -51,9 +56,13 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          sparse-checkout: |
+            build.gradle.kts
+            .github/scripts
+          sparse-checkout-cone-mode: false
       - name: Version
         id: version
         run: |
@@ -67,6 +76,7 @@ jobs:
         id: find
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          ENABLE_API_DEPLOY: ${{ vars.ENABLE_API_DEPLOY }}
         run: |
           set -euo pipefail
           tree=$(git rev-parse 'HEAD^{tree}')
@@ -81,44 +91,23 @@ jobs:
             echo "::error title=Version already released::v$VERSION already exists on another commit ($released). A new release needs a new version: release/x.y.z or hotfix/x.y.z with a higher version in build.gradle.kts."
             exit 1
           fi
-          field() { sed -n "s/^$1=//p" "$notes" | head -n 1; }
-          notes="$RUNNER_TEMP/notes.md"
-          numbers=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v$VERSION-rc." --jq '.[].ref' \
-            | sed -n "s|^refs/tags/v$VERSION-rc\.\([0-9][0-9]*\)$|\1|p" | sort -rn)
-          for n in $numbers; do
-            gh release view "v$VERSION-rc.$n" -R "$GITHUB_REPOSITORY" --json body --jq .body 2>/dev/null | tr -d '\r' > "$notes" || continue
-            [ "$(field tree)" = "$tree" ] || continue
-            if [ "$(field verification)" != passed ]; then
-              echo "::warning::v$VERSION-rc.$n has main's tree but its verification is '$(field verification)'; looking at older candidates."
-              continue
-            fi
-            digest=$(field digest)
-            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::v$VERSION-rc.$n records no valid digest"; exit 1; }
-            {
-              echo "released=false"
-              echo "candidate=$(field candidate)"
-              echo "build=$(field build)"
-              echo "commit=$(field commit)"
-              echo "tree=$tree"
-              echo "digest=$digest"
-            } >> "$GITHUB_OUTPUT"
-            {
-              echo "## Candidate $(field candidate)"
-              echo "\`main\` (\`$GITHUB_SHA\`) has the tree \`$tree\` of the verified candidate [\`v$VERSION-rc.$n\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/v$VERSION-rc.$n) (commit \`$(field commit)\`, build $(field build))."
-              echo "Image: \`$IMAGE@$digest\`."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          done
-          message="main differs from the tested candidate; push the change to the release branch to build a new rc."
-          message+=" No verified pre-release v$VERSION-rc.N has the tree $tree of $GITHUB_SHA."
-          echo "::error title=No candidate for main::$message"
-          echo "**No candidate:** $message" >> "$GITHUB_STEP_SUMMARY"
-          exit 1
+          echo "released=false" >> "$GITHUB_OUTPUT"
+          echo "## Candidate of \`main\` (\`$GITHUB_SHA\`)" >> "$GITHUB_STEP_SUMMARY"
+          if ! .github/scripts/find-candidate.sh "$VERSION" "$tree"; then
+            echo "::error title=No candidate for main::main differs from the tested candidate; push the change to the release branch to build a new rc. No verified pre-release v$VERSION-rc.N has the tree $tree of $GITHUB_SHA."
+            exit 1
+          fi
+          if [ "$ENABLE_API_DEPLOY" != true ]; then
+            echo "::notice title=Produccion switched off::ENABLE_API_DEPLOY is not 'true': nothing is deployed, so v$VERSION, the image tags $VERSION and latest are not created. Turn it on and re-run all jobs."
+            echo "- Produccion: skipped, switched off (\`ENABLE_API_DEPLOY\` is not \`true\`); no tag" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   produccion:
     name: Produccion (deploy through te-tengo-infra, approval there)
     needs: candidate
-    # Switch: ENABLE_API_DEPLOY (te-tengo-infra gates its deploy job with the same variable).
+    # Switch: ENABLE_API_DEPLOY (te-tengo-infra gates its deploy job with the same variable). No environment
+    # here on purpose: the approval and the deploy credentials live in te-tengo-infra's `produccion`; this job
+    # only holds a short-lived App token that can ask for a deploy, which still waits for that approval.
     if: needs.candidate.outputs.released != 'true' && vars.ENABLE_API_DEPLOY == 'true'
     runs-on: ubuntu-latest
     # Includes the wait for a reviewer in te-tengo-infra. If it runs out, "Re-run failed jobs" watches the
@@ -132,12 +121,13 @@ jobs:
     env:
       DIGEST: ${{ needs.candidate.outputs.digest }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@v4
+          sparse-checkout: .github/scripts
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -146,10 +136,32 @@ jobs:
         run: |
           docker buildx imagetools inspect "$IMAGE@$DIGEST" >/dev/null \
             || { echo "::error::$IMAGE@$DIGEST is not in GHCR"; exit 1; }
+      - name: Check the release bot configuration
+        env:
+          APP_ID: ${{ vars.RELEASE_APP_ID }}
+          HAS_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ -z "$APP_ID" ] || [ "$HAS_KEY" != true ]; then
+            echo "::error title=Release bot not configured::The organization variable RELEASE_APP_ID and the organization secret RELEASE_APP_PRIVATE_KEY (GitHub App te-tengo-release-bot) are required to ask te-tengo-infra for the deploy."
+            exit 1
+          fi
+      # A token for te-tengo-infra only, with Contents: write (repository_dispatch); it expires in one hour,
+      # so the run is watched with the workflow token (te-tengo-infra is public).
+      - name: Mint the release bot token for te-tengo-infra
+        id: bot
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          # The App ID; GitHub accepts it as the JWT issuer like the client ID.
+          client-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: Te-Tengo-Tech
+          repositories: te-tengo-infra
+          permission-contents: write
       - name: Request the deploy and wait for its result
         id: deploy
         env:
-          DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+          DISPATCH_TOKEN: ${{ steps.bot.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.candidate.outputs.candidate }}
           VERSION: ${{ needs.candidate.outputs.version }}
           REF: ${{ github.sha }}
@@ -157,61 +169,56 @@ jobs:
         run: .github/scripts/request-deploy.sh
 
   release:
-    name: Tag the image and create the release vX.Y.Z
+    name: Tag vX.Y.Z and GitHub Release
     needs: [candidate, produccion]
-    # Only when every enabled production job succeeded (a produccion skipped by its switch counts as done).
+    # Tag at the end: only a version that is live gets X.Y.Z, latest and vX.Y.Z. Switched off, failed or
+    # rejected → nothing is tagged.
     if: >-
       !cancelled()
       && needs.candidate.result == 'success'
       && needs.candidate.outputs.released != 'true'
-      && (needs.produccion.result == 'success'
-          || (needs.produccion.result == 'skipped' && vars.ENABLE_API_DEPLOY != 'true'))
+      && needs.produccion.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
-      packages: write
+      contents: write # the tag vX.Y.Z and its GitHub Release
+      packages: write # the image tags X.Y.Z and latest
     env:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.candidate.outputs.version }}
+      RC_TAG: ${{ needs.candidate.outputs.tag }}
       CANDIDATE: ${{ needs.candidate.outputs.candidate }}
       BUILD: ${{ needs.candidate.outputs.build }}
       COMMIT: ${{ needs.candidate.outputs.commit }}
       TREE: ${{ needs.candidate.outputs.tree }}
       DIGEST: ${{ needs.candidate.outputs.digest }}
-      DEPLOYED: ${{ needs.produccion.result == 'success' }}
       INFRA_RUN: ${{ needs.produccion.outputs.infra_run }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@v4
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Add the tags ${{ needs.candidate.outputs.version }}${{ needs.produccion.result == 'success' && ' and latest' || '' }} to the candidate digest
+      - name: Add the tags ${{ needs.candidate.outputs.version }} and latest to the deployed digest
         run: |
           set -euo pipefail
           # X.Y.Z is immutable (SemVer): it may only ever point to this digest.
           if existing=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' 2>/dev/null | jq -r '.digest'); then
             [ "$existing" = "$DIGEST" ] || { echo "::error::$IMAGE:$VERSION already points to $existing, not to $DIGEST"; exit 1; }
           fi
-          tags=(--tag "$IMAGE:$VERSION")
-          [ "$DEPLOYED" = true ] && tags+=(--tag "$IMAGE:latest")
-          docker buildx imagetools create "${tags[@]}" "$IMAGE@$DIGEST"
+          docker buildx imagetools create --tag "$IMAGE:$VERSION" --tag "$IMAGE:latest" "$IMAGE@$DIGEST"
           tagged=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' | jq -r '.digest')
           [ "$tagged" = "$DIGEST" ] || { echo "::error::$IMAGE:$VERSION has digest $tagged, not $DIGEST"; exit 1; }
           {
             echo "## Release $VERSION"
-            if [ "$DEPLOYED" = true ]; then
-              echo "Tagged \`$IMAGE@$DIGEST\` (candidate \`$CANDIDATE\`, deployed by $INFRA_RUN) as \`$VERSION\` and \`latest\`."
-            else
-              echo "Tagged \`$IMAGE@$DIGEST\` (candidate \`$CANDIDATE\`) as \`$VERSION\`."
-              echo "**Not deployed:** the organization variable \`ENABLE_API_DEPLOY\` is not \`true\`, so production still runs the previous image and \`latest\` was not moved."
-            fi
+            echo "Tagged \`$IMAGE@$DIGEST\` (candidate \`$CANDIDATE\`, deployed by $INFRA_RUN) as \`$VERSION\` and \`latest\`."
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Create the tag and the GitHub Release v${{ needs.candidate.outputs.version }}
         run: |
@@ -228,17 +235,10 @@ jobs:
             echo "::warning::CHANGELOG.md has no section [$VERSION]; the release notes point to the file."
             echo "See [CHANGELOG.md]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$tag/CHANGELOG.md)." > "$notes"
           fi
-          if [ "$DEPLOYED" = true ]; then
-            tags="\`$VERSION\`, \`latest\`"
-            deployed="deployed to produccion by $INFRA_RUN"
-          else
-            tags="\`$VERSION\`"
-            deployed="not deployed (\`ENABLE_API_DEPLOY\` was off)"
-          fi
           cat >> "$notes" <<EOF
 
           ### Image
-          Candidate [\`v$CANDIDATE\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/v$CANDIDATE) (build $BUILD), promoted without a rebuild: \`$IMAGE@$DIGEST\`, tags $tags, linux/amd64 and linux/arm64; $deployed.
+          Candidate [\`$RC_TAG\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$RC_TAG) (build $BUILD), promoted without a rebuild: \`$IMAGE@$DIGEST\`, tags \`$VERSION\`, \`latest\`, linux/amd64 and linux/arm64; deployed to produccion by $INFRA_RUN. Build provenance and SBOM attestations: \`gh attestation verify oci://$IMAGE@$DIGEST --repo $GITHUB_REPOSITORY\`.
 
           \`\`\`text
           version=$VERSION
@@ -251,38 +251,50 @@ jobs:
           digest=$DIGEST
           \`\`\`
           EOF
-          gh release create "$tag" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$tag" --latest --notes-file "$notes"
+          # The candidate's SBOM travels to the final release (same digest, same contents).
+          mkdir -p "$RUNNER_TEMP/assets"
+          gh release download "$RC_TAG" -R "$GITHUB_REPOSITORY" --pattern '*.spdx.json' --dir "$RUNNER_TEMP/assets" || true
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::notice title=Release $tag exists::Already published (a re-run): nothing to do."
+            exit 0
+          fi
+          gh release create "$tag" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$tag" --latest \
+            --notes-file "$notes" "$RUNNER_TEMP"/assets/*
           echo "Created the tag \`$tag\` on \`$GITHUB_SHA\` and its GitHub Release." >> "$GITHUB_STEP_SUMMARY"
 
   back-merge:
-    name: Open the back-merge pull request (main → develop)
+    name: Back-merge into develop
     needs: [candidate, release]
-    if: >-
-      !cancelled()
-      && (needs.release.result == 'success' || needs.candidate.outputs.released == 'true')
+    if: needs.release.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
-      pull-requests: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      VERSION: ${{ needs.candidate.outputs.version }}
     steps:
-      - name: Open the pull request if develop lacks commits of main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Check the release bot configuration
+        env:
+          APP_ID: ${{ vars.RELEASE_APP_ID }}
+          HAS_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY != '' }}
         run: |
-          set -euo pipefail
-          ahead=$(gh api "repos/$GITHUB_REPOSITORY/compare/develop...main" --jq '.ahead_by')
-          if [ "$ahead" = 0 ]; then
-            echo "develop already has every commit of main: no back-merge needed." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+          if [ -z "$APP_ID" ] || [ "$HAS_KEY" != true ]; then
+            echo "::error title=Release bot not configured::The organization variable RELEASE_APP_ID and the organization secret RELEASE_APP_PRIVATE_KEY (GitHub App te-tengo-release-bot) are required to open the back-merge pull request. Nothing falls back to GITHUB_TOKEN: its pull requests start no workflows."
+            exit 1
           fi
-          number=$(gh pr list -R "$GITHUB_REPOSITORY" --head main --base develop --state open --json number --jq '.[0].number // empty')
-          if [ -n "$number" ]; then
-            echo "The back-merge pull request #$number is already open." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          url=$(gh pr create -R "$GITHUB_REPOSITORY" --base develop --head main \
-            --title "chore: merge release $VERSION back into develop" \
-            --body "Brings the release $VERSION (tag \`v$VERSION\`) and any fix made on its release branch back into \`develop\`. Merge with a merge commit.")
-          echo "Opened $url" >> "$GITHUB_STEP_SUMMARY"
+      - name: Mint the release bot token
+        id: bot
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          # The App ID; GitHub accepts it as the JWT issuer like the client ID.
+          client-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write # auto-merge
+          permission-pull-requests: write
+      - name: Open the back-merge pull requests
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
+          VERSION: ${{ needs.candidate.outputs.version }}
+        run: .github/scripts/back-merge.sh "$VERSION"

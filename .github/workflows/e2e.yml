@@ -3,10 +3,11 @@ name: End-to-end
 # Smoke test of the agent ↔ API contract (scripts/e2e.sh): the real desktop agent, headless, plays a
 # URFD fall clip against this API on an isolated stack, and the test asserts the CAIDA alert, its
 # push, its confirmation and its clip in Floci's S3. The desktop agent repository is public, so the
-# workflow's own token checks it out; the E2E_REPO_TOKEN secret (read-only Contents) is only needed
-# if that repository becomes private again.
+# workflow's own token checks it out.
 # With an `imagen` input the API runs from that container image instead of a jar built here: the
-# Release workflow calls this workflow in its verification stage with the image it pushed, by digest.
+# Release workflow calls this workflow in its verification stage with the image it pushed, by digest,
+# and with the latest release of the desktop agent (what households run) as `escritorio_ref`. Pull
+# requests and the weekly run use the agent's develop branch (what the next agent release will be).
 on:
   workflow_call:
     inputs:
@@ -18,9 +19,6 @@ on:
         description: Branch, tag or commit of te-tengo-desktop-pywebview
         type: string
         default: develop
-    secrets:
-      E2E_REPO_TOKEN:
-        required: false
   workflow_dispatch:
     inputs:
       escritorio_ref:
@@ -45,8 +43,7 @@ on:
       - scripts/seed-demo.sh
       - .github/workflows/e2e.yml
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: e2e-${{ github.ref }}
@@ -66,28 +63,27 @@ jobs:
       ESCRITORIO_REF: ${{ inputs.escritorio_ref || 'develop' }}
       IMAGEN: ${{ inputs.imagen }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: te-tengo-general-api
           persist-credentials: false
       - name: Check out the desktop agent (${{ env.ESCRITORIO_REF }})
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: Te-Tengo-Tech/te-tengo-desktop-pywebview
           ref: ${{ env.ESCRITORIO_REF }}
-          token: ${{ secrets.E2E_REPO_TOKEN || github.token }}
           path: te-tengo-desktop-pywebview
           persist-credentials: false
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         if: env.IMAGEN == ''
         with:
           distribution: temurin
           java-version: "25"
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         if: env.IMAGEN == ''
       - name: Log in to GHCR
         if: env.IMAGEN != ''
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -95,7 +91,7 @@ jobs:
       - name: Pull the API image
         if: env.IMAGEN != ''
         run: docker pull "$IMAGEN"
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
           cache-dependency-glob: te-tengo-desktop-pywebview/uv.lock
@@ -106,7 +102,7 @@ jobs:
         run: ./scripts/descargar_modelo.sh
       - name: Cache the URFD fall clip
         id: clip
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/urfd
           key: urfd-fall-03-cam0
@@ -137,7 +133,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-logs${{ inputs.imagen && '-imagen' || '' }}
           # Logs only: the work directory also holds the throwaway JWT keys and agent credential.
