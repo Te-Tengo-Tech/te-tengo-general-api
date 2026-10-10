@@ -66,11 +66,12 @@ public class EliminarGrabaciones {
             return;
         }
         Instant ahora = reloj.instant();
-        for (Alerta alerta : alertas.conClip()) {
+        List<Alerta> conClip = alertas.conClip();
+        for (Alerta alerta : conClip) {
             almacenamiento.eliminar(alerta.getClipClave());
             alerta.marcarClipEliminado(ahora);
         }
-        pendientes.forEach(p -> p.completar(ahora));
+        pendientes.forEach(p -> p.completar(ahora, conClip.size()));
         avisos.alHogar(new Aviso(TipoAviso.DATOS_ELIMINADOS, null, null, null, ahora));
     }
 }

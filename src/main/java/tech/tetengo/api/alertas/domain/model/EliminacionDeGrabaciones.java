@@ -18,18 +18,22 @@ public class EliminacionDeGrabaciones extends EntidadDelHogar {
     @Column(name = "completada_en")
     private Instant completadaEn;
 
+    @Column(name = "clips_eliminados")
+    private Long clipsEliminados;
+
     protected EliminacionDeGrabaciones() {}
 
     public EliminacionDeGrabaciones(Instant solicitadaEn) {
         this.solicitadaEn = Objects.requireNonNull(solicitadaEn, "solicitadaEn");
     }
 
-    /** CA-09.3: done; returns false if it already was. */
-    public boolean completar(Instant ahora) {
+    /** CA-09.3: done, after deleting {@code clips} recordings; returns false if it already was. */
+    public boolean completar(Instant ahora, long clips) {
         if (completadaEn != null) {
             return false;
         }
         completadaEn = ahora;
+        clipsEliminados = clips;
         return true;
     }
 
@@ -39,5 +43,10 @@ public class EliminacionDeGrabaciones extends EntidadDelHogar {
 
     public Instant getCompletadaEn() {
         return completadaEn;
+    }
+
+    /** Recordings this deletion removed; null while it is pending. */
+    public Long getClipsEliminados() {
+        return clipsEliminados;
     }
 }

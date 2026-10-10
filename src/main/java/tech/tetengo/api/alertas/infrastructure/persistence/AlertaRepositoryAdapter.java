@@ -75,6 +75,11 @@ class AlertaRepositoryAdapter implements AlertaRepository {
     }
 
     @Override
+    public long contarConClip() {
+        return jpa.countByClipClaveIsNotNullAndClipEliminadoEnIsNull();
+    }
+
+    @Override
     public long contarSinFalsasAlarmas(TipoAlerta tipo, Instant desde, Instant hasta) {
         return jpa.countByTipoAndEstadoNotAndOcurridaEnGreaterThanEqualAndOcurridaEnLessThan(
                 tipo, EstadoAlerta.FALSA_ALARMA, desde, hasta);
