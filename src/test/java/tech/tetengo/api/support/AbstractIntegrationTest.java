@@ -55,6 +55,7 @@ public abstract class AbstractIntegrationTest {
         reloj.reiniciar();
         correos.limpiar();
         push.limpiar();
+        push.antesDeLeer(this::esperarEventosPendientes);
         almacenamiento.limpiar();
         transmision.limpiar();
         List<String> tablas = jdbcDeLimpieza.queryForList(
@@ -66,10 +67,11 @@ public abstract class AbstractIntegrationTest {
     }
 
     /**
-     * Asynchronous listeners of the previous test may still be running; wait for them (up to a few
-     * seconds) so they do not write into the next test's data.
+     * Asynchronous listeners (of the previous test, or the push notices sent after a commit) may
+     * still be running; wait for them (up to a few seconds) so they do not write into the next test's
+     * data and the notices they send can be checked.
      */
-    private void esperarEventosPendientes() {
+    protected void esperarEventosPendientes() {
         try {
             Awaitility.await()
                     .atMost(Duration.ofSeconds(5))

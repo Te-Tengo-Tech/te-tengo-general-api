@@ -14,8 +14,10 @@ import java.util.stream.Collectors;
 import tech.tetengo.api.shared.domain.model.EntidadDelHogar;
 
 /**
- * CA-16.4: a push notice the push service did not accept. A job retries it until it is delivered
- * or the attempts run out; the alert is visible in the app meanwhile.
+ * CA-16.4: a push notice on its way (outbox). It is saved with the change that calls for it, so a
+ * notice is never lost when the API stops, and sent once that transaction commits. If it is not
+ * delivered, a job retries it until it is delivered or its deadline ({@code venceEn}) passes; the
+ * alert is visible in the app meanwhile.
  */
 @Entity
 @Table(name = "avisos_pendientes")
@@ -49,6 +51,10 @@ public class AvisoPendiente extends EntidadDelHogar {
     @Column(name = "proximo_intento", nullable = false)
     private Instant proximoIntento;
 
+    /** No attempt after this. */
+    @Column(name = "vence_en", nullable = false, updatable = false)
+    private Instant venceEn;
+
     protected AvisoPendiente() {}
 
     public AvisoPendiente(
@@ -59,7 +65,8 @@ public class AvisoPendiente extends EntidadDelHogar {
             Instant ocurridaEn,
             Collection<UUID> destinatarios,
             UUID excluido,
-            Instant proximoIntento) {
+            Instant proximoIntento,
+            Instant venceEn) {
         this.tipo = Objects.requireNonNull(tipo, "tipo");
         this.alertaId = alertaId;
         this.camaraId = camaraId;
@@ -69,15 +76,40 @@ public class AvisoPendiente extends EntidadDelHogar {
                 ? null
                 : destinatarios.stream().map(UUID::toString).collect(Collectors.joining(","));
         this.excluido = excluido;
-        this.intentos = 1;
+        this.intentos = 0;
         this.proximoIntento = Objects.requireNonNull(proximoIntento, "proximoIntento");
+        this.venceEn = Objects.requireNonNull(venceEn, "venceEn");
     }
 
-    /** Another failed attempt; returns false when there are no attempts left. */
-    public boolean fallo(Instant ahora, Duration espera, int intentosMaximos) {
+    /**
+     * Whether an attempt may start now: the first one (right after the commit) or a due retry. An
+     * attempt in progress has pushed {@code proximoIntento} ahead, so the retry job and the first
+     * attempt never send it twice at once.
+     */
+    public boolean puedeIntentarse(Instant ahora) {
+        return intentos == 0 || !proximoIntento.isAfter(ahora);
+    }
+
+    /** An attempt starts: nobody else picks the notice up during {@code reserva}. */
+    public void iniciarIntento(Instant ahora, Duration reserva) {
         intentos++;
+        proximoIntento = ahora.plus(reserva);
+    }
+
+    /**
+     * The attempt did not deliver it: the next one is {@code espera} later. Returns false when that is
+     * past the deadline, so the notice is given up.
+     */
+    public boolean fallo(Instant ahora, Duration espera) {
         proximoIntento = ahora.plus(espera);
-        return intentos < intentosMaximos;
+        return !proximoIntento.isAfter(venceEn);
+    }
+
+    /** Due now: a phone of the family registered again and can receive it. */
+    public void adelantar(Instant ahora) {
+        if (proximoIntento.isAfter(ahora)) {
+            proximoIntento = ahora;
+        }
     }
 
     public String getTipo() {
@@ -117,5 +149,9 @@ public class AvisoPendiente extends EntidadDelHogar {
 
     public Instant getProximoIntento() {
         return proximoIntento;
+    }
+
+    public Instant getVenceEn() {
+        return venceEn;
     }
 }

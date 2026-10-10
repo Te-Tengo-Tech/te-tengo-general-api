@@ -13,10 +13,13 @@ import tech.tetengo.api.shared.application.port.TipoAviso;
 /**
  * Records push notices instead of sending them; can simulate an unresponsive push service and
  * rejected tokens. Like the SNS adapter, it reports a provider address for every device without one.
+ * Notices go out after the commit, on another thread (the outbox of {@code EnvioDeAvisos}), so reading
+ * what was sent first waits for those first attempts ({@link #antesDeLeer}).
  */
 public class PushDePrueba implements NotificadorPush {
 
-    public record Envio(List<Destino> destinos, Aviso aviso) {
+    /** {@code hilo}: the thread that sent it. */
+    public record Envio(List<Destino> destinos, Aviso aviso, String hilo) {
 
         public List<String> tokens() {
             return destinos.stream().map(Destino::tokenPush).toList();
@@ -26,13 +29,20 @@ public class PushDePrueba implements NotificadorPush {
     private final List<Envio> enviados = new CopyOnWriteArrayList<>();
     private final AtomicBoolean caido = new AtomicBoolean();
     private final Set<String> invalidos = ConcurrentHashMap.newKeySet();
+    private volatile Runnable antesDeLeer = () -> {};
+
+    /** Runs before every read of the sent notices: the tests wait for pending deliveries. */
+    public void antesDeLeer(Runnable espera) {
+        this.antesDeLeer = espera;
+    }
 
     @Override
     public Resultado enviar(List<Destino> destinos, Aviso aviso) {
         if (caido.get()) {
             throw new FallaDePush("Servicio de push de prueba sin respuesta", null);
         }
-        enviados.add(new Envio(List.copyOf(destinos), aviso));
+        enviados.add(
+                new Envio(List.copyOf(destinos), aviso, Thread.currentThread().getName()));
         Set<String> rechazados = destinos.stream()
                 .map(Destino::tokenPush)
                 .filter(invalidos::contains)
@@ -49,10 +59,12 @@ public class PushDePrueba implements NotificadorPush {
     }
 
     public List<Envio> enviados() {
+        antesDeLeer.run();
         return List.copyOf(enviados);
     }
 
     public List<Envio> deTipo(TipoAviso tipo) {
+        antesDeLeer.run();
         return enviados.stream().filter(e -> e.aviso().tipo() == tipo).toList();
     }
 
@@ -61,7 +73,9 @@ public class PushDePrueba implements NotificadorPush {
         this.caido.set(caido);
     }
 
+    /** Forgets what was sent so far, after waiting for the deliveries still under way. */
     public void limpiar() {
+        antesDeLeer.run();
         enviados.clear();
         caido.set(false);
         invalidos.clear();

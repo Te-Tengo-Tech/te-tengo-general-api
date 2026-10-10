@@ -42,7 +42,7 @@
 | Method and path | Auth | Body → response | Errors |
 |---|---|---|---|
 | `POST /api/hogar` | user without a household | `{adultoMayor: {nombre, edad, direccion, convivencia, telefono?}}` → `201 Sesion`. Creates the household with the caller as `TITULAR` and returns tokens that carry its `hogar_id` (CA-04.1) | `409 HOGAR_YA_REGISTRADO`: one older adult per account (CA-04.2) · `400 VALIDACION` (CA-04.3) |
-| `GET /api/hogar` | member | → `200 {hogarId, adultoMayor, rol, consentimiento: Consentimiento \| null}` | — |
+| `GET /api/hogar` | member | → `200 {hogarId, adultoMayor, rol, consentimiento: Consentimiento \| null, dispositivosActivos}`. `dispositivosActivos`: how many push devices of the household's members are active (§7); `0` means **nobody in the family can receive alerts** on a phone, and the app warns about it. An older backend does not send the field; the app then shows no warning | — |
 | `PUT /api/hogar/adulto-mayor` | owner | `{nombre, edad, direccion, convivencia, telefono?}` → `200 adultoMayor`. Replaces the whole profile: an omitted `telefono` clears it | `400 VALIDACION` |
 | `GET /api/hogares` | user | → `200 [{hogarId, nombreAdultoMayor, rol}]`, the households the user belongs to | — |
 | `POST /api/sesiones/hogar` | user | `{hogarId}` → `200 Sesion` for that household | `403 SIN_MEMBRESIA` |
@@ -113,6 +113,7 @@ Alerta = {
   estado: "ACTIVA" | "ATENDIDA" | "FALSA_ALARMA",
   confirmada: boolean,             // still on the floor after 30 s (CA-13.1, CA-21.2)
   camaraId, habitacion, ocurridaEn, notificadaEn | null,
+  estadoAviso: "ENVIANDO" | "ENTREGADO" | "REINTENTANDO" | "NO_ENTREGADO",  // CA-16.1, CA-16.4, see §7
   recuperadaEn | null,             // "se levantó" (CA-13.2, CA-21.1)
   atendidaPor: {id, nombre} | null, atendidaEn | null,   // CA-19.1, CA-19.3
   escaladaEn | null,               // CA-20.1
@@ -145,8 +146,15 @@ Alerta = {
 - `tendencia` compares each type with the previous week (CA-27.3).
 
 ## 7. Push notifications
-- **Device registration:** `POST /api/dispositivos {tokenPush, plataforma: "ANDROID" | "IOS" | "WEB"}` → `201`, and `DELETE /api/dispositivos/{tokenPush}` → `204` (member). `WEB` is the PWA, with its FCM web push token (`getToken` with the project's VAPID key). Another `plataforma` is `400 VALIDACION` with `campos.plataforma`.
-- **Delivery:** the backend sends through Amazon SNS (FCM on Android, APNs on iOS) or Firebase Cloud Messaging to every member device. Web devices get an FCM web push with the same title, body and data payload; clicking it opens the PWA. Without a web configuration on the push service the backend skips web devices (they do not count as delivered). Fall pushes must arrive **in less than 10 s** from the moment the person is on the floor, with the room and the time (CA-16.1, CA-16.2). On failure the backend logs the error and retries (CA-16.4).
+- **Device registration:** `POST /api/dispositivos {tokenPush, plataforma: "ANDROID" | "IOS" | "WEB"}` → `201 Dispositivo`, and `DELETE /api/dispositivos/{tokenPush}` → `204` (member). `WEB` is the PWA, with its FCM web push token (`getToken` with the project's VAPID key). Another `plataforma` is `400 VALIDACION` with `campos.plataforma`.
+  - `POST` is an upsert by token: it reactivates the device, assigns it to the caller and records `vistoEn`, even when nothing else changed. **The app registers on every start and every return to the foreground.** Notices of the household still waiting for a device (see Delivery) are sent right after a registration.
+  - `GET /api/dispositivos/{id}` (member, only the caller's own devices) → `200 Dispositivo`; `404 DISPOSITIVO_NO_ENCONTRADO` for an unknown id or another user's device. The app reads it with the `id` it got from `POST` to learn whether the backend still sends to this phone.
+  - `Dispositivo = {id, plataforma, activo, vistoEn, desactivadoEn | null}`. The push token is never returned. `activo: false` means the push service said the token no longer exists (FCM `UNREGISTERED` or `SENDER_ID_MISMATCH`, SNS endpoint disabled): **registering the same token again does not help**; the app deletes its token, gets a new one and registers that.
+- **Delivery:** the backend sends through Amazon SNS (FCM on Android, APNs on iOS) or Firebase Cloud Messaging to every member device. Web devices get an FCM web push with the same title, body and data payload; clicking it opens the PWA (the alert's screen, `#/alerta/{alertaId}`, for alert notices). Without a web configuration on the push service the backend skips web devices (they do not count as delivered). Fall pushes must arrive **in less than 10 s** from the moment the person is on the floor, with the room and the time (CA-16.1, CA-16.2).
+  - Every notice is saved with the change that causes it and sent right after that change is committed, on another thread (the agent's request never waits for the push service). On failure the backend logs the error and retries every 15 s (CA-16.4) **[implementation choice]**.
+  - **Urgent notices** (`ALERTA_CAIDA`, `ALERTA_MOVIMIENTO_INESTABLE`, `ALERTA_ACTUALIZADA_A_CAIDA`, `CAIDA_CONFIRMADA`, `ALERTA_ESCALADA`, `SIN_CONTACTO_SECUNDARIO`) are retried for 30 min **[implementation choice]**, also while no member has an active device, so a phone that registers again still gets them; retries stop when the alert is attended or marked a false alarm. Other notices are retried for 5 min and are dropped when nobody has an active device.
+  - `Alerta.estadoAviso` follows the notice that opened the alert (or turned it into a fall): `ENVIANDO` (just created), `ENTREGADO` (the push service accepted it for at least one device; `notificadaEn` is set), `REINTENTANDO` (not delivered yet and still being retried: the service failed or nobody can receive it), `NO_ENTREGADO` (the retries ended without delivery). Alerts created before this field existed answer `ENTREGADO` or `NO_ENTREGADO`.
+  - **On the phone:** notices about an alert go to the Android notification channel `alertas_caida`, which the app creates with high importance (others use the app's default channel); a later notice of the same alert replaces the earlier one (Android `tag`, APNs `apns-collapse-id`, web `tag` = `alertaId`; `camara-{camaraId}` for camera notices); urgent notices are iOS `time-sensitive` (the app needs the Time Sensitive Notifications entitlement) and web notifications that stay until dismissed (`requireInteraction`). Push services keep an undelivered notice for 1 h **[implementation choice]**.
 
 Data payload: `{tipo, alertaId?, camaraId?, habitacion?, ocurridaEn}`. `tipo` is one of:
 
@@ -156,7 +164,7 @@ Data payload: `{tipo, alertaId?, camaraId?, habitacion?, ocurridaEn}`. `tipo` is
 | `ALERTA_MOVIMIENTO_INESTABLE` | Unstable movement (medium severity) | CA-17.1 |
 | `ALERTA_ACTUALIZADA_A_CAIDA` | An unstable alert became a fall | CA-17.3 |
 | `CAIDA_CONFIRMADA` | 30 s on the floor | CA-13.1 |
-| `SE_LEVANTO` | Recovery after a fall | CA-21.1 |
+| `SE_LEVANTO` | Recovery after a fall, also a confirmed one: the alert stays active until a member attends it (product decision of 2026-10-10, changes CA-21.2) | CA-21.1 |
 | `ALERTA_ATENDIDA` | Another member attended it | CA-19.3 |
 | `ALERTA_ESCALADA` / `SIN_CONTACTO_SECUNDARIO` | Escalation | CA-20.1, CA-20.3 |
 | `CAMARA_DESCONECTADA` / `CAMARA_RECONECTADA` | Connection status; the app shows what to check: cable, PC on and internet | CA-07.2, CA-07.3 |

@@ -12,6 +12,11 @@ public interface DispositivoRepository {
 
     Optional<Dispositivo> buscarPorToken(String tokenPush);
 
+    Optional<Dispositivo> buscar(UUID id);
+
+    /** Number of active devices of the users. */
+    long activosDe(Collection<UUID> usuarioIds);
+
     /** Active devices of the users. */
     List<Dispositivo> deUsuarios(Collection<UUID> usuarioIds);
 

@@ -2,6 +2,7 @@ package tech.tetengo.api.alertas.infrastructure.persistence;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
 import tech.tetengo.api.alertas.application.port.AvisoPendienteRepository;
@@ -19,6 +20,16 @@ class AvisoPendienteRepositoryAdapter implements AvisoPendienteRepository {
     @Override
     public AvisoPendiente guardar(AvisoPendiente aviso) {
         return jpa.save(aviso);
+    }
+
+    @Override
+    public Optional<AvisoPendiente> buscar(UUID id) {
+        return jpa.findById(id);
+    }
+
+    @Override
+    public List<AvisoPendiente> delHogar() {
+        return jpa.findAll();
     }
 
     @Override

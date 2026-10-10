@@ -58,4 +58,39 @@ class AlertaTest {
         assertThat(alerta.getRecuperadaEn()).isEqualTo(ahora.plusSeconds(10));
         assertThat(alerta.registrarRecuperacion(ahora.plusSeconds(20))).isFalse();
     }
+
+    @Test
+    void ca16_4_elEstadoDelAvisoVaDeEnviandoAReintentandoYAEntregado() {
+        Alerta alerta = Alerta.caida(camara, "Sala", ahora);
+        assertThat(alerta.getEstadoAviso()).isEqualTo(EstadoAviso.ENVIANDO);
+
+        alerta.marcarAvisoPendiente();
+        assertThat(alerta.getEstadoAviso()).isEqualTo(EstadoAviso.REINTENTANDO);
+        assertThat(alerta.getNotificadaEn()).isNull();
+
+        alerta.marcarNotificada(ahora.plusSeconds(40));
+        assertThat(alerta.getEstadoAviso()).isEqualTo(EstadoAviso.ENTREGADO);
+        assertThat(alerta.getNotificadaEn()).isEqualTo(ahora.plusSeconds(40));
+    }
+
+    @Test
+    void unAvisoEntregadoNoVuelveAtras() {
+        Alerta alerta = Alerta.caida(camara, "Sala", ahora);
+        alerta.marcarNotificada(ahora);
+
+        alerta.marcarAvisoPendiente();
+        alerta.marcarAvisoNoEntregado();
+        alerta.marcarNotificada(ahora.plusSeconds(60));
+
+        assertThat(alerta.getEstadoAviso()).isEqualTo(EstadoAviso.ENTREGADO);
+        assertThat(alerta.getNotificadaEn()).isEqualTo(ahora);
+    }
+
+    @Test
+    void sinEntregaAlTerminarLosReintentosQuedaNoEntregado() {
+        Alerta alerta = Alerta.caida(camara, "Sala", ahora);
+        alerta.marcarAvisoPendiente();
+        alerta.marcarAvisoNoEntregado();
+        assertThat(alerta.getEstadoAviso()).isEqualTo(EstadoAviso.NO_ENTREGADO);
+    }
 }

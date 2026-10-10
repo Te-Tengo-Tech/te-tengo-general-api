@@ -61,7 +61,7 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 - [x] **T18 `monitoreo` — US-22 pauses.** `POST` and `DELETE /api/camaras/{id}/pausa` with the contract durations (`HASTA_MANANA` = next 07:00 America/Lima); automatic resume with push `PAUSA_FINALIZADA`. — *pause and resume cameras with automatic resume (US-22)*
 - [x] **T19 `monitoreo` — US-23 live view sessions.** `POST /api/camaras/{id}/vista-en-vivo` (`409` when disconnected or paused) and `DELETE /api/vista-en-vivo/{sesionId}`. The WSS relay follows the contract proposal (see BLOCKERS). — *live view sessions and the WebSocket relay of the contract proposal (US-23); since replaced by live view through MediaMTX (ADR 0007)*
 - [x] **T20 `monitoreo` — US-24 access log.** `GET /api/accesos-vista-en-vivo`, newest first. — *live view access log, newest first (US-24)*
-- [x] **T21 `alertas` — US-21 recovery notice.** Push `SE_LEVANTO`; none when the fall is confirmed (CA-21.2). — *push SE_LEVANTO on recovery, none for confirmed falls (US-21)*
+- [x] **T21 `alertas` — US-21 recovery notice.** Push `SE_LEVANTO`; none when the fall is confirmed (CA-21.2). Changed in 0.3.1: a confirmed fall that recovers is notified too (docs/BLOCKERS.md). — *push SE_LEVANTO on recovery, none for confirmed falls (US-21)*
 - [x] **T22 `historial` — US-26 recordings.** Download disposition and the retention job. — *clip download disposition and the retention job (US-26)*
 - [x] **T23 `historial` — US-27 weekly summary.** `GET /api/resumen-semanal`: false alarms excluded from falls, trend against the previous week. — *weekly summary with trend (US-27)*
 - [x] **T24 Hardening.** — *OpenAPI on every endpoint, 80 % coverage gate and contract check; RLS deferred (ADR 0002)*

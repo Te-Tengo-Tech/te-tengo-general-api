@@ -2,6 +2,7 @@ package tech.tetengo.api.alertas.interfaces.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,7 +36,10 @@ import tech.tetengo.api.support.DatosDePrueba;
 import tech.tetengo.api.support.JwtDePrueba;
 import tech.tetengo.api.support.PushDePrueba.Envio;
 
-/** US-16 and US-17: push alerts to every member device, with retries (CA-16.4). */
+/**
+ * US-16 and US-17: push alerts to every member device, sent right after the agent's request commits,
+ * with retries (CA-16.4), the alert's delivery state and the device status the app reads.
+ */
 class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
@@ -88,14 +92,30 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
                 .content("{\"tokenPush\":\"%s\",\"plataforma\":\"%s\"}".formatted(tokenPush, plataforma)));
     }
 
+    /** Sends the agent's event and waits for the first attempt of the notice it queued. */
     private String evento(String tipo, Instant ocurridoEn) throws Exception {
-        return campo(
+        String alertaId = campo(
                 enviarEvento(mvc, agente, UUID.randomUUID(), tipo, ocurridoEn)
                         .andExpect(status().isAccepted())
                         .andReturn()
                         .getResponse()
                         .getContentAsString(),
                 "$.alertaId");
+        esperarEventosPendientes();
+        return alertaId;
+    }
+
+    private String estadoAviso(String alertaId) {
+        return jdbc.queryForObject(
+                "select estado_aviso from alertas where id = ?", String.class, UUID.fromString(alertaId));
+    }
+
+    private int pendientes() {
+        return jdbc.queryForObject("select count(*) from avisos_pendientes", Integer.class);
+    }
+
+    private String tokenDeBeto() {
+        return JwtDePrueba.token(invitado, UUID.fromString(campo(titular, "$.hogarId")), Rol.INVITADO);
     }
 
     private Instant notificadaEn(String alertaId) {
@@ -105,11 +125,13 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void ca16_1_laCaidaSeNotificaATodosLosFamiliaresDuranteLaMismaPeticionConHabitacionYHora() throws Exception {
+    void ca16_1_laCaidaSeNotificaATodosLosFamiliaresAlGuardarseConHabitacionYHora() throws Exception {
         String alertaId = evento("caida", cuando);
 
-        // No waiting: the push was requested before the agent got its answer (< 10 s, CA-11.3).
+        // Sent right after the agent's request committed (< 10 s, CA-11.3), on another thread: the
+        // agent never waits for the push service.
         Envio envio = push.deTipo(TipoAviso.ALERTA_CAIDA).getFirst();
+        assertThat(envio.hilo()).isNotEqualTo(Thread.currentThread().getName());
         assertThat(envio.tokens()).containsExactlyInAnyOrder("telefono-ana", "telefono-beto");
         assertThat(envio.aviso())
                 .isEqualTo(new Aviso(TipoAviso.ALERTA_CAIDA, UUID.fromString(alertaId), camara, "Sala", cuando, ROSA));
@@ -118,6 +140,8 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
                 .extracting(ContenidoDelAviso::titulo, ContenidoDelAviso::etiqueta)
                 .containsExactly("Posible caída de Rosa en la Sala", "URGENTE · CAÍDA");
         assertThat(notificadaEn(alertaId)).isEqualTo(reloj.instant());
+        assertThat(estadoAviso(alertaId)).isEqualTo("ENTREGADO");
+        assertThat(pendientes()).isZero();
     }
 
     @Test
@@ -164,7 +188,8 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
         String alertaId = evento("caida", cuando);
         assertThat(alertaId).isNotBlank();
         assertThat(notificadaEn(alertaId)).isNull();
-        assertThat(jdbc.queryForObject("select count(*) from avisos_pendientes", Integer.class))
+        assertThat(estadoAviso(alertaId)).isEqualTo("REINTENTANDO");
+        assertThat(jdbc.queryForObject("select intentos from avisos_pendientes", Integer.class))
                 .isEqualTo(1);
 
         // Not before the retry interval.
@@ -185,11 +210,27 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
         assertThat(envio.aviso().alertaId()).hasToString(alertaId);
         assertThat(envio.aviso().detalle()).isEqualTo(ROSA);
         assertThat(notificadaEn(alertaId)).isEqualTo(reloj.instant());
-        assertThat(jdbc.queryForObject("select count(*) from avisos_pendientes", Integer.class))
-                .isZero();
+        assertThat(estadoAviso(alertaId)).isEqualTo("ENTREGADO");
+        assertThat(pendientes()).isZero();
 
         reintentarAvisos.ejecutar();
         assertThat(push.enviados()).hasSize(1);
+    }
+
+    @Test
+    void ca16_4_unAvisoQueNoSeEntregaSeAbandonaAlTerminarSuPlazo() throws Exception {
+        push.simularCaida(true);
+        String alertaId = evento("caida", cuando);
+
+        for (int i = 0; i < 120; i++) {
+            reloj.avanzar(Duration.ofSeconds(15));
+            reintentarAvisos.ejecutar();
+        }
+
+        assertThat(jdbc.queryForList("select tipo || ' ' || intentos from avisos_pendientes", String.class))
+                .isEmpty();
+        assertThat(estadoAviso(alertaId)).isEqualTo("NO_ENTREGADO");
+        assertThat(notificadaEn(alertaId)).isNull();
     }
 
     @Test
@@ -278,6 +319,11 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
         String alertaId = evento("caida", cuando);
 
         assertThat(activo("telefono-beto")).isFalse();
+        assertThat(jdbc.queryForObject(
+                        "select desactivado_en from dispositivos where token_push = ?",
+                        Timestamp.class,
+                        "telefono-beto"))
+                .isNotNull();
         assertThat(activo("telefono-ana")).isTrue();
         assertThat(notificadaEn(alertaId)).isEqualTo(reloj.instant());
 
@@ -293,17 +339,167 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void siElServicioRechazaTodosLosTokensNoHayAQuienAvisarYNoSeReintenta() throws Exception {
+    void siElServicioRechazaTodosLosTokensLaCaidaSeReintentaYLlegaAlTelefonoQueSeRegistraDeNuevo() throws Exception {
         push.rechazarToken("telefono-ana");
         push.rechazarToken("telefono-beto");
 
         String alertaId = evento("caida", cuando);
 
         assertThat(notificadaEn(alertaId)).isNull();
-        assertThat(jdbc.queryForObject("select count(*) from avisos_pendientes", Integer.class))
+        assertThat(estadoAviso(alertaId)).isEqualTo("REINTENTANDO");
+        assertThat(pendientes()).isEqualTo(1);
+
+        // Nobody can receive it: it stays queued, without calling the push service again.
+        push.limpiar();
+        reloj.avanzar(Duration.ofSeconds(15));
+        reintentarAvisos.ejecutar();
+        assertThat(push.enviados()).isEmpty();
+        assertThat(pendientes()).isEqualTo(1);
+
+        // Ana's phone gets a new token and registers it: the fall goes out right away.
+        reloj.avanzar(Duration.ofMinutes(3));
+        registrarDispositivo(campo(titular, "$.tokenAcceso"), "telefono-ana-nuevo", "ANDROID")
+                .andExpect(status().isCreated());
+
+        assertThat(push.deTipo(TipoAviso.ALERTA_CAIDA))
+                .singleElement()
+                .satisfies(e -> assertThat(e.tokens()).containsExactly("telefono-ana-nuevo"));
+        assertThat(notificadaEn(alertaId)).isEqualTo(reloj.instant());
+        assertThat(estadoAviso(alertaId)).isEqualTo("ENTREGADO");
+        assertThat(pendientes()).isZero();
+    }
+
+    @Test
+    void sinNingunDispositivoLaCaidaSeReintentaTreintaMinutosYLuegoSeAbandona() throws Exception {
+        jdbc.update("delete from dispositivos");
+        String alertaId = evento("caida", cuando);
+        assertThat(estadoAviso(alertaId)).isEqualTo("REINTENTANDO");
+
+        reloj.avanzar(Duration.ofMinutes(29));
+        reintentarAvisos.ejecutar();
+        assertThat(pendientes()).isEqualTo(1);
+
+        reloj.avanzar(Duration.ofMinutes(2));
+        reintentarAvisos.ejecutar();
+        assertThat(pendientes()).isZero();
+        assertThat(estadoAviso(alertaId)).isEqualTo("NO_ENTREGADO");
+    }
+
+    @Test
+    void unaAlertaAtendidaDejaDeReintentarse() throws Exception {
+        jdbc.update("delete from dispositivos");
+        String alertaId = evento("caida", cuando);
+
+        mvc.perform(post("/api/alertas/" + alertaId + "/atencion")
+                        .header("Authorization", bearer(campo(titular, "$.tokenAcceso"))))
+                .andExpect(status().isOk());
+        esperarEventosPendientes();
+        reloj.avanzar(Duration.ofSeconds(15));
+        reintentarAvisos.ejecutar();
+
+        assertThat(jdbc.queryForObject(
+                        "select count(*) from avisos_pendientes where tipo = 'ALERTA_CAIDA'", Integer.class))
                 .isZero();
-        evento("caida_confirmada", cuando.plusSeconds(30));
-        assertThat(push.deTipo(TipoAviso.CAIDA_CONFIRMADA)).isEmpty();
+        assertThat(estadoAviso(alertaId)).isEqualTo("NO_ENTREGADO");
+    }
+
+    @Test
+    void unAvisoQueNoEsUrgenteSinDispositivosNoSeReintenta() throws Exception {
+        jdbc.update("delete from dispositivos");
+        evento("deteccion_no_confiable", cuando);
+        assertThat(pendientes()).isZero();
+    }
+
+    @Test
+    void registrarDevuelveElDispositivoYRegistrarloSinCambiosActualizaCuandoSeVio() throws Exception {
+        String sesion = campo(titular, "$.tokenAcceso");
+        String primero = registrarDispositivo(sesion, "telefono-ana", "ANDROID")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.plataforma").value("ANDROID"))
+                .andExpect(jsonPath("$.activo").value(true))
+                .andExpect(jsonPath("$.desactivadoEn").isEmpty())
+                .andExpect(jsonPath("$.tokenPush").doesNotExist())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        reloj.avanzar(Duration.ofHours(2));
+        String segundo = registrarDispositivo(sesion, "telefono-ana", "ANDROID")
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(campo(segundo, "$.id")).isEqualTo(campo(primero, "$.id"));
+        assertThat(Instant.parse(campo(segundo, "$.vistoEn"))).isEqualTo(reloj.instant());
+        assertThat(jdbc.queryForObject(
+                                "select visto_en from dispositivos where token_push = ?",
+                                Timestamp.class,
+                                "telefono-ana")
+                        .toInstant())
+                .isEqualTo(reloj.instant());
+    }
+
+    @Test
+    void elTelefonoConsultaSiSigueRecibiendoAvisos() throws Exception {
+        String sesion = campo(titular, "$.tokenAcceso");
+        String id = campo(
+                registrarDispositivo(sesion, "telefono-ana", "ANDROID")
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString(),
+                "$.id");
+        mvc.perform(get("/api/dispositivos/" + id).header("Authorization", bearer(sesion)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id))
+                .andExpect(jsonPath("$.activo").value(true));
+
+        // The push service says the token is gone: the app learns it and gets a new one.
+        push.rechazarToken("telefono-ana");
+        evento("caida", cuando);
+        mvc.perform(get("/api/dispositivos/" + id).header("Authorization", bearer(sesion)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo").value(false))
+                .andExpect(jsonPath("$.desactivadoEn").isNotEmpty());
+
+        // Another account cannot read it.
+        mvc.perform(get("/api/dispositivos/" + id).header("Authorization", bearer(tokenDeBeto())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.codigo").value("DISPOSITIVO_NO_ENCONTRADO"));
+        mvc.perform(get("/api/dispositivos/" + UUID.randomUUID()).header("Authorization", bearer(sesion)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void elHogarDiceCuantosDispositivosPuedenRecibirAlertas() throws Exception {
+        String sesion = campo(titular, "$.tokenAcceso");
+        mvc.perform(get("/api/hogar").header("Authorization", bearer(sesion)))
+                .andExpect(jsonPath("$.dispositivosActivos").value(2));
+
+        push.rechazarToken("telefono-ana");
+        push.rechazarToken("telefono-beto");
+        evento("caida", cuando);
+
+        // Nobody in the family can receive alerts: the app warns about it.
+        mvc.perform(get("/api/hogar").header("Authorization", bearer(tokenDeBeto())))
+                .andExpect(jsonPath("$.dispositivosActivos").value(0));
+    }
+
+    @Test
+    void losDispositivosActivosSonLosDeLosFamiliaresDeCadaHogar() throws Exception {
+        String otro = ApiDePrueba.titularConHogar(mvc, "carla@correo.pe", "Carla");
+        mvc.perform(get("/api/hogar").header("Authorization", bearer(campo(otro, "$.tokenAcceso"))))
+                .andExpect(jsonPath("$.dispositivosActivos").value(0));
+        mvc.perform(get("/api/hogar").header("Authorization", bearer(campo(titular, "$.tokenAcceso"))))
+                .andExpect(jsonPath("$.dispositivosActivos").value(2));
+    }
+
+    @Test
+    void lasAlertasMuestranElEstadoDelAviso() throws Exception {
+        String alertaId = evento("caida", cuando);
+        mvc.perform(get("/api/alertas/" + alertaId).header("Authorization", bearer(campo(titular, "$.tokenAcceso"))))
+                .andExpect(jsonPath("$.estadoAviso").value("ENTREGADO"))
+                .andExpect(jsonPath("$.notificadaEn").isNotEmpty());
     }
 
     @Test

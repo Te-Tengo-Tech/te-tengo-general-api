@@ -289,10 +289,19 @@ grep -q 'Cámara registrada' "$WORK/agente.log" || falla "the agent registered i
 ok "CAIDA alert $ALERTA_ID created from the agent's event"
 
 # The push for this alert: ALERTA_CAIDA, or ALERTA_ACTUALIZADA_A_CAIDA when the agent first saw an
-# unstable movement. The `registro` provider logs it with the number of devices.
-PUSH="$(grep -m1 -E "Push ALERTA_(CAIDA|ACTUALIZADA_A_CAIDA) \(sin enviar, proveedor registro\) a 1 dispositivo.*alertaId=$ALERTA_ID" "$WORK/api.log" || true)"
-[ -n "$PUSH" ] || falla "push provider invoked for the CAIDA alert"
-[ "$(jq -r .notificadaEn <<<"$ALERTA")" != null ] || falla "alert marked as notified (notificadaEn)"
+# unstable movement. The `registro` provider logs it with the number of devices. It goes out right
+# after the agent's request commits, on another thread, so wait a few seconds for it.
+PUSH=""
+push_enviado() {
+  PUSH="$(grep -m1 -E "Push ALERTA_(CAIDA|ACTUALIZADA_A_CAIDA) \(sin enviar, proveedor registro\) a 1 dispositivo.*alertaId=$ALERTA_ID" "$WORK/api.log" || true)"
+  [ -n "$PUSH" ]
+}
+esperar 10 push_enviado || falla "push provider invoked for the CAIDA alert"
+notificada() {
+  ALERTA="$(llamar GET "/api/alertas/$ALERTA_ID")"
+  [ "$(jq -r .notificadaEn <<<"$ALERTA")" != null ] && [ "$(jq -r .estadoAviso <<<"$ALERTA")" = ENTREGADO ]
+}
+esperar 10 notificada || falla "alert marked as notified (notificadaEn, estadoAviso ENTREGADO)"
 
 # Latency, on this machine's clock: the agent's detection log line → the API's push log line.
 DETECTADO="$(grep -m1 'Evento detectado: caida ' "$WORK/agente.log" | cut -d' ' -f1,2 || true)"
@@ -325,8 +334,8 @@ confirmada() {
   [ "$(jq -r .confirmada <<<"$ALERTA")" = true ]
 }
 esperar "$ESPERA" confirmada || falla "alert confirmada: true within ${ESPERA}s"
-grep -q 'Push CAIDA_CONFIRMADA (sin enviar, proveedor registro)' "$WORK/api.log" ||
-  falla "push provider invoked for CAIDA_CONFIRMADA"
+push_confirmada() { grep -q 'Push CAIDA_CONFIRMADA (sin enviar, proveedor registro)' "$WORK/api.log"; }
+esperar 10 push_confirmada || falla "push provider invoked for CAIDA_CONFIRMADA"
 ok "alert confirmed (caida_confirmada) and CAIDA_CONFIRMADA pushed"
 
 clip_disponible() {
