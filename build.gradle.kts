@@ -9,7 +9,7 @@ plugins {
 
 group = "tech.tetengo"
 
-version = "0.3.1"
+version = "0.3.2"
 
 description = "Backend API del sistema Te Tengo"
 
@@ -204,8 +204,9 @@ tasks.jacocoTestCoverageVerification {
 
 tasks.named("check") { dependsOn("jacocoTestReport", "jacocoTestCoverageVerification") }
 
-// OWASP Dependency-Check of the runtime dependencies: `./gradlew dependencyCheckAnalyze`.
-// CI runs it weekly (.github/workflows/owasp.yml) and fails on CVSS 7.0 or higher.
+// OWASP Dependency-Check of the runtime dependencies, on demand only:
+// `NVD_API_KEY=... ./gradlew dependencyCheckAnalyze` (fails on CVSS 7.0 or higher).
+// CI scans them with OSV-Scanner instead (.github/workflows/osv-scanner.yml).
 dependencyCheck {
   nvd { apiKey = System.getenv("NVD_API_KEY") }
   scanConfigurations = listOf("runtimeClasspath")
