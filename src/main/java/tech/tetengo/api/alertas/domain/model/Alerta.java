@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.hibernate.annotations.DynamicUpdate;
 import tech.tetengo.api.alertas.domain.AlertaError;
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 import tech.tetengo.api.shared.domain.model.EntidadDelHogar;
@@ -16,8 +17,13 @@ import tech.tetengo.api.shared.domain.model.EntidadDelHogar;
 /**
  * An alert of a fall (high severity) or an unstable movement (medium severity, CA-17.1), with the
  * room and time of the event. Created and updated from the household agent's events.
+ *
+ * <p>{@link DynamicUpdate}: the push notice records its delivery ({@code notificadaEn},
+ * {@code estadoAviso}) from another thread while the agent's next event may be confirming the fall;
+ * each update writes only the columns it changed, so neither overwrites the other.
  */
 @Entity
+@DynamicUpdate
 @Table(name = "alertas")
 public class Alerta extends EntidadDelHogar {
 
@@ -51,6 +57,10 @@ public class Alerta extends EntidadDelHogar {
 
     @Column(name = "notificada_en")
     private Instant notificadaEn;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estado_aviso", nullable = false, length = 20)
+    private EstadoAviso estadoAviso = EstadoAviso.ENVIANDO;
 
     @Column(name = "recuperada_en")
     private Instant recuperadaEn;
@@ -161,6 +171,21 @@ public class Alerta extends EntidadDelHogar {
         if (notificadaEn == null) {
             notificadaEn = instante;
         }
+        estadoAviso = EstadoAviso.ENTREGADO;
+    }
+
+    /** CA-16.4: the notice could not be delivered yet and is being retried. */
+    public void marcarAvisoPendiente() {
+        if (estadoAviso != EstadoAviso.ENTREGADO) {
+            estadoAviso = EstadoAviso.REINTENTANDO;
+        }
+    }
+
+    /** The retries ended without delivering the notice. */
+    public void marcarAvisoNoEntregado() {
+        if (estadoAviso != EstadoAviso.ENTREGADO) {
+            estadoAviso = EstadoAviso.NO_ENTREGADO;
+        }
     }
 
     /**
@@ -235,6 +260,10 @@ public class Alerta extends EntidadDelHogar {
 
     public Instant getNotificadaEn() {
         return notificadaEn;
+    }
+
+    public EstadoAviso getEstadoAviso() {
+        return estadoAviso;
     }
 
     public Instant getRecuperadaEn() {

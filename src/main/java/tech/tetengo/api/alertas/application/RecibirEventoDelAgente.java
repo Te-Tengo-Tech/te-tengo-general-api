@@ -1,6 +1,5 @@
 package tech.tetengo.api.alertas.application;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,19 +38,13 @@ public class RecibirEventoDelAgente {
     private final AlertaRepository alertas;
     private final CamarasDelHogar camaras;
     private final EnvioDeAvisos avisos;
-    private final Clock reloj;
 
     public RecibirEventoDelAgente(
-            EventoDeAgenteRepository eventos,
-            AlertaRepository alertas,
-            CamarasDelHogar camaras,
-            EnvioDeAvisos avisos,
-            Clock reloj) {
+            EventoDeAgenteRepository eventos, AlertaRepository alertas, CamarasDelHogar camaras, EnvioDeAvisos avisos) {
         this.eventos = eventos;
         this.alertas = alertas;
         this.camaras = camaras;
         this.avisos = avisos;
-        this.reloj = reloj;
     }
 
     @Transactional
@@ -78,21 +71,19 @@ public class RecibirEventoDelAgente {
     }
 
     /**
-     * US-16, US-17: the push goes out within this request, so it reaches the family in less than
-     * 10 s (CA-11.3, CA-16.1). If the push service fails, it is retried and the alert is still shown
-     * when the app opens (CA-16.4).
+     * US-16, US-17: the push is queued with the alert and goes out as soon as this request commits,
+     * on another thread, so it reaches the family in less than 10 s without holding the agent's
+     * request (CA-11.3, CA-16.1). If it is not delivered, it is retried and the alert is still shown
+     * when the app opens (CA-16.4); the alert's {@code estadoAviso} tells how it went.
      */
     private void avisar(Efecto efecto, CamaraDelHogar camara, Instant ocurridoEn) {
         Alerta alerta = efecto.alerta();
-        ResultadoDeEnvio resultado = avisos.alHogar(new Aviso(
+        avisos.alHogar(new Aviso(
                 efecto.aviso(),
                 alerta == null ? null : alerta.getId(),
                 camara.id(),
                 alerta == null ? camara.nombreHabitacion() : alerta.getHabitacion(),
                 ocurridoEn));
-        if (resultado == ResultadoDeEnvio.ENTREGADO && alerta != null) {
-            alerta.marcarNotificada(reloj.instant());
-        }
     }
 
     private Efecto aplicar(TipoEvento tipo, CamaraDelHogar camara, Instant ocurridoEn) {

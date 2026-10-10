@@ -2,6 +2,7 @@ package tech.tetengo.api.alertas.application.port;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import tech.tetengo.api.alertas.domain.model.AvisoPendiente;
 
@@ -9,8 +10,14 @@ public interface AvisoPendienteRepository {
 
     AvisoPendiente guardar(AvisoPendiente aviso);
 
-    /** Due notices of the household in context. */
+    /** A queued notice of the household in context. */
+    Optional<AvisoPendiente> buscar(UUID id);
+
+    /** Due notices of the household in context, oldest first. */
     List<AvisoPendiente> vencidos(Instant ahora);
+
+    /** Every queued notice of the household in context. */
+    List<AvisoPendiente> delHogar();
 
     void eliminar(AvisoPendiente aviso);
 

@@ -149,13 +149,15 @@ class HistorialDeAlertasIntegrationTest extends AbstractIntegrationTest {
         DatosDePrueba.dispositivo(jdbc, UUID.fromString(campo(titular, "$.usuario.id")), "telefono-ana");
         push.simularCaida(true);
         String alertaId = alerta("caida", reloj.instant().truncatedTo(ChronoUnit.MILLIS));
+        esperarEventosPendientes();
 
         listar("?estado=ACTIVA").andExpect(jsonPath("$.elementos[0].id").value(alertaId));
         mvc.perform(get("/api/alertas/" + alertaId).header("Authorization", bearer(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(alertaId))
                 .andExpect(jsonPath("$.estado").value("ACTIVA"))
-                .andExpect(jsonPath("$.notificadaEn").isEmpty());
+                .andExpect(jsonPath("$.notificadaEn").isEmpty())
+                .andExpect(jsonPath("$.estadoAviso").value("REINTENTANDO"));
     }
 
     @Test
