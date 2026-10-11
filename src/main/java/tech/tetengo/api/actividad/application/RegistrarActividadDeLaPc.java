@@ -20,6 +20,11 @@ import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
  * deletions) reach the log, also those made without internet, sent when it returns. Each change has
  * the PC's own id, so a batch sent twice is stored once. Changes the API already sees (a camera's
  * room, unlinking) are logged by the API, not reported.
+ *
+ * <p>US-39 / CA-39.3: a replay watched on the PC ({@code REPETICION_VISTA}) carries the camera, the
+ * moment replayed and how long it was watched; it is stored with the camera, the room as
+ * {@code objeto}, the moment as an ISO-8601 interval in {@code valorAnterior} and the seconds
+ * watched in {@code valorNuevo}.
  */
 @Service
 public class RegistrarActividadDeLaPc {
@@ -38,7 +43,16 @@ public class RegistrarActividadDeLaPc {
     }
 
     public record Cambio(
-            UUID id, String tipo, Instant ocurridoEn, String objeto, String valorAnterior, String valorNuevo) {}
+            UUID id,
+            String tipo,
+            Instant ocurridoEn,
+            String objeto,
+            String valorAnterior,
+            String valorNuevo,
+            Repeticion repeticion) {}
+
+    /** What a {@code REPETICION_VISTA} carries; null fields are validation errors. */
+    public record Repeticion(UUID camaraId, Instant momentoDesde, Instant momentoHasta, Long duracionSegundos) {}
 
     public record Resultado(int registrados, int repetidos) {}
 
@@ -53,18 +67,51 @@ public class RegistrarActividadDeLaPc {
             if (cambio.ocurridoEn().isAfter(limite)) {
                 throw invalido("cambios[%d].ocurridoEn".formatted(i), "La fecha está en el futuro.");
             }
-            boolean nuevo = registro.registrar(Actividad.de(
+            Actividad actividad = Actividad.de(
                             RegistroDeActividad.clave("PC", pcId, cambio.id()),
                             cambio.ocurridoEn(),
                             tipo,
                             OrigenDeActividad.PC)
-                    .enPc(pcId, nombre)
-                    .sobre(cambio.objeto(), cambio.valorAnterior(), cambio.valorNuevo()));
+                    .enPc(pcId, nombre);
+            if (tipo == TipoDeActividad.REPETICION_VISTA) {
+                repeticion(actividad, pcId, cambio, i, limite);
+            } else {
+                actividad.sobre(cambio.objeto(), cambio.valorAnterior(), cambio.valorNuevo());
+            }
+            boolean nuevo = registro.registrar(actividad);
             if (nuevo) {
                 registrados++;
             }
         }
         return new Resultado(registrados, cambios.size() - registrados);
+    }
+
+    /** CA-39.3: the replay of a camera of this PC, of a past moment, watched for some seconds. */
+    private void repeticion(Actividad actividad, UUID pcId, Cambio cambio, int i, Instant limite) {
+        Repeticion r = cambio.repeticion() == null ? new Repeticion(null, null, null, null) : cambio.repeticion();
+        if (r.camaraId() == null
+                || !camaras.pcDeCamara(r.camaraId()).map(pcId::equals).orElse(false)) {
+            throw invalido("cambios[%d].camaraId".formatted(i), "La cámara no es de esta PC.");
+        }
+        if (r.momentoDesde() == null
+                || r.momentoHasta() == null
+                || !r.momentoDesde().isBefore(r.momentoHasta())) {
+            throw invalido("cambios[%d].momentoDesde".formatted(i), "El momento debe empezar antes de terminar.");
+        }
+        if (r.momentoHasta().isAfter(limite)) {
+            throw invalido("cambios[%d].momentoHasta".formatted(i), "La fecha está en el futuro.");
+        }
+        if (r.duracionSegundos() == null || r.duracionSegundos() < 0) {
+            throw invalido("cambios[%d].duracionSegundos".formatted(i), "Falta cuánto tiempo se vio.");
+        }
+        String habitacion = cambio.objeto() != null && !cambio.objeto().isBlank()
+                ? cambio.objeto()
+                : camaras.buscar(r.camaraId())
+                        .map(CamarasDelHogar.CamaraDelHogar::nombreHabitacion)
+                        .orElse(null);
+        actividad
+                .deCamara(r.camaraId())
+                .sobre(habitacion, r.momentoDesde() + "/" + r.momentoHasta(), String.valueOf(r.duracionSegundos()));
     }
 
     private static TipoDeActividad tipo(String tipo, int indice) {
@@ -78,7 +125,7 @@ public class RegistrarActividadDeLaPc {
         }
         throw invalido(
                 "cambios[%d].tipo".formatted(indice),
-                "La PC solo informa MODO_AVANZADO_ACTIVADO, MODO_AVANZADO_DESACTIVADO, GUARDADO_LOCAL_CAMBIADO o DATOS_LOCALES_ELIMINADOS.");
+                "La PC solo informa MODO_AVANZADO_ACTIVADO, MODO_AVANZADO_DESACTIVADO, GUARDADO_LOCAL_CAMBIADO, DATOS_LOCALES_ELIMINADOS o REPETICION_VISTA.");
     }
 
     private static ErrorDeNegocio invalido(String campo, String mensaje) {

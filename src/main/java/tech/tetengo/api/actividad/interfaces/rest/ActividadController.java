@@ -55,14 +55,21 @@ class ActividadController {
     @Operation(
             summary = "Report the PC's own changes (agent, US-33)",
             description =
-                    "Changes only the PC knows about: MODO_AVANZADO_ACTIVADO, MODO_AVANZADO_DESACTIVADO, GUARDADO_LOCAL_CAMBIADO, DATOS_LOCALES_ELIMINADOS, also those queued without internet (CA-33.3). Idempotent by each change's id. Up to 100 per request. Errors: 400 VALIDACION. PC token.")
+                    "Changes only the PC knows about: MODO_AVANZADO_ACTIVADO, MODO_AVANZADO_DESACTIVADO, GUARDADO_LOCAL_CAMBIADO, DATOS_LOCALES_ELIMINADOS, and REPETICION_VISTA (a replay watched on the PC, with camaraId, momentoDesde, momentoHasta and duracionSegundos; CA-39.3), also those queued without internet (CA-33.3). Idempotent by each change's id. Up to 100 per request. Errors: 400 VALIDACION. PC token.")
     @PostMapping(path = ApiVersioning.BASE + "/agente/pc/actividad", version = ApiVersioning.V1)
     RegistrarActividadDeLaPc.Resultado reportar(@Valid @RequestBody CambiosRequest pedido) {
         return registrarDeLaPc.ejecutar(
                 UsuarioActual.pcDelAgente(),
                 pedido.cambios().stream()
                         .map(c -> new RegistrarActividadDeLaPc.Cambio(
-                                c.id(), c.tipo(), c.ocurridoEn(), c.objeto(), c.valorAnterior(), c.valorNuevo()))
+                                c.id(),
+                                c.tipo(),
+                                c.ocurridoEn(),
+                                c.objeto(),
+                                c.valorAnterior(),
+                                c.valorNuevo(),
+                                new RegistrarActividadDeLaPc.Repeticion(
+                                        c.camaraId(), c.momentoDesde(), c.momentoHasta(), c.duracionSegundos())))
                         .toList());
     }
 
@@ -78,5 +85,10 @@ class ActividadController {
             @NotNull(message = "Falta la fecha.") Instant ocurridoEn,
             @Size(max = 120) String objeto,
             @Size(max = 200) String valorAnterior,
-            @Size(max = 200) String valorNuevo) {}
+            @Size(max = 200) String valorNuevo,
+            // REPETICION_VISTA only (CA-39.3).
+            UUID camaraId,
+            Instant momentoDesde,
+            Instant momentoHasta,
+            Long duracionSegundos) {}
 }

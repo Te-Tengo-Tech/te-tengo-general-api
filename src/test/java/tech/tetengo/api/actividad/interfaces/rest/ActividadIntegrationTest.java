@@ -173,6 +173,89 @@ class ActividadIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void ca39_3_unaRepeticionVistaEnLaPcQuedaConLaCamaraElMomentoYCuantoSeVio() throws Exception {
+        String camara = campo(
+                VinculacionDePrueba.usarCamara(mvc, tokenPc, "usb#1", "Logitech C920", "Sala")
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString(),
+                "$.camaraId");
+        var desde = reloj.instant().minus(Duration.ofHours(3));
+        var hasta = desde.plus(Duration.ofMinutes(10));
+        String cuerpo =
+                """
+                {"cambios":[{"id":"%s","tipo":"REPETICION_VISTA","ocurridoEn":"%s","camaraId":"%s",
+                 "momentoDesde":"%s","momentoHasta":"%s","duracionSegundos":180}]}
+                """.formatted(UUID.randomUUID(), reloj.instant().minus(Duration.ofMinutes(5)), camara, desde, hasta);
+        mvc.perform(post("/api/agente/pc/actividad")
+                        .header("Authorization", bearer(tokenPc))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpo))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.registrados").value(1));
+
+        // Any member sees it, from the PC, with the camera, the room, the moment and the seconds.
+        UUID invitado = UUID.randomUUID();
+        DatosDePrueba.membresia(jdbc, hogar, invitado, Rol.INVITADO);
+        String vista = actividad(JwtDePrueba.token(invitado, hogar, Rol.INVITADO), "?tipo=REPETICION_VISTA");
+        assertThat(campo(vista, "$.total")).isEqualTo("1");
+        assertThat(campo(vista, "$.elementos[0].actor.tipo")).isEqualTo("PC");
+        assertThat(campo(vista, "$.elementos[0].pc.nombre")).isEqualTo("Sala-Rosa");
+        assertThat(campo(vista, "$.elementos[0].camaraId")).isEqualTo(camara);
+        assertThat(campo(vista, "$.elementos[0].objeto")).isEqualTo("Sala");
+        assertThat(campo(vista, "$.elementos[0].valorAnterior")).isEqualTo(desde + "/" + hasta);
+        assertThat(campo(vista, "$.elementos[0].valorNuevo")).isEqualTo("180");
+
+        // Another household does not see it.
+        String otro = campo(ApiDePrueba.titularConHogar(mvc, "ana@correo.pe", "Ana"), "$.tokenAcceso");
+        assertThat(campo(actividad(otro, "?tipo=REPETICION_VISTA"), "$.total")).isEqualTo("0");
+    }
+
+    @Test
+    void ca39_3_laRepeticionDeLaPcNecesitaUnaCamaraSuyaYUnMomentoPasado() throws Exception {
+        var desde = reloj.instant().minus(Duration.ofHours(1));
+        String sinCamara = """
+                {"cambios":[{"id":"%s","tipo":"REPETICION_VISTA","ocurridoEn":"%s","camaraId":"%s",
+                 "momentoDesde":"%s","momentoHasta":"%s","duracionSegundos":60}]}
+                """.formatted(
+                UUID.randomUUID(), reloj.instant(), UUID.randomUUID(), desde, desde.plus(Duration.ofMinutes(10)));
+        mvc.perform(post("/api/agente/pc/actividad")
+                        .header("Authorization", bearer(tokenPc))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(sinCamara))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.campos['cambios[0].camaraId']").exists());
+
+        String camara = campo(
+                VinculacionDePrueba.usarCamara(mvc, tokenPc, "usb#1", "Logitech C920", "Sala")
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString(),
+                "$.camaraId");
+        String alReves = """
+                {"cambios":[{"id":"%s","tipo":"REPETICION_VISTA","ocurridoEn":"%s","camaraId":"%s",
+                 "momentoDesde":"%s","momentoHasta":"%s","duracionSegundos":60}]}
+                """.formatted(UUID.randomUUID(), reloj.instant(), camara, desde, desde.minusSeconds(60));
+        mvc.perform(post("/api/agente/pc/actividad")
+                        .header("Authorization", bearer(tokenPc))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(alReves))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.campos['cambios[0].momentoDesde']").exists());
+        String sinDuracion =
+                """
+                {"cambios":[{"id":"%s","tipo":"REPETICION_VISTA","ocurridoEn":"%s","camaraId":"%s",
+                 "momentoDesde":"%s","momentoHasta":"%s"}]}
+                """.formatted(UUID.randomUUID(), reloj.instant(), camara, desde, desde.plus(Duration.ofMinutes(1)));
+        mvc.perform(post("/api/agente/pc/actividad")
+                        .header("Authorization", bearer(tokenPc))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(sinDuracion))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.campos['cambios[0].duracionSegundos']").exists());
+    }
+
+    @Test
     void laPcSoloInformaSusPropiosCambiosConFechasPasadas() throws Exception {
         mvc.perform(post("/api/agente/pc/actividad")
                         .header("Authorization", bearer(tokenPc))
