@@ -19,6 +19,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param secretoAutorizacion shared secret of MediaMTX's authorization requests; blank rejects them all
  * @param inactividad a session ends when its viewer has not read for this long (implementation choice)
  * @param duracionMaxima maximum length of a session (implementation choice)
+ * @param duracionMaximaVistaPrevia maximum length of a webcam preview (US-29, implementation choice)
  */
 @ConfigurationProperties("tetengo.vista-en-vivo")
 public record PropiedadesDeVistaEnVivo(
@@ -28,9 +29,12 @@ public record PropiedadesDeVistaEnVivo(
         String mediamtxApi,
         String secretoAutorizacion,
         Duration inactividad,
-        Duration duracionMaxima) {
+        Duration duracionMaxima,
+        Duration duracionMaximaVistaPrevia) {
 
     public PropiedadesDeVistaEnVivo {
+        duracionMaximaVistaPrevia =
+                duracionMaximaVistaPrevia == null ? Duration.ofMinutes(2) : duracionMaximaVistaPrevia;
         urlPublicacion = urlPublicacion == null ? "rtsp://localhost:8554/camaras/{camaraId}" : urlPublicacion;
         urlHls = urlHls == null ? "http://localhost:8888" : urlHls;
         inactividad = inactividad == null ? Duration.ofSeconds(30) : inactividad;

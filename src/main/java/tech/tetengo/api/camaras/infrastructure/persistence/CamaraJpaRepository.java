@@ -31,6 +31,12 @@ interface CamaraJpaRepository extends JpaRepository<Camara, UUID> {
 
     List<Camara> findByPcIdAndRetiradaEnIsNull(UUID pcId, Sort orden);
 
+    List<Camara> findByAmbienteIdAndRetiradaEnIsNull(UUID ambienteId);
+
+    List<Camara> findByPcIdAndDispositivoIdIsNotNull(UUID pcId, Sort orden);
+
+    Optional<Camara> findFirstByPcIdAndDispositivoId(UUID pcId, String dispositivoId);
+
     /** Native, so not filtered by household: the agent token is checked before its household is bound. */
     @Query(
             value = "select c.pc_id, c.retirada_en is not null, coalesce(p.estado = 'VINCULADA', true)"

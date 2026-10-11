@@ -10,10 +10,12 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import tech.tetengo.api.camaras.application.CamarasDetectadas;
 import tech.tetengo.api.camaras.application.DesvincularPc;
 import tech.tetengo.api.camaras.application.ListarPcs;
 import tech.tetengo.api.camaras.application.RenombrarPc;
@@ -29,11 +31,34 @@ class PcController {
     private final ListarPcs listarPcs;
     private final RenombrarPc renombrarPc;
     private final DesvincularPc desvincularPc;
+    private final CamarasDetectadas detectadas;
 
-    PcController(ListarPcs listarPcs, RenombrarPc renombrarPc, DesvincularPc desvincularPc) {
+    PcController(
+            ListarPcs listarPcs, RenombrarPc renombrarPc, DesvincularPc desvincularPc, CamarasDetectadas detectadas) {
         this.listarPcs = listarPcs;
         this.renombrarPc = renombrarPc;
         this.desvincularPc = desvincularPc;
+        this.detectadas = detectadas;
+    }
+
+    @Operation(
+            summary = "Ask the PC to look for webcams again: «Buscar de nuevo» (owner, US-29)",
+            description =
+                    "CA-29.6: the PC gets {\"buscarCamaras\":true} on its control channel and reports its webcams again; the app reads them with GET /api/pcs/{id}/camaras a few seconds later. 202; nothing happens while the PC is offline. Errors: 404 PC_NO_ENCONTRADA, 403 SOLO_TITULAR.")
+    @PostMapping(path = "/{id}/busqueda-de-camaras", version = ApiVersioning.V1)
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    void buscarCamaras(@PathVariable UUID id) {
+        UsuarioActual.exigirTitular();
+        detectadas.buscarDeNuevo(id);
+    }
+
+    @Operation(
+            summary = "The webcams a PC detected («Elige las cámaras», US-29)",
+            description =
+                    "Every webcam the PC reported, in use in a room or «sin usar», with whether it is plugged in. The owner assigns them with PUT /api/camaras/{id}/ambiente and can preview each one first (POST /api/camaras/{id}/vista-previa). Any member. Errors: 404 PC_NO_ENCONTRADA.")
+    @GetMapping(path = "/{id}/camaras", version = ApiVersioning.V1)
+    List<CamaraDetectadaResponse> camaras(@PathVariable UUID id) {
+        return detectadas.deLaPc(id).stream().map(CamaraDetectadaResponse::de).toList();
     }
 
     @Operation(

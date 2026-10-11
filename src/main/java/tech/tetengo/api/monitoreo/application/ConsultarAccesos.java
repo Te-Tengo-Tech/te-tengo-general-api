@@ -45,7 +45,9 @@ public class ConsultarAccesos {
                                 : null,
                         a.getInicio(),
                         a.duracionSegundos(ahora),
-                        a.desdeAlerta()))
+                        a.desdeAlerta(),
+                        a.getCamaraId(),
+                        a.isVistaPrevia()))
                 .toList();
     }
 }

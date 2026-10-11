@@ -121,4 +121,73 @@ class DesvinculacionPorElCanalIntegrationTest extends AbstractIntegrationTest {
         await().atMost(Duration.ofSeconds(5)).until(() -> camara.cierre.get() != null);
         assertThat(camara.textos).contains("{\"desvincular\":true}");
     }
+
+    @Test
+    void ca29_2_laPcRecibeLaAsignacionHechaDesdeElCelularPorSuCanal() throws Exception {
+        String tokens = VinculacionDePrueba.vincular(mvc, titular, "Sala-Rosa");
+        Receptor pc = new Receptor();
+        conectar(campo(tokens, "$.access_token"), pc);
+        String inventario = VinculacionDePrueba.reportarWebcams(
+                        mvc, campo(tokens, "$.access_token"), "usb#1:Webcam USB HD")
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String camara = campo(inventario, "$[0].camaraId");
+
+        VinculacionDePrueba.asignarDesdeLaApp(mvc, titular, camara, "Sala").andExpect(status().isOk());
+        await().atMost(Duration.ofSeconds(5)).until(() -> !pc.textos.isEmpty());
+        String asignada = pc.textos.getLast();
+        assertThat(campo(asignada, "$.camara.camaraId")).isEqualTo(camara);
+        assertThat(campo(asignada, "$.camara.dispositivoId")).isEqualTo("usb#1");
+        assertThat(campo(asignada, "$.camara.enUso")).isEqualTo("true");
+        assertThat(campo(asignada, "$.camara.nombreHabitacion")).isEqualTo("Sala");
+
+        mvc.perform(delete("/api/camaras/" + camara + "/ambiente").header("Authorization", bearer(titular)))
+                .andExpect(status().isNoContent());
+        await().atMost(Duration.ofSeconds(5)).until(() -> pc.textos.size() >= 2);
+        assertThat(campo(pc.textos.getLast(), "$.camara.enUso")).isEqualTo("false");
+        assertThat(campo(pc.textos.getLast(), "$.camara.nombreHabitacion")).isNull();
+    }
+
+    @Test
+    void laVistaPreviaDeUnaWebcamSinUsarPideTransmitirPorElCanalDeLaPc() throws Exception {
+        ApiDePrueba.otorgarConsentimiento(mvc, titular);
+        String tokens = VinculacionDePrueba.vincular(mvc, titular, "Sala-Rosa");
+        Receptor pc = new Receptor();
+        conectar(campo(tokens, "$.access_token"), pc);
+        String camara = campo(
+                VinculacionDePrueba.reportarWebcams(mvc, campo(tokens, "$.access_token"), "usb#1:Webcam USB HD")
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString(),
+                "$[0].camaraId");
+        esperarEventosPendientes();
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                                "/api/camaras/" + camara + "/vista-previa")
+                        .header("Authorization", bearer(titular)))
+                .andExpect(status().isCreated());
+
+        await().atMost(Duration.ofSeconds(5)).until(() -> !pc.textos.isEmpty());
+        String transmitir = pc.textos.getLast();
+        assertThat(campo(transmitir, "$.transmitir")).isEqualTo("true");
+        assertThat(campo(transmitir, "$.urlPublicacion")).endsWith("/camaras/" + camara);
+        assertThat(campo(transmitir, "$.camaraId")).isEqualTo(camara);
+        assertThat(campo(transmitir, "$.dispositivoId")).isEqualTo("usb#1");
+    }
+
+    @Test
+    void ca29_6_laPcRecibeBuscarCamarasPorSuCanal() throws Exception {
+        String tokens = VinculacionDePrueba.vincular(mvc, titular, "Sala-Rosa");
+        Receptor pc = new Receptor();
+        conectar(campo(tokens, "$.access_token"), pc);
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                                "/api/pcs/" + campo(tokens, "$.pc_id") + "/busqueda-de-camaras")
+                        .header("Authorization", bearer(titular)))
+                .andExpect(status().isAccepted());
+
+        await().atMost(Duration.ofSeconds(5)).until(() -> !pc.textos.isEmpty());
+        assertThat(pc.textos).containsExactly("{\"buscarCamaras\":true}");
+    }
 }

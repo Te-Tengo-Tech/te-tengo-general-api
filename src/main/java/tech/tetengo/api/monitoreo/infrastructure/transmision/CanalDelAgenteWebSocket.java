@@ -70,6 +70,10 @@ class CanalDelAgenteWebSocket implements CanalDelAgente {
 
     /** The exact JSON of AGENT_CONTRACT.md, fields in that order. */
     static String json(Mensaje mensaje) {
+        return JSON.writeValueAsString(cuerpo(mensaje));
+    }
+
+    private static Map<String, Object> cuerpo(Mensaje mensaje) {
         Map<String, Object> cuerpo = new LinkedHashMap<>();
         switch (mensaje) {
             case Preparar p -> cuerpo.put("preparar", true);
@@ -83,8 +87,26 @@ class CanalDelAgenteWebSocket implements CanalDelAgente {
             case CambiarModo c -> cuerpo.put("modo", c.modo().name());
             case Detener d -> cuerpo.put("transmitir", false);
             case Desvincular d -> cuerpo.put("desvincular", true);
+            case BuscarCamaras b -> cuerpo.put("buscarCamaras", true);
+            case ParaCamara p -> {
+                cuerpo.putAll(cuerpo(p.mensaje()));
+                cuerpo.put("camaraId", p.camaraId().toString());
+                cuerpo.put("dispositivoId", p.dispositivoId());
+            }
+            case CamaraDeLaPc c -> {
+                Map<String, Object> camara = new LinkedHashMap<>();
+                camara.put("camaraId", c.camaraId().toString());
+                camara.put("dispositivoId", c.dispositivoId());
+                camara.put("nombreDispositivo", c.nombreDispositivo());
+                camara.put("enUso", c.enUso());
+                camara.put(
+                        "ambienteId",
+                        c.ambienteId() == null ? null : c.ambienteId().toString());
+                camara.put("nombreHabitacion", c.nombreHabitacion());
+                cuerpo.put("camara", camara);
+            }
         }
-        return JSON.writeValueAsString(cuerpo);
+        return cuerpo;
     }
 
     private static boolean mismaSesion(WebSocketSession guardada, WebSocketSession sesion) {

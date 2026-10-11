@@ -9,6 +9,7 @@ import tech.tetengo.api.camaras.application.port.CamaraRepository;
 import tech.tetengo.api.camaras.application.port.InstalacionRepository;
 import tech.tetengo.api.camaras.application.port.PcRepository;
 import tech.tetengo.api.camaras.domain.CamaraError;
+import tech.tetengo.api.camaras.domain.model.Ambiente;
 import tech.tetengo.api.camaras.domain.model.Camara;
 import tech.tetengo.api.camaras.domain.model.Instalacion;
 import tech.tetengo.api.camaras.domain.model.Pc;
@@ -40,6 +41,7 @@ public class RegistrarCamaraDelAgente {
     private final EmisorDeTokens emisor;
     private final PropiedadesDelAgente propiedades;
     private final PcRepository pcs;
+    private final ServicioDeAmbientes ambientes;
     private final Clock reloj;
 
     public RegistrarCamaraDelAgente(
@@ -49,6 +51,7 @@ public class RegistrarCamaraDelAgente {
             EmisorDeTokens emisor,
             PropiedadesDelAgente propiedades,
             PcRepository pcs,
+            ServicioDeAmbientes ambientes,
             Clock reloj) {
         this.instalaciones = instalaciones;
         this.camaras = camaras;
@@ -56,6 +59,7 @@ public class RegistrarCamaraDelAgente {
         this.emisor = emisor;
         this.propiedades = propiedades;
         this.pcs = pcs;
+        this.ambientes = ambientes;
         this.reloj = reloj;
     }
 
@@ -88,7 +92,11 @@ public class RegistrarCamaraDelAgente {
                     ? null
                     : camaras.buscar(instalacion.getCamaraId()).orElse(null);
             if (camara == null) {
-                camara = camaras.guardar(new Camara(nombreHabitacion, pc.getId()));
+                // The installation's room, shared if another camera has it: the team configured it.
+                Ambiente ambiente = ambientes.buscarOCrear(Camara.nombreDeHabitacion(nombreHabitacion));
+                Camara nueva = new Camara(ambiente.getNombre(), pc.getId());
+                nueva.ubicarEn(ambiente);
+                camara = camaras.guardar(nueva);
                 instalacion.asignarCamara(camara.getId());
             } else if (camara.getPcId() == null) {
                 camara.asignarPc(pc.getId());

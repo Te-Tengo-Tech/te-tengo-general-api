@@ -1,5 +1,6 @@
 package tech.tetengo.api.camaras.application;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -8,17 +9,59 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tech.tetengo.api.camaras.CamarasDelHogar;
 import tech.tetengo.api.camaras.application.port.CamaraRepository;
+import tech.tetengo.api.camaras.application.port.EstadoDeCapturaRepository;
+import tech.tetengo.api.camaras.application.port.PcRepository;
 import tech.tetengo.api.camaras.domain.model.Camara;
+import tech.tetengo.api.camaras.domain.model.EstadoConexion;
+import tech.tetengo.api.camaras.domain.model.EstadoDeCaptura;
 
 @Service
 public class ServicioDeCamaras implements CamarasDelHogar {
 
     private final CamaraRepository camaras;
+    private final PcRepository pcs;
     private final ConsultarEstadoDeCaptura estadoDeCaptura;
+    private final EstadoDeCapturaRepository estados;
+    private final Clock reloj;
 
-    public ServicioDeCamaras(CamaraRepository camaras, ConsultarEstadoDeCaptura estadoDeCaptura) {
+    public ServicioDeCamaras(
+            CamaraRepository camaras,
+            PcRepository pcs,
+            ConsultarEstadoDeCaptura estadoDeCaptura,
+            EstadoDeCapturaRepository estados,
+            Clock reloj) {
         this.camaras = camaras;
+        this.pcs = pcs;
         this.estadoDeCaptura = estadoDeCaptura;
+        this.estados = estados;
+        this.reloj = reloj;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<CamaraDetectada> buscarDetectada(UUID camaraId) {
+        return camaras.buscarAunqueRetirada(camaraId)
+                .filter(camara ->
+                        camara.getPcId() != null && pcs.buscar(camara.getPcId()).isPresent())
+                .filter(camara -> camara.enUso() || camara.getDispositivoId() != null)
+                .map(camara -> {
+                    Instant ahora = reloj.instant();
+                    boolean consentimiento = estados.actual()
+                            .map(EstadoDeCaptura::isConsentimientoVigente)
+                            .orElse(false);
+                    boolean enUso = camara.enUso();
+                    return new CamaraDetectada(
+                            camara.getId(),
+                            camara.getPcId(),
+                            camara.getDispositivoId(),
+                            camara.getNombreDispositivo(),
+                            enUso,
+                            enUso
+                                    ? camara.getEstadoConexion() == EstadoConexion.EN_LINEA
+                                    : camara.isDetectadaConectada(),
+                            consentimiento && !(enUso && camara.estaPausada(ahora)),
+                            enUso && camara.estaPausada(ahora) ? camara.getPausadaHasta() : null);
+                });
     }
 
     @Override
@@ -81,7 +124,9 @@ public class ServicioDeCamaras implements CamarasDelHogar {
                 camara.isDeteccionConfiable(),
                 camara.getInstaladaEn(),
                 camara.getNoConfiableDesde(),
-                camara.getPcId());
+                camara.getPcId(),
+                camara.getAmbienteId(),
+                camara.getNombreDispositivo());
     }
 
     @Override

@@ -15,7 +15,33 @@ public interface CanalDelAgente {
     /** @param canalId the camera, or the PC for its own channel */
     void enviar(UUID canalId, Mensaje mensaje);
 
-    sealed interface Mensaje permits Preparar, Transmitir, CambiarModo, Detener, Desvincular {}
+    sealed interface Mensaje
+            permits Preparar, Transmitir, CambiarModo, Detener, Desvincular, ParaCamara, CamaraDeLaPc, BuscarCamaras {}
+
+    /** {@code {"buscarCamaras":true}} on the PC's channel: «Buscar de nuevo» (CA-29.6). */
+    record BuscarCamaras() implements Mensaje {}
+
+    /**
+     * A live view message of a webcam that is not in use (a preview before assigning it a room, US-29),
+     * sent on the PC's own channel: the message's fields plus {@code camaraId} and {@code dispositivoId},
+     * e.g. {@code {"transmitir":true,…,"camaraId":"…","dispositivoId":"…"}}.
+     */
+    record ParaCamara(java.util.UUID camaraId, String dispositivoId, Mensaje mensaje) implements Mensaje {}
+
+    /**
+     * {@code {"camara":{camaraId, dispositivoId, nombreDispositivo, enUso, ambienteId, nombreHabitacion}}} on
+     * the PC's channel: the owner assigned, moved or stopped using a webcam, or renamed its room (US-29).
+     * The PC starts or stops that camera; it gets the camera's token from {@code POST
+     * /api/agente/pc/camaras/tokens}.
+     */
+    record CamaraDeLaPc(
+            java.util.UUID camaraId,
+            String dispositivoId,
+            String nombreDispositivo,
+            boolean enUso,
+            java.util.UUID ambienteId,
+            String nombreHabitacion)
+            implements Mensaje {}
 
     /**
      * {@code {"desvincular":true}}: the PC was unlinked (US-31). The agent stops capturing, deletes its

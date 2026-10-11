@@ -29,6 +29,16 @@ class CamaraRepositoryAdapter implements CamaraRepository {
     }
 
     @Override
+    public Optional<Camara> buscarAunqueRetirada(UUID id) {
+        return jpa.findById(id);
+    }
+
+    @Override
+    public List<Camara> detectadasDeLaPc(UUID pcId) {
+        return jpa.findByPcIdAndDispositivoIdIsNotNull(pcId, Sort.by("nombreDispositivo"));
+    }
+
+    @Override
     public List<Camara> listar() {
         return jpa.findByRetiradaEnIsNull(Sort.by("nombreHabitacion"));
     }
@@ -36,6 +46,16 @@ class CamaraRepositoryAdapter implements CamaraRepository {
     @Override
     public List<Camara> deLaPc(UUID pcId) {
         return jpa.findByPcIdAndRetiradaEnIsNull(pcId, Sort.by("nombreHabitacion"));
+    }
+
+    @Override
+    public List<Camara> enAmbiente(UUID ambienteId) {
+        return jpa.findByAmbienteIdAndRetiradaEnIsNull(ambienteId);
+    }
+
+    @Override
+    public Optional<Camara> deLaPcPorDispositivo(UUID pcId, String dispositivoId) {
+        return jpa.findFirstByPcIdAndDispositivoId(pcId, dispositivoId);
     }
 
     @Override

@@ -15,7 +15,8 @@ record PcResponse(
         Instant vinculadaEn,
         Usuario vinculadaPor,
         String origen,
-        List<CamaraResponse> camaras) {
+        List<CamaraResponse> camaras,
+        int camarasSinUsar) {
 
     record Usuario(UUID id, String nombre) {}
 }

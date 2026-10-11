@@ -14,11 +14,23 @@ public interface CamaraRepository {
     /** A camera in use: retired cameras (their PC was unlinked) are not found. */
     Optional<Camara> buscar(UUID id);
 
+    /** A camera of the household, in use or not (a detected webcam, a retired camera). */
+    Optional<Camara> buscarAunqueRetirada(UUID id);
+
+    /** Every webcam of the PC the PC reported or used, in use or not, by device name. */
+    List<Camara> detectadasDeLaPc(UUID pcId);
+
     /** The cameras in use, by room name. */
     List<Camara> listar();
 
     /** The cameras in use of a PC of the household. */
     List<Camara> deLaPc(UUID pcId);
+
+    /** The cameras in use in a room (CA-29.3: at most one, for now). */
+    List<Camara> enAmbiente(UUID ambienteId);
+
+    /** The PC's camera of that webcam, in use or retired (CA-29.4: same device, same camera). */
+    Optional<Camara> deLaPcPorDispositivo(UUID pcId, String dispositivoId);
 
     /**
      * How an agent token of the camera stands, read without the household in context (the token is

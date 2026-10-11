@@ -15,7 +15,14 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 - `Camara.pcId`; migration `V24` turns each existing installation with a camera into a PC «PC de la casa» of origin `INSTALACION` (tables `pcs`, `autorizaciones_de_dispositivo`, `tokens_de_renovacion_de_pc`, `intentos_de_vinculacion`; `camaras.pc_id`, `camaras.retirada_en`, `instalaciones.pc_id`).
 - `docs/references`: the backlog with US-28 to US-40 and a copy of the change request.
 
+- Rooms («ambientes», US-29): `GET`/`POST /api/ambientes` and `PATCH`/`DELETE /api/ambientes/{id}`; a renamed room renames its cameras and their later alerts. One camera per room for now (CA-29.3, `409 AMBIENTE_OCUPADO`), enforced by the use cases so several can be allowed later. The apps keep saying «habitación».
+- Cameras assigned from the phone (product decision of 2026-10-10): the PC reports the webcams it detects (`PUT /api/agente/pc/camaras/inventario`), the owner lists them (`GET /api/pcs/{id}/camaras`, `Pc.camarasSinUsar`), previews one (`POST /api/camaras/{id}/vista-previa`, a 2-minute live view session logged with `vistaPrevia: true`), assigns it a room (`PUT /api/camaras/{id}/ambiente`) or stops using it (`DELETE /api/camaras/{id}/ambiente`), and asks the PC to look again (`POST /api/pcs/{id}/busqueda-de-camaras`, CA-29.6); the PC hears each change on its control channel (`{"camara":{…}}`) and only cameras in use capture. No cameras in the bathroom (`422 AMBIENTE_NO_PERMITIDO`).
+- Cameras of a linked PC, known by the operating system's device id (CA-29.4): `GET /api/agente/ambientes`, `GET`/`PUT /api/agente/pc/camaras` (the PC's own assignment is the installer's fallback), `DELETE /api/agente/pc/camaras/{camaraId}` and `POST /api/agente/pc/camaras/tokens`. Each camera in use gets a per-camera token (with `pc_id`), so heartbeat, events, clips and live view work as with an installation.
+- `GET /api/accesos-vista-en-vivo` also returns `camaraId` and `vistaPrevia`.
+- `Camara.ambienteId` and `Camara.nombreDispositivo`; `PATCH /api/camaras/{id}` also takes `{ambienteId}`. Migration `V25` creates the rooms from the cameras' room names (equal names share one) and adds `camaras.ambiente_id`, `dispositivo_id` and `nombre_dispositivo`; `nombre_habitacion` stays and holds the room's name.
+
 ### Changed
+- `PATCH /api/camaras/{id}` with `{nombreHabitacion}` now works on rooms: it uses the room of that name, renames the camera's own room when it is alone in it, or creates one; it answers `409 AMBIENTE_OCUPADO` when the room has another camera.
 - Agent endpoints of one camera answer `403 TOKEN_DE_CAMARA_REQUERIDO` instead of a `500` when called with a token without a camera.
 
 ## [0.3.4] - 2026-10-10
