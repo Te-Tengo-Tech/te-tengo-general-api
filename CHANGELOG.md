@@ -36,6 +36,13 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 - Events carry who made the change: `ConsentimientoOtorgado`, `ConsentimientoRevocado` (new `usuarioId`), new `CamaraPausada` and `CamaraReanudada` of `monitoreo`.
 - `REPETICION_VISTA` in `POST /api/agente/pc/actividad` (CA-39.3): a replay watched on the PC, with the camera (`camaraId`, one of that PC), the moment replayed (`momentoDesde`, `momentoHasta`) and the seconds watched (`duracionSegundos`); members read it in `GET /api/actividad` (room in `objeto`, the moment as an ISO-8601 interval in `valorAnterior`, the seconds in `valorNuevo`), and the app adds it to the access log.
 
+- Light replay files (TTMOV v1, gzip; ADR 0011, US-36, US-37, US-39), so the app can draw movements on every platform:
+  - `POST /api/agente/movimientos/{archivoId}/ligero` `{tamanoBytes, sha256}` → `201 {urlSubida, cabeceras, expiraEn}` (key: the movement file's with `.ttmov`, `Content-Type: application/gzip`) and `POST /api/agente/movimientos/{archivoId}/ligero/confirmacion` → `200 {archivoId, tamanoBytes}` (`HeadObject`); same consent and cloud checks as the movement file.
+  - Replays: each `archivos[*]` has `ligero: {url, tamanoBytes, sha256} | null`, non-null once the light file is confirmed.
+  - Clips: `POST /api/agente/eventos/{eventoId}/clip/puntos/ligero` (`clips/<alerta>.landmarks.ttmov`, no confirmation), and `GET /api/alertas/{id}/clip` returns `puntos.ligero: {url} | null`.
+  - Light files are deleted with their movement file or clip landmarks (retention, revocations, unconfirmed uploads, a replaced clip). `GET /api/hogar/movimientos-en-la-nube` `tamanoBytes` counts the confirmed light files too.
+  - Migration `V28`: `archivos_de_movimiento.ligero_tamano_bytes`, `ligero_sha256`, `ligero_subido_en`.
+
 ### Changed
 - The movements consent text is version `2` (`TT_MOVIMIENTOS_VERSION_TEXTO`): it names the cloud store (Cloudflare R2) and the cross-border flow. Consents given with version `1` keep their version and stay in force; registering a new one needs version `2`.
 - `PATCH /api/camaras/{id}` with `{nombreHabitacion}` now works on rooms: it uses the room of that name, renames the camera's own room when it is alone in it, or creates one; it answers `409 AMBIENTE_OCUPADO` when the room has another camera.

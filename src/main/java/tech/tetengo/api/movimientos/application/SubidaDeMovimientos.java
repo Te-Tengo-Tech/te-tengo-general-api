@@ -30,6 +30,10 @@ import tech.tetengo.api.shared.infrastructure.multitenancy.HogarActual;
  * one row per file with a daily summary. Only with the consent in force and a cloud retention chosen;
  * a file already outside the retention is refused. A file still pending can be asked for again
  * (CA-37.3: the PC retries what it could not upload).
+ *
+ * <p>ADR 0011: next to each file the PC uploads the same frames in the light replay format (TTMOV v1),
+ * under the same key with {@code .ttmov}, through the same pre-signed flow; the file's index row records
+ * it once confirmed.
  */
 @Service
 public class SubidaDeMovimientos {
@@ -64,6 +68,9 @@ public class SubidaDeMovimientos {
 
     public record Subida(UUID archivoId, URI url, Map<String, String> cabeceras, Instant expiraEn) {}
 
+    /** ADR 0011: the light file's pre-signed upload. */
+    public record SubidaLigera(URI url, Map<String, String> cabeceras, Instant expiraEn) {}
+
     /** The bounds of the file were validated by the controller (order, length, size, checksum). */
     @Transactional
     public Subida preparar(
@@ -97,14 +104,13 @@ public class SubidaDeMovimientos {
      */
     @Transactional(noRollbackFor = ErrorDeNegocio.class)
     public ArchivoDeMovimiento confirmar(UUID camaraId, UUID archivoId) {
-        ArchivoDeMovimiento archivo = archivos.buscar(archivoId)
-                .filter(a -> a.getCamaraId().equals(camaraId))
-                .orElseThrow(() -> new ErrorDeNegocio(MovimientoError.ARCHIVO_NO_ENCONTRADO));
+        ArchivoDeMovimiento archivo = deLaCamara(camaraId, archivoId);
         if (archivo.disponible()) {
             return archivo;
         }
         if (!consentimientoVigente()) {
-            almacenamiento.eliminar(java.util.List.of(archivo.getClave()));
+            // The light file too, in case the PC uploaded it before this confirmation.
+            almacenamiento.eliminar(archivo.claves());
             archivos.eliminar(java.util.List.of(archivo));
             throw new ErrorDeNegocio(MovimientoError.SIN_CONSENTIMIENTO_DE_MOVIMIENTOS);
         }
@@ -119,6 +125,53 @@ public class SubidaDeMovimientos {
         resumen.sumar(archivo);
         resumenes.guardar(resumen);
         return archivos.guardar(archivo);
+    }
+
+    /**
+     * ADR 0011: the PC asks where to upload the light replay file of one of this camera's movement files.
+     * Same consent and cloud checks as the movement file; the size and checksum were validated by the
+     * controller. Asking again while it is not confirmed returns a new URL and replaces them.
+     */
+    @Transactional
+    public SubidaLigera prepararLigero(UUID camaraId, UUID archivoId, long tamanoBytes, String sha256) {
+        ArchivoDeMovimiento archivo = deLaCamara(camaraId, archivoId);
+        retencionVigente();
+        archivo.prepararLigero(tamanoBytes, sha256.toLowerCase(java.util.Locale.ROOT));
+        archivos.guardar(archivo);
+        Instant expira = reloj.instant().plus(propiedades.vigenciaUrlSubida());
+        var subida =
+                almacenamiento.urlDeSubida(archivo.claveLigera(), PropiedadesDeMovimientos.CONTENT_TYPE_LIGERO, expira);
+        return new SubidaLigera(subida.url(), subida.cabeceras(), expira);
+    }
+
+    /**
+     * ADR 0011: the PC finished the light file's PUT; it becomes available if the storage has it.
+     * Without the consent the object is deleted and the row forgets it, like {@link #confirmar}.
+     * Confirming it again changes nothing.
+     */
+    @Transactional(noRollbackFor = ErrorDeNegocio.class)
+    public ArchivoDeMovimiento confirmarLigero(UUID camaraId, UUID archivoId) {
+        ArchivoDeMovimiento archivo = deLaCamara(camaraId, archivoId);
+        if (archivo.ligeroDisponible()) {
+            return archivo;
+        }
+        if (!consentimientoVigente()) {
+            almacenamiento.eliminar(java.util.List.of(archivo.claveLigera()));
+            archivo.quitarLigero();
+            archivos.guardar(archivo);
+            throw new ErrorDeNegocio(MovimientoError.SIN_CONSENTIMIENTO_DE_MOVIMIENTOS);
+        }
+        long tamano = almacenamiento
+                .tamano(archivo.claveLigera())
+                .orElseThrow(() -> new ErrorDeNegocio(MovimientoError.ARCHIVO_NO_SUBIDO));
+        archivo.confirmarLigero(tamano, reloj.instant());
+        return archivos.guardar(archivo);
+    }
+
+    private ArchivoDeMovimiento deLaCamara(UUID camaraId, UUID archivoId) {
+        return archivos.buscar(archivoId)
+                .filter(a -> a.getCamaraId().equals(camaraId))
+                .orElseThrow(() -> new ErrorDeNegocio(MovimientoError.ARCHIVO_NO_ENCONTRADO));
     }
 
     private Duration retencionVigente() {

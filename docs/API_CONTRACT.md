@@ -136,7 +136,7 @@ Alerta = {
 | `GET /api/alertas/{id}` | member | → `200 Alerta`. Active alerts must be visible when the app opens, even if the push failed (CA-16.4) | `404 ALERTA_NO_ENCONTRADA` |
 | `POST /api/alertas/{id}/atencion` | member | → `200 Alerta` with `ATENDIDA`, `atendidaPor` and `atendidaEn`. Pushes `ALERTA_ATENDIDA` to the other members (CA-19.1, CA-19.3) | `409 ALERTA_CERRADA` |
 | `POST /api/alertas/{id}/falsa-alarma` | member | → `200 Alerta` with `FALSA_ALARMA`; excluded from the fall count (CA-19.2) | `409 ALERTA_CERRADA` |
-| `GET /api/alertas/{id}/clip` | member | Query `descarga=true` for the download disposition → `200 {url, expiraEn, puntos: {url, expiraEn} \| null, puntosNoDisponibles}`, a short-lived pre-signed URL of the clip covering 6 s before and 6 s after the event (CA-18.1, CA-26.1, CA-26.2). `puntos` (US-36): the clip's body landmarks, a Parquet file to draw the skeleton over the clip, synchronized by time (CA-36.1); when null, `puntosNoDisponibles` is `SIN_CONSENTIMIENTO` (the consent to store movements is not in force) or `SIN_ARCHIVO` (this clip has none) and the switch shows that reason while the clip plays normally (CA-36.2). An older backend sends neither field | `404 CLIP_NO_DISPONIBLE` (CA-18.2) · `410 CLIP_ELIMINADO` (CA-26.3) |
+| `GET /api/alertas/{id}/clip` | member | Query `descarga=true` for the download disposition → `200 {url, expiraEn, puntos: {url, expiraEn, ligero: {url} \| null} \| null, puntosNoDisponibles}`, a short-lived pre-signed URL of the clip covering 6 s before and 6 s after the event (CA-18.1, CA-26.1, CA-26.2). `puntos` (US-36): the clip's body landmarks, a Parquet file, synchronized with the clip by time (CA-36.1); `puntos.ligero.url` (same expiry) is the same landmarks in the light replay format (§11), the one the app draws over the clip, null when the PC did not upload it (an older Te Tengo Captura); when null, `puntosNoDisponibles` is `SIN_CONSENTIMIENTO` (the consent to store movements is not in force) or `SIN_ARCHIVO` (this clip has none) and the switch shows that reason while the clip plays normally (CA-36.2). An older backend sends neither field | `404 CLIP_NO_DISPONIBLE` (CA-18.2) · `410 CLIP_ELIMINADO` (CA-26.3) |
 | `POST /api/reportes-de-caida` | member | `{camaraId \| null, habitacion \| null, ocurridaAproximadamenteEn, nota \| null}` → `201 {id, recibidoEn, movimientosDisponibles}`: «¿Hubo una caída y no avisó?» (CA-40.4). Stored as a possible false negative for the team's evaluation; it creates no alert and notifies nobody. `camaraId` (its room is recorded) or `habitacion`, or neither for «No sé»; `nota` up to 300 characters. `movimientosDisponibles`: movements of that time may be in the cloud (consent and retention on): «Revisaremos los movimientos de ese momento»; otherwise «revisaremos lo que nos cuentes» | `400 VALIDACION` with `campos.ocurridaAproximadamenteEn` («Elige una hora que ya pasó.», up to 5 min ahead is tolerated) or `campos.nota` · `404 CAMARA_NO_ENCONTRADA` |
 
 **Escalation (backend job):**
@@ -311,10 +311,44 @@ Repeticion = {
   id, camaraId, habitacion, desde, hasta,
   disponiblesDesde | null,   // start of the oldest movement stored: «Hay movimientos desde el 10/09/2026» (CA-39.4)
   guardadoEnLaNube: boolean, // false: the owner chose no cloud retention («No guardamos movimientos en la nube»)
-  archivos: [{id, desde, hasta, tamanoBytes, fotogramas, sha256, url}],   // oldest first; url: pre-signed GET, until urlsExpiranEn
+  archivos: [{id, desde, hasta, tamanoBytes, fotogramas, sha256, url,      // oldest first; url: pre-signed GET of the Parquet file, until urlsExpiranEn
+              ligero: {url, tamanoBytes, sha256} | null}],                // the same frames in the light replay format (below); null: not uploaded
   urlsExpiranEn
 }
 ```
-- **Files:** Parquet compressed with zstd, one per camera and 5 minutes, written by Te Tengo Captura (its contract defines the columns). Check `sha256` before drawing. A moment outside the retention returns `archivos: []` with `disponiblesDesde` (CA-39.4).
+- **Files:** Parquet compressed with zstd, one per camera and 5 minutes, written by Te Tengo Captura (its contract defines the columns), for analysis; the app draws `ligero`, the same frames in the light replay format below. Check the light file's `sha256` before drawing; a file without `ligero` draws as a stretch without data. A moment outside the retention returns `archivos: []` with `disponiblesDesde` (CA-39.4).
 - **Gaps** (CA-39.5): frames exist only while a person is in the image; time between frames inside a file is «Sin persona en la imagen», time without files is «PC apagada» or «En pausa» (the pause of the camera is known from the alerts and the camera; the API does not mark it). The timeline's events come from `GET /api/alertas?desde=&hasta=`, filtered by `camaraId` in the app.
 - **Without internet** the app says «Sin internet. La repetición necesita conexión.»; a revoked consent while watching makes the next request answer `409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` («Rosa ya no autoriza guardar sus movimientos.»).
+
+### Light replay format (TTMOV v1)
+The app cannot read Parquet on every platform (ADR 0011 of the backend), so next to each Parquet file the PC uploads the same frames in this small format, made from the same rows. The Parquet file stays the source for analysis (US-40); the light file only serves to draw the skeleton (US-36, US-39). Same file for a 5-minute window and for a clip's 12 seconds.
+- **Container:** one gzip member (RFC 1952; deflate, RFC 1951) holding the payload below; header `MTIME` 0, no file name. Content type `application/gzip`. Readers decompress the whole file, then check the magic.
+- **Byte order:** little-endian. `u8`, `u16`, `u32`: unsigned; `i32`, `i64`: two's complement.
+- **Header** (24 bytes):
+
+| Offset | Type | Field | Value |
+|---|---|---|---|
+| 0 | 4 bytes | `magia` | ASCII `TTMV` (`54 54 4D 56`) |
+| 4 | u8 | `version` | `1`; a reader rejects any other |
+| 5 | u8 | `banderas` | bit 0 `Z`: each pose carries `z`; bits 1–7 are 0 (a reader rejects a file with any of them set) |
+| 6 | u8 | `fpsObjetivo` | the camera's analysis rate, `8` |
+| 7 | u8 | `puntos` | landmarks per pose, `33` (MediaPipe Pose order) |
+| 8 | i64 | `t0Ms` | start of the file, UTC epoch milliseconds (`desde`) |
+| 16 | u32 | `duracionMs` | `hasta − desde`: the file covers `[t0Ms, t0Ms + duracionMs)` |
+| 20 | u32 | `fotogramas` | number of frames that follow |
+
+- **Frames**, `fotogramas` times, in the Parquet file's row order:
+
+| Type | Field | Meaning |
+|---|---|---|
+| i32 | `dtMs` | the frame's time minus the previous frame's (the first: minus `t0Ms`); the frame is at `t0Ms + Σ dtMs`. Negative only if the PC's clock stepped back |
+| u8 | `estado` | bit 0: a person (pose) is in the frame; bits 1–2 `fase`: 0 `normal`, 1 `inicio_caida`, 2 `en_el_suelo`; bits 3–5 `evento` detected on this frame: 0 none, 1 `caida`, 2 `caida_confirmada`, 3 `movimiento_inestable`, 4 `recuperacion`, 5 `deteccion_no_confiable`; bits 6–7 are 0. A reader treats an unknown `fase` or `evento` value as `normal` / none |
+| `puntos` × u16 | `dx` | only with a pose: `x` of each landmark, as a delta |
+| `puntos` × u16 | `dy` | only with a pose: `y`, as a delta |
+| `puntos` × u8 | `dv` | only with a pose: visibility, as a delta |
+| `puntos` × u16 | `dz` | only with a pose and the `Z` flag: `z` (its int16 bit pattern), as a delta |
+
+- **Deltas:** each value is the difference with the same landmark's value in the **previous frame that had a pose in this file**, modulo 2¹⁶ (u16) or 2⁸ (u8); for the first pose of the file the previous values are 0. So `x = (xAnterior + dx) mod 65536`, and so on. Frames without a pose carry no landmarks and do not reset the reference.
+- **Quantization**, the same integers as the Parquet file (`q` stored, `c` MediaPipe's value): `x`, `y`: `c = q / 65535 × 2 − 0.5` (range −0.5 to 1.5, normalized to the image; 0 is the left or top edge); visibility: `c = q / 255`; `z` (int16): `c = q / 8192`. A landmark with visibility below 0.5 should not be drawn.
+- **Names:** the object key is the Parquet file's with `.ttmov` instead of `.parquet` (`movimientos/<hogar>/<camara>/YYYY/MM/DD/HH/mm.ttmov`; a clip's `clips/<alerta>.landmarks.ttmov`).
+- **Sizes** (measured, 5 minutes with a person in the image 86 % of the frames): Parquet 459 KB, light file 257 KB; about 132 MB and 74 MB per camera and day.

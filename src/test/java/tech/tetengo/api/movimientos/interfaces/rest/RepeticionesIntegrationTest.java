@@ -64,13 +64,14 @@ class RepeticionesIntegrationTest extends AbstractIntegrationTest {
         }
     }
 
-    private void subir(Instant desde) throws Exception {
+    private String subir(Instant desde) throws Exception {
         String subida = pedirSubida(mvc, agente, desde, desde.plus(Duration.ofMinutes(5)))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
         movimientos.subir("movimientos/%s/%s/%s.parquet".formatted(hogar, camara, RUTA.format(desde)), 4000);
         confirmar(mvc, agente, campo(subida, "$.archivoId")).andExpect(status().isOk());
+        return campo(subida, "$.archivoId");
     }
 
     private ResultActions abrir(String token, Instant desde, Instant hasta) throws Exception {
@@ -102,6 +103,37 @@ class RepeticionesIntegrationTest extends AbstractIntegrationTest {
                         .param("hasta", inicio.plus(Duration.ofMinutes(20)).toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.archivos.length()").value(1));
+    }
+
+    @Test
+    void adr0011_cadaArchivoTraeSuArchivoLigeroSoloDespuesDeConfirmarlo() throws Exception {
+        Instant desde = inicio.plus(Duration.ofMinutes(15));
+        String archivo = subir(desde);
+        String claveLigera = "movimientos/%s/%s/%s.ttmov".formatted(hogar, camara, RUTA.format(desde));
+        MovimientosApiDePrueba.pedirLigero(mvc, agente, archivo, 2500, "d".repeat(64))
+                .andExpect(status().isCreated());
+        movimientos.subir(claveLigera, 2480);
+
+        // Asked for and uploaded, but not confirmed: not offered yet.
+        abrir(titular, desde, desde.plus(Duration.ofMinutes(5)))
+                .andExpect(jsonPath("$.archivos.length()").value(1))
+                .andExpect(jsonPath("$.archivos[0].url").exists())
+                .andExpect(jsonPath("$.archivos[0].ligero").value(org.hamcrest.Matchers.nullValue()));
+
+        MovimientosApiDePrueba.confirmarLigero(mvc, agente, archivo).andExpect(status().isOk());
+        String repeticion = abrir(titular, inicio, desde.plus(Duration.ofMinutes(5)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.archivos.length()").value(4))
+                .andExpect(jsonPath("$.archivos[0].ligero").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.archivos[3].id").value(archivo))
+                .andExpect(jsonPath("$.archivos[3].ligero.tamanoBytes").value(2480))
+                .andExpect(jsonPath("$.archivos[3].ligero.sha256").value("d".repeat(64)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(campo(repeticion, "$.archivos[3].ligero.url"))
+                .isEqualTo("https://r2.prueba/" + claveLigera + "?metodo=GET");
+        assertThat(campo(repeticion, "$.archivos[3].url")).endsWith(".parquet?metodo=GET");
     }
 
     @Test

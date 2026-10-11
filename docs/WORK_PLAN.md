@@ -35,6 +35,8 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 
 - [x] **T28 `actividad` — US-33 activity log.** Append-only log fed by the modules' events and by the PC's own changes; list for any member. — *activity log of the household's configuration (US-33)*
 
+- [x] **T29 `movimientos` — light replay format (ADR 0011).** The PC uploads a TTMOV v1 file (gzip) next to each movement file and each clip's landmarks; the index records it, replays and clips return its URL, and every deletion removes it too (V28). — *light replay files next to movement files and clip landmarks (US-36, US-37, US-39)*
+
 ### Sprint 3
 - [x] **T01 `cuentas` — US-01 register.** `POST /api/cuentas`; BCrypt passwords; unique email (`409 CORREO_EN_USO`); `400 VALIDACION` with `campos`. — *register accounts (US-01)*
 - [x] **T02 `cuentas` — US-02 sessions.** — *sign in, refresh and sign out with JWTs and lockout (US-02)*

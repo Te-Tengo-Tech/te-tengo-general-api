@@ -32,7 +32,7 @@ class MovimientosEnLaNubeController {
     @Operation(
             summary = "Read the cloud retention of movements (US-37)",
             description =
-                    "retencionDias (null: not stored in the cloud, the default), the options, whether the consent is in force, since when there is data and how much (CA-37.1). Any member.")
+                    "retencionDias (null: not stored in the cloud, the default), the options, whether the consent is in force, since when there is data and how much (CA-37.1; tamanoBytes counts the confirmed light replay files too, ADR 0011). Any member.")
     @GetMapping(version = ApiVersioning.V1)
     MovimientosEnLaNubeResponse ver() {
         return respuesta(nube.consultar());

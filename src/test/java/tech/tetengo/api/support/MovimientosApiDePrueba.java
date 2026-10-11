@@ -53,4 +53,18 @@ public final class MovimientosApiDePrueba {
         return mvc.perform(post("/api/agente/movimientos/" + archivoId + "/confirmacion")
                 .header("Authorization", bearer(tokenCamara)));
     }
+
+    /** ADR 0011: the PC asks where to upload the light replay file of a movement file. */
+    public static ResultActions pedirLigero(
+            MockMvc mvc, String tokenCamara, String archivoId, long tamanoBytes, String sha256) throws Exception {
+        return mvc.perform(post("/api/agente/movimientos/" + archivoId + "/ligero")
+                .header("Authorization", bearer(tokenCamara))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"tamanoBytes\":%d,\"sha256\":\"%s\"}".formatted(tamanoBytes, sha256)));
+    }
+
+    public static ResultActions confirmarLigero(MockMvc mvc, String tokenCamara, String archivoId) throws Exception {
+        return mvc.perform(post("/api/agente/movimientos/" + archivoId + "/ligero/confirmacion")
+                .header("Authorization", bearer(tokenCamara)));
+    }
 }

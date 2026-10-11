@@ -55,7 +55,7 @@ class ClipController {
     @Operation(
             summary = "Watch or download the clip (US-18, US-26)",
             description =
-                    "Short-lived pre-signed URL (CA-18.1, CA-26.1); descarga=true for a download (CA-26.2). With puntos, the URL of the clip's body landmarks (US-36), or puntosNoDisponibles SIN_CONSENTIMIENTO / SIN_ARCHIVO (CA-36.2). Errors: 404 CLIP_NO_DISPONIBLE (CA-18.2), 410 CLIP_ELIMINADO (CA-26.3), 404 ALERTA_NO_ENCONTRADA.")
+                    "Short-lived pre-signed URL (CA-18.1, CA-26.1); descarga=true for a download (CA-26.2). With puntos, the URL of the clip's body landmarks (US-36) and in puntos.ligero the same landmarks in the light replay format (ADR 0011; null when not uploaded), or puntosNoDisponibles SIN_CONSENTIMIENTO / SIN_ARCHIVO (CA-36.2). Errors: 404 CLIP_NO_DISPONIBLE (CA-18.2), 410 CLIP_ELIMINADO (CA-26.3), 404 ALERTA_NO_ENCONTRADA.")
     @GetMapping(path = API + "/alertas/{id}/clip", version = ApiVersioning.V1)
     UrlDeClipResponse ver(@PathVariable UUID id, @RequestParam(defaultValue = "false") boolean descarga) {
         return aRespuesta(obtenerClip.ejecutar(id, descarga));
@@ -65,7 +65,14 @@ class ClipController {
         return new UrlDeClipResponse(
                 url.url(),
                 url.expiraEn(),
-                url.urlPuntos() == null ? null : new UrlDeClipResponse.Puntos(url.urlPuntos(), url.expiraEn()),
+                url.urlPuntos() == null
+                        ? null
+                        : new UrlDeClipResponse.Puntos(
+                                url.urlPuntos(),
+                                url.expiraEn(),
+                                url.urlPuntosLigero() == null
+                                        ? null
+                                        : new UrlDeClipResponse.Ligero(url.urlPuntosLigero())),
                 url.puntosNoDisponibles());
     }
 
@@ -78,6 +85,18 @@ class ClipController {
     @ResponseStatus(HttpStatus.CREATED)
     SubidaDeClipResponse subirPuntos(@PathVariable UUID eventoId) {
         SubidaDeClip subida = puntos.prepararSubida(UsuarioActual.camaraDelAgente(), eventoId);
+        return new SubidaDeClipResponse(subida.urlSubida(), subida.cabeceras(), subida.expiraEn());
+    }
+
+    /** ADR 0011: pre-signed PUT URL for the same landmarks in the light replay format. */
+    @Operation(
+            summary = "Get the upload URL of the clip's light landmarks (agent, US-36)",
+            description =
+                    "The clip's landmarks in the light replay format (TTMOV v1, gzip; ADR 0011) at clips/<alerta>.landmarks.ttmov, the file the app draws over the clip. No confirmation: the app gets it once the storage has it. Errors: 404 EVENTO_NO_ENCONTRADO, 409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS (CA-36.2).")
+    @PostMapping(path = API + "/agente/eventos/{eventoId}/clip/puntos/ligero", version = ApiVersioning.V1)
+    @ResponseStatus(HttpStatus.CREATED)
+    SubidaDeClipResponse subirPuntosLigeros(@PathVariable UUID eventoId) {
+        SubidaDeClip subida = puntos.prepararSubidaLigera(UsuarioActual.camaraDelAgente(), eventoId);
         return new SubidaDeClipResponse(subida.urlSubida(), subida.cabeceras(), subida.expiraEn());
     }
 }

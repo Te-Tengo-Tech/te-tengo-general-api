@@ -155,7 +155,8 @@ tetengo:
     rango-maximo-consulta: 1h
     # Cloudflare R2 (S3 API) or Amazon S3; by default the clips' bucket and credentials. The objects are
     # movimientos/<hogar>/<camara>/YYYY/MM/DD/HH/mm.parquet; the clips' landmarks go next to the clips
-    # (clips/<alerta>.landmarks.parquet). Without a bucket, an in-memory fake.
+    # (clips/<alerta>.landmarks.parquet), and each with its light replay file under the same key with .ttmov
+    # (ADR 0011). Without a bucket, an in-memory fake.
     s3:
       bucket: ${TT_MOVIMIENTOS_BUCKET:${TT_CLIPS_BUCKET:}}
       region: ${TT_MOVIMIENTOS_REGION:${TT_CLIPS_REGION:}}
