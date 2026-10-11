@@ -22,7 +22,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
             "spring.security.oauth2.resourceserver.jwt.public-key-location=",
             "tetengo.jwt.clave-privada-location=",
             "tetengo.tareas.habilitadas=false",
-            AbstractIntegrationTest.SECRETO_MEDIAMTX
+            AbstractIntegrationTest.SECRETO_MEDIAMTX,
+            AbstractIntegrationTest.SIN_LIMITES
         })
 @AutoConfigureMockMvc
 @Import({TestcontainersConfiguration.class, JwtDePrueba.class, SoporteDePruebas.class})
@@ -30,6 +31,12 @@ public abstract class AbstractIntegrationTest {
 
     /** Shared secret of MediaMTX's authorization requests in tests. */
     public static final String SECRETO_MEDIAMTX = "tetengo.vista-en-vivo.secreto-autorizacion=secreto-de-prueba";
+
+    /**
+     * Every test runs from the same address, so the per-address limits of the public endpoints are
+     * off, except in the tests about them ({@code LimitePorIpIntegrationTest}).
+     */
+    public static final String SIN_LIMITES = "tetengo.limites.habilitado=false";
 
     @Autowired
     protected TransmisionDePrueba transmision;

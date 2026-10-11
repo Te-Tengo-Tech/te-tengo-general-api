@@ -46,6 +46,7 @@ import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 import tech.tetengo.api.monitoreo.application.port.ServicioDeTransmision;
 import tech.tetengo.api.shared.infrastructure.security.Secretos;
+import tech.tetengo.api.support.AbstractIntegrationTest;
 import tech.tetengo.api.support.ApiDePrueba;
 import tech.tetengo.api.support.JwtDePrueba;
 import tech.tetengo.api.support.TestcontainersConfiguration;
@@ -64,7 +65,8 @@ import tech.tetengo.api.support.TestcontainersConfiguration;
             "spring.security.oauth2.resourceserver.jwt.public-key-location=",
             "tetengo.jwt.clave-privada-location=",
             "tetengo.tareas.habilitadas=false",
-            "tetengo.vista-en-vivo.secreto-autorizacion=" + MediaMtxIntegrationTest.SECRETO
+            "tetengo.vista-en-vivo.secreto-autorizacion=" + MediaMtxIntegrationTest.SECRETO,
+            AbstractIntegrationTest.SIN_LIMITES
         })
 @AutoConfigureMockMvc
 @Import({TestcontainersConfiguration.class, JwtDePrueba.class})
