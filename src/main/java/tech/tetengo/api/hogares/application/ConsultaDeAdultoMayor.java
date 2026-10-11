@@ -27,4 +27,13 @@ public class ConsultaDeAdultoMayor implements AdultoMayorDelHogar {
                 .map(Hogar::getAdultoMayor)
                 .map(AdultoMayor::nombreDePila);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> nombre() {
+        return HogarActual.obtener()
+                .flatMap(hogares::buscar)
+                .map(Hogar::getAdultoMayor)
+                .map(AdultoMayor::getNombre);
+    }
 }

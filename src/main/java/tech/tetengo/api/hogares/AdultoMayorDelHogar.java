@@ -11,4 +11,7 @@ public interface AdultoMayorDelHogar {
 
     /** First name of the older adult («Rosa» for «Rosa Huamán»); empty without a household in context. */
     Optional<String> nombreDePila();
+
+    /** Full registered name («Rosa Huamán»), e.g. for «vinculada a la casa de Rosa Huamán» (US-28). */
+    Optional<String> nombre();
 }

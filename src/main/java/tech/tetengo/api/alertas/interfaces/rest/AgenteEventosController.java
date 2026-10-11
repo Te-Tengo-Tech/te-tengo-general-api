@@ -38,7 +38,7 @@ class AgenteEventosController {
     @ResponseStatus(HttpStatus.ACCEPTED)
     EventoDelAgenteResponse recibir(@Valid @RequestBody EventoDelAgenteRequest pedido) {
         ResultadoDeEvento resultado = recibirEvento.ejecutar(
-                UsuarioActual.camaraId().orElseThrow(),
+                UsuarioActual.camaraDelAgente(),
                 pedido.eventoId(),
                 TipoEvento.desde(pedido.tipo()).orElseThrow(),
                 pedido.ocurridoEn(),

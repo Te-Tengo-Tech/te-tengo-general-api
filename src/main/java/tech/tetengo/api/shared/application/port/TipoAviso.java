@@ -17,7 +17,9 @@ public enum TipoAviso {
     CAMARA_RECONECTADA,
     DETECCION_NO_CONFIABLE,
     PAUSA_FINALIZADA,
-    DATOS_ELIMINADOS;
+    DATOS_ELIMINADOS,
+    /** A PC left the household without the app: from the PC itself, or for security (US-31, CA-31.3). */
+    PC_DESVINCULADA;
 
     private static final Set<TipoAviso> ABREN_ALERTA =
             EnumSet.of(ALERTA_CAIDA, ALERTA_MOVIMIENTO_INESTABLE, ALERTA_ACTUALIZADA_A_CAIDA);

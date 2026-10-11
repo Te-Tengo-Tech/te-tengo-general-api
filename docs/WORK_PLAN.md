@@ -26,6 +26,9 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 
 ## Tasks
 
+### Change request «PCs, cámaras y datos de movimiento» (no sprint yet; pending the advisor's approval)
+- [x] **T25 `camaras` — US-28, US-30, US-31 PC link.** OAuth 2.0 device grant (RFC 8628), owner approval with brute-force limit, rotating refresh tokens with reuse detection (RFC 9700), PCs in the app, unlink from the app or the PC, 90-day expiry, migration of installations to PCs (ADR 0009). — *link PCs with the OAuth device grant (US-28, US-30, US-31)*
+
 ### Sprint 3
 - [x] **T01 `cuentas` — US-01 register.** `POST /api/cuentas`; BCrypt passwords; unique email (`409 CORREO_EN_USO`); `400 VALIDACION` with `campos`. — *register accounts (US-01)*
 - [x] **T02 `cuentas` — US-02 sessions.** — *sign in, refresh and sign out with JWTs and lockout (US-02)*

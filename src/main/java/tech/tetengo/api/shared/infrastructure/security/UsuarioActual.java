@@ -35,6 +35,30 @@ public final class UsuarioActual {
         return uuid(ClaimsDelToken.CAMARA);
     }
 
+    /** The PC of an agent token issued through the PC link; empty for installation tokens. */
+    public static Optional<UUID> pcId() {
+        return uuid(ClaimsDelToken.PC);
+    }
+
+    /**
+     * The camera of an agent endpoint that works on one camera: the per-camera token (installation or
+     * PC). A PC's own token answers {@code 403 TOKEN_DE_CAMARA_REQUERIDO}.
+     */
+    public static UUID camaraDelAgente() {
+        return camaraId().orElseThrow(() -> new ErrorDeNegocio(ErrorComun.TOKEN_DE_CAMARA_REQUERIDO));
+    }
+
+    /**
+     * The PC of an agent endpoint that works on the whole PC: only the PC's own access token, without a
+     * camera. Anything else answers {@code 403 TOKEN_DE_PC_REQUERIDO}.
+     */
+    public static UUID pcDelAgente() {
+        if (camaraId().isPresent()) {
+            throw new ErrorDeNegocio(ErrorComun.TOKEN_DE_PC_REQUERIDO);
+        }
+        return pcId().orElseThrow(() -> new ErrorDeNegocio(ErrorComun.TOKEN_DE_PC_REQUERIDO));
+    }
+
     public static Optional<Rol> rol() {
         return Optional.ofNullable(jwt().getClaimAsString(ClaimsDelToken.ROL)).map(Rol::valueOf);
     }

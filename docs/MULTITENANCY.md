@@ -36,5 +36,7 @@ There is no JWT outside a web request, so the household must be bound explicitly
 ## The household agent
 The agent receives a **per-camera token** when it registers. That token carries `hogar_id` and `camara_id`, so its events can only write to its own household. See [AGENT_CONTRACT.md](AGENT_CONTRACT.md).
 
+A **linked PC** (US-28, ADR 0009) gets its own token with `hogar_id` and `pc_id`. The household is the one of the owner who approved the PC's code, never one the PC chooses. Every agent token is checked before its household is bound (`ComprobadorDeAgentes`, implemented by `camaras` with native queries): an unlinked PC, a token of another household, or a retired camera answer `401 PC_DESVINCULADA`. Link requests, refresh tokens and wrong-code counters are global tables, read before any household is known; the PC itself (`pcs`) is household data.
+
 ## Reference
 Hibernate. (n.d.). *Hibernate ORM User Guide*, ch. 23 "Multitenancy". https://docs.jboss.org/hibernate/orm/6.6/userguide/html_single/Hibernate_User_Guide.html
