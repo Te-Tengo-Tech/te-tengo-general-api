@@ -58,6 +58,7 @@ public class RenombrarCamara {
 
     private Ambiente porNombre(Camara camara, String nombre, UUID usuarioId, Instant ahora) {
         String valido = Ambiente.valido(Camara.nombreDeHabitacion(nombre));
+        // The bathroom rule is not applied here: this endpoint keeps the behaviour of the app before rooms.
         var existente = ambientes.porNombre(Ambiente.normalizar(valido));
         if (existente.isPresent()) {
             if (existente.get().getId().equals(camara.getAmbienteId())) {
@@ -80,7 +81,7 @@ public class RenombrarCamara {
     private void renombrar(Ambiente ambiente, String nombre, UUID usuarioId, Instant ahora) {
         if (ambiente.renombrar(nombre, usuarioId, ahora) != null) {
             ambientes.guardar(ambiente);
-            servicio.propagarNombre(ambiente);
+            servicio.propagarNombre(ambiente, ahora);
         }
     }
 }

@@ -42,12 +42,35 @@ class AmbienteTest {
         assertThat(camara.getAmbienteId()).isEqualTo(cocina.getId());
 
         cocina.renombrar("Cocina grande", null, T0);
-        camara.seguirAmbiente(cocina);
+        camara.seguirAmbiente(cocina, T0);
         assertThat(camara.getNombreHabitacion()).isEqualTo("Cocina grande");
 
         assertThat(camara.dejarDeUsar(T0)).isTrue();
         assertThat(camara.dejarDeUsar(T0)).isFalse();
         assertThat(camara.asignarAmbiente(cocina, null, T0)).isTrue();
         assertThat(camara.retirada()).isFalse();
+    }
+
+    @Test
+    void porPrivacidadNoSeAdmitenCamarasEnElBano() {
+        for (String bano : new String[] {"Baño", "BAÑOS", "bano", "Baño de visitas", "SS.HH.", "sshh", "WC", "Aseo"}) {
+            assertThatThrownBy(() -> Ambiente.exigirPermitido(bano)).as(bano).isInstanceOf(ErrorDeNegocio.class);
+        }
+        for (String permitido : new String[] {"Sala", "Dormitorio", "Bañera de Rosa", "Cocina", "Pasillo"}) {
+            Ambiente.exigirPermitido(permitido);
+        }
+    }
+
+    @Test
+    void unaWebcamDetectadaNoEstaEnUsoHastaQueSeLeAsignaUnAmbiente() {
+        Camara camara = Camara.detectada(UUID.randomUUID(), "usb#1", "Webcam USB HD", true, T0);
+        assertThat(camara.enUso()).isFalse();
+        assertThat(camara.getAmbienteId()).isNull();
+        assertThat(camara.reportarDeteccion("Webcam USB HD", false, T0)).isTrue();
+        assertThat(camara.isDetectadaConectada()).isFalse();
+        assertThat(camara.asignarAmbiente(new Ambiente("Sala"), UUID.randomUUID(), T0))
+                .isTrue();
+        assertThat(camara.enUso()).isTrue();
+        assertThat(camara.getNombreHabitacion()).isEqualTo("Sala");
     }
 }

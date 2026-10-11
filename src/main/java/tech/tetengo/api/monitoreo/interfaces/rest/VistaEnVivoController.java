@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import tech.tetengo.api.monitoreo.application.AbrirVistaEnVivo;
+import tech.tetengo.api.monitoreo.application.AbrirVistaPrevia;
 import tech.tetengo.api.monitoreo.application.CambiarModoDeVistaEnVivo;
 import tech.tetengo.api.monitoreo.application.CerrarVistaEnVivo;
 import tech.tetengo.api.monitoreo.application.PrepararVistaEnVivo;
@@ -30,16 +31,35 @@ class VistaEnVivoController {
     private final CambiarModoDeVistaEnVivo cambiarModo;
     private final CerrarVistaEnVivo cerrarVistaEnVivo;
     private final PrepararVistaEnVivo prepararVistaEnVivo;
+    private final AbrirVistaPrevia abrirVistaPrevia;
 
     VistaEnVivoController(
             AbrirVistaEnVivo abrirVistaEnVivo,
             CambiarModoDeVistaEnVivo cambiarModo,
             CerrarVistaEnVivo cerrarVistaEnVivo,
-            PrepararVistaEnVivo prepararVistaEnVivo) {
+            PrepararVistaEnVivo prepararVistaEnVivo,
+            AbrirVistaPrevia abrirVistaPrevia) {
         this.abrirVistaEnVivo = abrirVistaEnVivo;
         this.cambiarModo = cambiarModo;
         this.cerrarVistaEnVivo = cerrarVistaEnVivo;
         this.prepararVistaEnVivo = prepararVistaEnVivo;
+        this.abrirVistaPrevia = abrirVistaPrevia;
+    }
+
+    @Operation(
+            summary = "Preview a webcam before assigning it (US-29)",
+            description =
+                    "A live view session of a webcam the PC detected, in use or not, to recognise it in «Elige las cámaras»: the same response, playback and rules as the live view, at most 2 minutes, never recorded, logged in the access log as a preview (US-24). Close it with DELETE /api/vista-en-vivo/{sesionId}. Errors: 404 CAMARA_NO_ENCONTRADA, 409 CAMARA_DESCONECTADA, 409 CAMARA_EN_PAUSA with pausadaHasta, 409 SIN_CONSENTIMIENTO.")
+    @PostMapping(path = API + "/camaras/{id}/vista-previa", version = ApiVersioning.V1)
+    @ResponseStatus(HttpStatus.CREATED)
+    SesionDeVistaEnVivoResponse vistaPrevia(@PathVariable UUID id) {
+        SesionDeVistaEnVivo sesion = abrirVistaPrevia.ejecutar(id, UsuarioActual.id());
+        return new SesionDeVistaEnVivoResponse(
+                sesion.sesionId(),
+                sesion.urlTransmision(),
+                sesion.urlWebrtc(),
+                sesion.expiraEn(),
+                sesion.modo().name());
     }
 
     @Operation(

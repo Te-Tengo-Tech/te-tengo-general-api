@@ -12,7 +12,7 @@ class PropiedadesDeVistaEnVivoTest {
 
     private static PropiedadesDeVistaEnVivo conWebrtc(String urlWebrtc) {
         return new PropiedadesDeVistaEnVivo(
-                null, "https://api.tetengo.reqsai.tech/vivo/", urlWebrtc, null, null, null, null);
+                null, "https://api.tetengo.reqsai.tech/vivo/", urlWebrtc, null, null, null, null, null);
     }
 
     @Test

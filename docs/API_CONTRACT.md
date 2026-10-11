@@ -92,7 +92,7 @@
 | `POST /api/camaras/{id}/vista-en-vivo` | member | `{alertaId \| null, modo?}` → `201 {sesionId, urlTransmision, urlWebrtc, expiraEn, modo}` (CA-23.1, CA-23.2). `alertaId`: the alert the live view is opened from, which must be of that camera. `modo`: see "Live view" below; omitted keeps the camera's current mode (`VIDEO` when nobody is watching) | `409 CAMARA_DESCONECTADA` (CA-23.3) · `409 CAMARA_EN_PAUSA {pausadaHasta}` (CA-23.4) · `409 SIN_CONSENTIMIENTO`: without a current consent the camera does not stream (CA-05.2) · `400 VALIDACION` with `campos.alertaId` (alert of another camera or unknown) or `campos.modo` |
 | `PATCH /api/vista-en-vivo/{sesionId}` | member | `{modo}` → `200 {sesionId, modo}`. Only the session's viewer, while it is open; the mode applies to the camera's stream, so every viewer sees it | `400 VALIDACION` with `campos.modo` · `404 SESION_NO_ENCONTRADA`: unknown, of another member, or already ended **[implementation choice]** |
 | `DELETE /api/vista-en-vivo/{sesionId}` | member | → `204`. Ends the session and records who watched, when it started and how long (CA-24.1). Closing someone else's session, or one that already ended, changes nothing | — |
-| `GET /api/accesos-vista-en-vivo` | member | → `200 [{usuario: {id, nombre}, inicio, duracionSegundos, desdeAlerta: boolean}]`, newest first (CA-24.2). Empty list when none (CA-24.3) | — |
+| `GET /api/accesos-vista-en-vivo` | member | → `200 [{usuario: {id, nombre}, inicio, duracionSegundos, desdeAlerta: boolean, camaraId, vistaPrevia: boolean}]`, newest first (CA-24.2). Empty list when none (CA-24.3). `vistaPrevia`: a preview of a webcam before assigning it a room (§9). An older backend does not send `camaraId` nor `vistaPrevia` | — |
 
 **Live view (MediaMTX).** Decided by the project owner on 2026-10-07; it replaces the earlier WebSocket JPEG relay proposal.
 - **Playback:** MediaMTX, the system's live streaming service, serves the same stream two ways, without transcoding:
@@ -194,7 +194,8 @@ Pc = {
   ultimaSenal | null,                            // the latest of them: «Sin conexión desde las HH:MM»
   vinculadaEn, vinculadaPor: {id, nombre} | null, // null for installations
   origen: "VINCULACION" | "INSTALACION",
-  camaras: [Camara]                              // the PC's cameras in use (§4)
+  camaras: [Camara],                             // the PC's cameras in use (§4)
+  camarasSinUsar                                 // webcams the PC detected that have no room: «Falta elegir las cámaras»
 }
 ```
 
@@ -207,15 +208,25 @@ Pc = {
 | `PATCH /api/pcs/{id}` | owner | `{nombre}` (1–60 chars) → `200 Pc` | `422 PC_NOMBRE_VACIO` · `422 PC_NOMBRE_MUY_LARGO` · `404 PC_NO_ENCONTRADA` |
 | `DELETE /api/pcs/{id}` | owner | → `204`: «Quitar esta PC». The app stops showing it and its cameras at once; the PC stops capturing, deletes its credentials and shows the QR again at once if online (CA-31.1), or as soon as it connects (CA-31.2). No push is sent for it | `404 PC_NO_ENCONTRADA` |
 
-**Rooms («ambientes», US-29).** Each camera watches one room of the household; the camera is chosen and placed on the PC (D-29.1), and the app lists, renames and adds rooms. For now a room has **one camera**, on any PC (CA-29.3); the data allows more later.
+**Cameras and rooms («ambientes», US-29).** Product decision of 2026-10-10 (backlog US-29, CA-29.1 to CA-29.9): **the owner chooses the cameras and their rooms from the phone.** Invited members see the same, read-only (CA-29.9: `403 SOLO_TITULAR` on changes). The PC reports every webcam it detects; the app shows them in «Elige las cámaras» (after pairing, and in the PC's detail), the owner previews each one to recognise it, assigns it a room, renames rooms, or «Dejar de usar»; the PC hears every change at once and only cameras in use capture. (The PC can still assign a camera itself, as the installer's fallback.) For now a room has **one camera**, on any PC (CA-29.3); the data allows more later. **No cameras in the bathroom:** room names that mean a bathroom (baño, servicios higiénicos, SS.HH., WC, aseo…) answer `422 AMBIENTE_NO_PERMITIDO` («Por privacidad, Te Tengo no admite cámaras en el baño.»).
+
+`CamaraDetectada = {id, pcId, nombreDispositivo, enUso, conectada, ambienteId | null, nombreHabitacion | null, estadoConexion | null, pausadaHasta | null, detectadaEn | null}`: a webcam the PC reported, known by the operating system's device id so it is always the same `id` (CA-29.4). `enUso: false` is «sin usar» (no room). `conectada`: for a camera in use, online by its heartbeats; otherwise plugged in at the PC's latest report. A camera in use that is unplugged keeps its room (CA-29.5).
+
+| Method and path | Auth | Body → response | Errors |
+|---|---|---|---|
+| `GET /api/pcs/{id}/camaras` | member | → `200 [CamaraDetectada]`, by device name: «Elegir las cámaras», with each webcam's name, whether it is plugged in and whether it is in use in a room (CA-29.1, CA-29.5). Empty: the PC finds no webcam (CA-29.6: ask someone at home to plug one in by USB). The invited member sees it read-only (CA-29.9) | `404 PC_NO_ENCONTRADA` |
+| `POST /api/pcs/{id}/busqueda-de-camaras` | owner | → `202`: «Buscar de nuevo» (CA-29.6). The PC looks for its webcams and reports them again; read them again after a few seconds. Nothing happens while the PC is offline | `404 PC_NO_ENCONTRADA` |
+| `PUT /api/camaras/{id}/ambiente` | owner | `{ambienteId}` or `{nombreAmbiente}` (a new name creates the room) → `200 Camara`: «Usar esta cámara», or a move. The PC receives it without anyone touching it and starts capturing; later alerts use the room's name (CA-29.2). If the PC also changed it («Elegir aquí», CA-29.8), the last change wins; the activity log tells which came from where | `409 AMBIENTE_OCUPADO {ambiente, camara}` (CA-29.3) · `422 AMBIENTE_NO_PERMITIDO` · `422 AMBIENTE_NOMBRE_VACIO` · `422 AMBIENTE_NOMBRE_MUY_LARGO` · `404 AMBIENTE_NO_ENCONTRADO` · `404 CAMARA_NO_ENCONTRADA` · `400 VALIDACION` with neither field |
+| `DELETE /api/camaras/{id}/ambiente` | owner | → `204`: «Dejar de usar». The camera stops detecting and its room is free (CA-29.2); it stays «sin usar» among the PC's webcams | `404 CAMARA_NO_ENCONTRADA` |
+| `POST /api/camaras/{id}/vista-previa` | member | → `201 {sesionId, urlTransmision, urlWebrtc, expiraEn, modo}`: a preview of a webcam, in use or «sin usar», to recognise it before assigning it. It **is a live view session**: same playback and rules (connected, not paused, the consent with its live view clause, CA-05.2), never recorded, closed with `DELETE /api/vista-en-vivo/{sesionId}`, logged in the access log with `vistaPrevia: true` (US-24). It lasts 2 minutes at most **[implementation choice]** (CA-29.7: «unos segundos»; the app may close it sooner). A regular live view of a webcam «sin usar» is `404`. The errors tell the app why it cannot be seen (CA-29.7) | `404 CAMARA_NO_ENCONTRADA` · `409 CAMARA_DESCONECTADA` · `409 CAMARA_EN_PAUSA {pausadaHasta}` · `409 SIN_CONSENTIMIENTO` |
 
 `Ambiente = {id, nombre, camaras: [{id, pcId, pcNombre, nombreDispositivo, estadoConexion}]}`: the cameras in use in it (at most one, for now).
 
 | Method and path | Auth | Body → response | Errors |
 |---|---|---|---|
-| `GET /api/ambientes` | member | → `200 [Ambiente]`, by name | — |
-| `POST /api/ambientes` | owner | `{nombre}` (1–40 chars) → `201 Ambiente` | `422 AMBIENTE_NOMBRE_VACIO` («Escribe el nombre del ambiente.», CA-29.2) · `422 AMBIENTE_NOMBRE_MUY_LARGO` · `409 AMBIENTE_YA_EXISTE`: names are unique ignoring case |
-| `PATCH /api/ambientes/{id}` | owner | `{nombre}` → `200 Ambiente`; its camera and its later alerts use the new name | the same · `404 AMBIENTE_NO_ENCONTRADO` |
+| `GET /api/ambientes` | member | → `200 [Ambiente]`, by name: the chips of «¿En qué habitación está?», with «Ya tiene cámara» for those with one | — |
+| `POST /api/ambientes` | owner | `{nombre}` (1–40 chars) → `201 Ambiente` | `422 AMBIENTE_NOMBRE_VACIO` («Escribe el nombre del ambiente.», CA-29.2) · `422 AMBIENTE_NOMBRE_MUY_LARGO` · `422 AMBIENTE_NO_PERMITIDO` · `409 AMBIENTE_YA_EXISTE`: names are unique ignoring case |
+| `PATCH /api/ambientes/{id}` | owner | `{nombre}` → `200 Ambiente`; its camera and its later alerts use the new name, and the PC hears it | the same · `404 AMBIENTE_NO_ENCONTRADO` |
 | `DELETE /api/ambientes/{id}` | owner | → `204` | `409 AMBIENTE_CON_CAMARA`: move or stop its camera first · `404 AMBIENTE_NO_ENCONTRADO` |
 
 `409 AMBIENTE_OCUPADO` carries `ambiente` (its name) and `camara: {id, pcId, pcNombre, nombreDispositivo}`, for «Ya hay una cámara en el ambiente Sala (PC Sala-Rosa). Por ahora, cada ambiente usa una sola cámara.».

@@ -76,6 +76,10 @@ public class ListarPcs {
         Instant limite = reloj.instant().minus(agente.esperaSinSenal());
         boolean enLinea = suyas.stream().anyMatch(c -> c.getEstadoConexion() == EstadoConexion.EN_LINEA)
                 || (pc.getUltimaSenal() != null && pc.getUltimaSenal().isAfter(limite));
-        return new PcConsultada(pc, suyas, enLinea, ultimaSenal, vinculadaPor == null ? null : vinculadaPor.nombre());
+        int sinUsar = (int) camaras.detectadasDeLaPc(pc.getId()).stream()
+                .filter(camara -> !camara.enUso())
+                .count();
+        return new PcConsultada(
+                pc, suyas, enLinea, ultimaSenal, vinculadaPor == null ? null : vinculadaPor.nombre(), sinUsar);
     }
 }

@@ -14,4 +14,9 @@ import tech.tetengo.api.camaras.domain.model.Pc;
  * @param vinculadaPorNombre name of the owner who linked it; null for installations
  */
 public record PcConsultada(
-        Pc pc, List<Camara> camaras, boolean enLinea, Instant ultimaSenal, String vinculadaPorNombre) {}
+        Pc pc,
+        List<Camara> camaras,
+        boolean enLinea,
+        Instant ultimaSenal,
+        String vinculadaPorNombre,
+        int camarasSinUsar) {}

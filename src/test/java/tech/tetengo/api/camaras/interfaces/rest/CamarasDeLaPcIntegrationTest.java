@@ -207,7 +207,9 @@ class CamarasDeLaPcIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk());
         String suyas = get("/api/agente/pc/camaras", salaRosa);
         assertThat(campo(suyas, "$.length()")).isEqualTo("1");
-        assertThat(campo(suyas, "$[0].token")).isNull();
+        // GET also gives the token of each camera in use, for a PC that reconnects.
+        assertThat(campo(suyas, "$[0].enUso")).isEqualTo("true");
+        assertThat(campo(suyas, "$[0].token")).isNotBlank();
         // A PC cannot stop another PC's camera, and a camera token is not a PC token.
         String deLaCocina = campo(get("/api/agente/pc/camaras", cocinaRosa), "$[0].camaraId");
         mvc.perform(delete("/api/agente/pc/camaras/" + deLaCocina).header("Authorization", bearer(salaRosa)))

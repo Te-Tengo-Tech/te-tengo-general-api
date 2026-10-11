@@ -38,6 +38,7 @@ public class GestionarAmbientes {
 
     @Transactional
     public AmbienteConsultado crear(String nombre) {
+        Ambiente.exigirPermitido(nombre);
         exigirNombreLibre(nombre, null);
         Ambiente ambiente = ambientes.guardar(new Ambiente(nombre));
         return new AmbienteConsultado(ambiente.getId(), ambiente.getNombre(), List.of());
@@ -46,10 +47,11 @@ public class GestionarAmbientes {
     @Transactional
     public AmbienteConsultado renombrar(UUID ambienteId, String nombre, UUID usuarioId) {
         Ambiente ambiente = buscar(ambienteId);
+        Ambiente.exigirPermitido(nombre);
         exigirNombreLibre(nombre, ambienteId);
         if (ambiente.renombrar(nombre, usuarioId, reloj.instant()) != null) {
             ambientes.guardar(ambiente);
-            servicio.propagarNombre(ambiente);
+            servicio.propagarNombre(ambiente, reloj.instant());
         }
         return servicio.listar().stream()
                 .filter(a -> a.id().equals(ambienteId))

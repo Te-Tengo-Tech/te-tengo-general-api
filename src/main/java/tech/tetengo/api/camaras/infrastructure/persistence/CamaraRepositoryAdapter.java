@@ -29,6 +29,16 @@ class CamaraRepositoryAdapter implements CamaraRepository {
     }
 
     @Override
+    public Optional<Camara> buscarAunqueRetirada(UUID id) {
+        return jpa.findById(id);
+    }
+
+    @Override
+    public List<Camara> detectadasDeLaPc(UUID pcId) {
+        return jpa.findByPcIdAndDispositivoIdIsNotNull(pcId, Sort.by("nombreDispositivo"));
+    }
+
+    @Override
     public List<Camara> listar() {
         return jpa.findByRetiradaEnIsNull(Sort.by("nombreHabitacion"));
     }

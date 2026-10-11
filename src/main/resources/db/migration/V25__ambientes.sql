@@ -21,7 +21,15 @@ alter table camaras
     add column ambiente_id         uuid references ambientes (id),
     -- the operating system's unique id of the webcam (CA-29.4); null for installation cameras
     add column dispositivo_id      varchar(300),
-    add column nombre_dispositivo  varchar(100);
+    add column nombre_dispositivo  varchar(100),
+    -- US-29 (product decision of 2026-10-10): the PC reports every webcam it detects; one not in use
+    -- («sin usar») is a row with retirada_en set and no room until the owner assigns it from the app
+    add column detectada_conectada boolean not null default true,
+    add column detectada_en        timestamptz;
+
+-- US-29: a short preview of a webcam before assigning it, logged with the live views (US-24).
+alter table accesos_vista_en_vivo
+    add column vista_previa boolean not null default false;
 
 create index idx_camaras_ambiente on camaras (ambiente_id) where retirada_en is null;
 create unique index uq_camaras_pc_dispositivo on camaras (pc_id, dispositivo_id) where dispositivo_id is not null;

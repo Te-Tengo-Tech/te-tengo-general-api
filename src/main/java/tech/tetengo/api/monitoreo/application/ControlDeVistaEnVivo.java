@@ -6,10 +6,14 @@ import java.util.UUID;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionalEventListener;
+import tech.tetengo.api.camaras.BusquedaDeCamarasPedida;
+import tech.tetengo.api.camaras.CamaraActualizada;
 import tech.tetengo.api.camaras.PcDesvinculada;
 import tech.tetengo.api.hogares.ConsentimientoRevocado;
 import tech.tetengo.api.monitoreo.application.port.AccesoVistaEnVivoRepository;
 import tech.tetengo.api.monitoreo.application.port.CanalDelAgente;
+import tech.tetengo.api.monitoreo.application.port.CanalDelAgente.BuscarCamaras;
+import tech.tetengo.api.monitoreo.application.port.CanalDelAgente.CamaraDeLaPc;
 import tech.tetengo.api.monitoreo.application.port.CanalDelAgente.Desvincular;
 import tech.tetengo.api.monitoreo.application.port.TransmisionEnVivoRepository;
 import tech.tetengo.api.monitoreo.domain.model.AccesoVistaEnVivo;
@@ -45,6 +49,36 @@ public class ControlDeVistaEnVivo {
         this.agentes = agentes;
         this.enHogar = enHogar;
         this.reloj = reloj;
+    }
+
+    /**
+     * US-29: the owner assigned, moved or stopped using a webcam, or renamed its room: the PC hears it
+     * on its own channel ({@code {"camara":{…}}}) and starts or stops that camera. A camera that stops
+     * being used also stops streaming. An offline PC gets the assignment at its next
+     * {@code GET /api/agente/pc/camaras}.
+     */
+    @Async
+    @TransactionalEventListener
+    public void alActualizarseCamara(CamaraActualizada evento) {
+        if (!evento.enUso()) {
+            enHogar.ejecutar(evento.hogarId(), () -> transmisiones.detenerCamara(evento.camaraId(), reloj.instant()));
+        }
+        agentes.enviar(
+                evento.pcId(),
+                new CamaraDeLaPc(
+                        evento.camaraId(),
+                        evento.dispositivoId(),
+                        evento.nombreDispositivo(),
+                        evento.enUso(),
+                        evento.ambienteId(),
+                        evento.nombreHabitacion()));
+    }
+
+    /** CA-29.6: «Buscar de nuevo» reaches the PC on its own channel. */
+    @Async
+    @TransactionalEventListener(fallbackExecution = true)
+    public void alPedirseBusquedaDeCamaras(BusquedaDeCamarasPedida evento) {
+        agentes.enviar(evento.pcId(), new BuscarCamaras());
     }
 
     /**

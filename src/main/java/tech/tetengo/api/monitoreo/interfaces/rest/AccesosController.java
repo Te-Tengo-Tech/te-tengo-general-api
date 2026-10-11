@@ -29,7 +29,9 @@ class AccesosController {
                         new AccesoResponse.Usuario(a.usuarioId(), a.nombre()),
                         a.inicio(),
                         a.duracionSegundos(),
-                        a.desdeAlerta()))
+                        a.desdeAlerta(),
+                        a.camaraId(),
+                        a.vistaPrevia()))
                 .toList();
     }
 }

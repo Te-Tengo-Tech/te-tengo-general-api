@@ -76,6 +76,24 @@ public class Ambiente extends EntidadDelHogar {
         return limpio;
     }
 
+    /**
+     * Brief §6.2: «Por privacidad, Te Tengo no admite cámaras en el baño.» Names that mean a bathroom
+     * (baño, servicios higiénicos, SS.HH., WC, aseo…), in any case and with or without accents, are
+     * refused for new rooms and assignments.
+     */
+    public static void exigirPermitido(String nombre) {
+        String sinTildes = java.text.Normalizer.normalize(valido(nombre), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", " ")
+                .strip();
+        if ((" " + sinTildes + " ")
+                .matches(
+                        ".* (bano|banos|wc|aseo|toilet|ss hh|sshh|servicio higienico|servicios higienicos|bath|bathroom) .*")) {
+            throw new ErrorDeNegocio(CamaraError.AMBIENTE_NO_PERMITIDO);
+        }
+    }
+
     public static String normalizar(String nombre) {
         return valido(nombre).toLowerCase(Locale.ROOT);
     }

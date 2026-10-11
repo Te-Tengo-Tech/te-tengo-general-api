@@ -8,6 +8,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import tech.tetengo.api.camaras.CamaraActualizada;
 import tech.tetengo.api.camaras.CamaraAsignada;
 import tech.tetengo.api.camaras.CamaraDesconectada;
 import tech.tetengo.api.camaras.CamaraReconectada;
@@ -70,6 +71,14 @@ public class Camara extends EntidadDelHogar {
     @Column(name = "nombre_dispositivo", length = LARGO_MAXIMO_NOMBRE_DISPOSITIVO)
     private String nombreDispositivo;
 
+    /** US-29: the webcam was plugged in at the PC's latest report of the webcams it detects. */
+    @Column(name = "detectada_conectada", nullable = false)
+    private boolean detectadaConectada = true;
+
+    /** The PC's latest report that included this webcam. */
+    @Column(name = "detectada_en")
+    private Instant detectadaEn;
+
     protected Camara() {}
 
     public Camara(String nombreHabitacion) {
@@ -105,6 +114,48 @@ public class Camara extends EntidadDelHogar {
     }
 
     /**
+     * US-29: a webcam the PC detected and reported, not in use until the owner assigns it a room from
+     * the app. It has no room yet: its room name holds the device name until then, and the API never
+     * shows it as a room.
+     */
+    public static Camara detectada(
+            UUID pcId, String dispositivoId, String nombreDispositivo, boolean conectada, Instant ahora) {
+        String nombre = Pc.recortar(nombreDispositivo, LARGO_MAXIMO_NOMBRE_DISPOSITIVO);
+        Camara camara = new Camara(
+                nombre == null
+                        ? "Cámara"
+                        : nombre.length() > LARGO_MAXIMO_NOMBRE ? nombre.substring(0, LARGO_MAXIMO_NOMBRE) : nombre,
+                pcId);
+        camara.dispositivoId = Objects.requireNonNull(dispositivoId, "dispositivoId");
+        camara.nombreDispositivo = nombre;
+        camara.retiradaEn = ahora;
+        camara.detectadaConectada = conectada;
+        camara.detectadaEn = ahora;
+        return camara;
+    }
+
+    /** The PC reported the webcam again: its name and whether it is plugged in. Returns whether it changed. */
+    public boolean reportarDeteccion(String nombre, boolean conectada, Instant ahora) {
+        boolean cambio = actualizarDispositivo(nombre) || detectadaConectada != conectada;
+        detectadaConectada = conectada;
+        detectadaEn = ahora;
+        return cambio;
+    }
+
+    /** In use: assigned to a room, capturing and detecting. Otherwise detected but «sin usar». */
+    public boolean enUso() {
+        return retiradaEn == null;
+    }
+
+    public boolean isDetectadaConectada() {
+        return detectadaConectada;
+    }
+
+    public Instant getDetectadaEn() {
+        return detectadaEn;
+    }
+
+    /**
      * US-29: the camera watches {@code ambiente} from now on; its room name and later alerts follow
      * (CA-29.2). A retired camera of the same device is used again. Returns whether it changed.
      */
@@ -121,13 +172,30 @@ public class Camara extends EntidadDelHogar {
         nombreHabitacion = ambiente.getNombre();
         registrarEvento(new CamaraAsignada(
                 getHogarId(), getId(), pcId, nombreDispositivo, anterior, ambiente.getNombre(), usuarioId, ahora));
+        actualizada(ahora);
         return true;
     }
 
+    private void actualizada(Instant ahora) {
+        if (pcId != null && dispositivoId != null) {
+            registrarEvento(new CamaraActualizada(
+                    getHogarId(),
+                    getId(),
+                    pcId,
+                    dispositivoId,
+                    nombreDispositivo,
+                    enUso(),
+                    enUso() ? ambienteId : null,
+                    enUso() ? nombreHabitacion : null,
+                    ahora));
+        }
+    }
+
     /** The room was renamed: the camera's name follows it, with no event of its own. */
-    public void seguirAmbiente(Ambiente ambiente) {
-        if (ambiente.getId().equals(ambienteId)) {
+    public void seguirAmbiente(Ambiente ambiente, Instant ahora) {
+        if (ambiente.getId().equals(ambienteId) && !ambiente.getNombre().equals(nombreHabitacion)) {
             nombreHabitacion = ambiente.getNombre();
+            actualizada(ahora);
         }
     }
 
@@ -154,6 +222,7 @@ public class Camara extends EntidadDelHogar {
             return false;
         }
         registrarEvento(new CamaraRetirada(getHogarId(), getId(), pcId, nombreDispositivo, nombreHabitacion, ahora));
+        actualizada(ahora);
         return true;
     }
 

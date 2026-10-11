@@ -70,6 +70,32 @@ public final class VinculacionDePrueba {
                         .formatted(dispositivoId.replace("\\", "\\\\"), nombreDispositivo, ambiente)));
     }
 
+    /** The PC reports the webcams it detects (US-29): {@code dispositivoId:nombre} pairs, all plugged in. */
+    public static ResultActions reportarWebcams(MockMvc mvc, String tokenPc, String... webcams) throws Exception {
+        StringBuilder lista = new StringBuilder();
+        for (String webcam : webcams) {
+            String[] partes = webcam.split(":", 2);
+            if (!lista.isEmpty()) {
+                lista.append(',');
+            }
+            lista.append("{\"dispositivoId\":\"%s\",\"nombreDispositivo\":\"%s\",\"conectada\":true}"
+                    .formatted(partes[0], partes[1]));
+        }
+        return mvc.perform(put("/api/agente/pc/camaras/inventario")
+                .header("Authorization", bearer(tokenPc))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"webcams\":[" + lista + "]}"));
+    }
+
+    /** The owner assigns a webcam to a room from the app (US-29). */
+    public static ResultActions asignarDesdeLaApp(MockMvc mvc, String tokenTitular, String camaraId, String ambiente)
+            throws Exception {
+        return mvc.perform(put("/api/camaras/" + camaraId + "/ambiente")
+                .header("Authorization", bearer(tokenTitular))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"nombreAmbiente\":\"%s\"}".formatted(ambiente)));
+    }
+
     /**
      * The whole link: the PC asks, the owner approves, the PC polls once. Returns the token response
      * JSON ({@code access_token}, {@code refresh_token}, {@code pc_id}, {@code hogar_id}).

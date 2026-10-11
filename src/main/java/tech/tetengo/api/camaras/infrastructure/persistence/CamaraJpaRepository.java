@@ -33,6 +33,8 @@ interface CamaraJpaRepository extends JpaRepository<Camara, UUID> {
 
     List<Camara> findByAmbienteIdAndRetiradaEnIsNull(UUID ambienteId);
 
+    List<Camara> findByPcIdAndDispositivoIdIsNotNull(UUID pcId, Sort orden);
+
     Optional<Camara> findFirstByPcIdAndDispositivoId(UUID pcId, String dispositivoId);
 
     /** Native, so not filtered by household: the agent token is checked before its household is bound. */

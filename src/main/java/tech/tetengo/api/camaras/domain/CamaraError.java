@@ -21,6 +21,11 @@ public enum CamaraError implements CodigoError {
             "AMBIENTE_NOMBRE_MUY_LARGO",
             HttpStatus.UNPROCESSABLE_CONTENT,
             "El nombre del ambiente es demasiado largo."),
+    /** Brief §6.2: no cameras in the bathroom. */
+    AMBIENTE_NO_PERMITIDO(
+            "AMBIENTE_NO_PERMITIDO",
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "Por privacidad, Te Tengo no admite cámaras en el baño."),
     AMBIENTE_YA_EXISTE("AMBIENTE_YA_EXISTE", HttpStatus.CONFLICT, "Ya hay un ambiente con ese nombre."),
     /** CA-29.3: one camera per room, for now. */
     AMBIENTE_OCUPADO(

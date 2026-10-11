@@ -29,7 +29,7 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 ### Change request «PCs, cámaras y datos de movimiento» (no sprint yet; pending the advisor's approval)
 - [x] **T25 `camaras` — US-28, US-30, US-31 PC link.** OAuth 2.0 device grant (RFC 8628), owner approval with brute-force limit, rotating refresh tokens with reuse detection (RFC 9700), PCs in the app, unlink from the app or the PC, 90-day expiry, migration of installations to PCs (ADR 0009). — *link PCs with the OAuth device grant (US-28, US-30, US-31)*
 
-- [x] **T26 `camaras` — US-29 cameras and rooms.** Rooms of the household (one camera per room by rule, not schema), cameras of linked PCs by OS device id with per-camera tokens, migration of room names (V25). — *cameras of linked PCs and the household's rooms (US-29)*
+- [x] **T26 `camaras` — US-29 cameras and rooms.** Rooms of the household (one camera per room by rule, not schema, no bathrooms), webcams reported by the PC and assigned from the phone with a preview, pushed to the PC over its control channel, per-camera tokens, migration of room names (V25). — *cameras of linked PCs and the household's rooms (US-29)*
 
 ### Sprint 3
 - [x] **T01 `cuentas` — US-01 register.** `POST /api/cuentas`; BCrypt passwords; unique email (`409 CORREO_EN_USO`); `400 VALIDACION` with `campos`. — *register accounts (US-01)*

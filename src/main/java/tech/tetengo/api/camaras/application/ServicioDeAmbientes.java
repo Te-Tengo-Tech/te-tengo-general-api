@@ -43,12 +43,11 @@ public class ServicioDeAmbientes {
 
     /** The room chosen by id, or by name when no id is given. */
     public Ambiente elegido(UUID ambienteId, String nombre) {
-        if (ambienteId != null) {
-            return ambientes
-                    .buscar(ambienteId)
-                    .orElseThrow(() -> new ErrorDeNegocio(CamaraError.AMBIENTE_NO_ENCONTRADO));
-        }
-        return buscarOCrear(nombre);
+        Ambiente ambiente = ambienteId != null
+                ? ambientes.buscar(ambienteId).orElseThrow(() -> new ErrorDeNegocio(CamaraError.AMBIENTE_NO_ENCONTRADO))
+                : null;
+        Ambiente.exigirPermitido(ambiente != null ? ambiente.getNombre() : nombre);
+        return ambiente != null ? ambiente : buscarOCrear(nombre);
     }
 
     /**
@@ -100,9 +99,9 @@ public class ServicioDeAmbientes {
     }
 
     /** The cameras of a room follow its new name. */
-    public void propagarNombre(Ambiente ambiente) {
+    public void propagarNombre(Ambiente ambiente, java.time.Instant ahora) {
         camaras.enAmbiente(ambiente.getId()).forEach(camara -> {
-            camara.seguirAmbiente(ambiente);
+            camara.seguirAmbiente(ambiente, ahora);
             camaras.guardar(camara);
         });
     }

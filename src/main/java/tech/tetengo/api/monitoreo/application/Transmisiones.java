@@ -6,10 +6,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import tech.tetengo.api.camaras.CamarasDelHogar;
 import tech.tetengo.api.monitoreo.application.port.AccesoVistaEnVivoRepository;
 import tech.tetengo.api.monitoreo.application.port.CanalDelAgente;
 import tech.tetengo.api.monitoreo.application.port.CanalDelAgente.CambiarModo;
 import tech.tetengo.api.monitoreo.application.port.CanalDelAgente.Detener;
+import tech.tetengo.api.monitoreo.application.port.CanalDelAgente.Mensaje;
+import tech.tetengo.api.monitoreo.application.port.CanalDelAgente.ParaCamara;
 import tech.tetengo.api.monitoreo.application.port.CanalDelAgente.Transmitir;
 import tech.tetengo.api.monitoreo.application.port.ServicioDeTransmision;
 import tech.tetengo.api.monitoreo.application.port.TransmisionEnVivoRepository;
@@ -34,18 +37,39 @@ public class Transmisiones {
     private final CanalDelAgente agentes;
     private final ServicioDeTransmision servicio;
     private final PropiedadesDeVistaEnVivo propiedades;
+    private final CamarasDelHogar camaras;
 
     public Transmisiones(
             TransmisionEnVivoRepository transmisiones,
             AccesoVistaEnVivoRepository accesos,
             CanalDelAgente agentes,
             ServicioDeTransmision servicio,
-            PropiedadesDeVistaEnVivo propiedades) {
+            PropiedadesDeVistaEnVivo propiedades,
+            CamarasDelHogar camaras) {
         this.transmisiones = transmisiones;
         this.accesos = accesos;
         this.agentes = agentes;
         this.servicio = servicio;
         this.propiedades = propiedades;
+        this.camaras = camaras;
+    }
+
+    /**
+     * Sends a live view message of the camera after the commit: on the camera's own channel, or, for a
+     * webcam not in use (a preview, US-29), on its PC's channel with the camera and device ids. The route
+     * is resolved now, inside the caller's transaction.
+     */
+    private void enviarTrasConfirmar(UUID camaraId, Mensaje mensaje) {
+        Runnable envio = ruta(camaraId, mensaje);
+        TrasConfirmar.ejecutar(envio);
+    }
+
+    private Runnable ruta(UUID camaraId, Mensaje mensaje) {
+        return camaras.buscarDetectada(camaraId)
+                .filter(camara -> !camara.enUso())
+                .<Runnable>map(camara ->
+                        () -> agentes.enviar(camara.pcId(), new ParaCamara(camaraId, camara.dispositivoId(), mensaje)))
+                .orElse(() -> agentes.enviar(camaraId, mensaje));
     }
 
     /** Takes the camera's lock until the transaction ends (see {@link TransmisionEnVivoRepository#bloquear}). */
@@ -70,7 +94,7 @@ public class Transmisiones {
         if (transmision.cambiarModo(modo)) {
             transmisiones.guardar(transmision);
             ModoDeVista nuevo = transmision.getModo();
-            TrasConfirmar.ejecutar(() -> agentes.enviar(camaraId, new CambiarModo(nuevo)));
+            enviarTrasConfirmar(camaraId, new CambiarModo(nuevo));
         }
         return transmision.getModo();
     }
@@ -114,7 +138,7 @@ public class Transmisiones {
         if (accesos.abiertasDe(camaraId).isEmpty()) {
             transmisiones.deCamara(camaraId).ifPresent(transmision -> {
                 transmisiones.eliminar(transmision);
-                TrasConfirmar.ejecutar(() -> agentes.enviar(camaraId, new Detener()));
+                enviarTrasConfirmar(camaraId, new Detener());
             });
         }
     }
@@ -133,10 +157,9 @@ public class Transmisiones {
                     return true;
                 })
                 .orElse(false);
+        Runnable detener = transmitia ? ruta(camaraId, new Detener()) : () -> {};
         TrasConfirmar.ejecutar(() -> {
-            if (transmitia) {
-                agentes.enviar(camaraId, new Detener());
-            }
+            detener.run();
             servicio.expulsarCamara(camaraId);
         });
     }
@@ -144,6 +167,6 @@ public class Transmisiones {
     private void transmitir(UUID camaraId, String clave, ModoDeVista modo) {
         Transmitir mensaje =
                 new Transmitir(propiedades.urlPublicacionDe(camaraId), PeticionDeMediaMtx.USUARIO_AGENTE, clave, modo);
-        TrasConfirmar.ejecutar(() -> agentes.enviar(camaraId, mensaje));
+        enviarTrasConfirmar(camaraId, mensaje);
     }
 }

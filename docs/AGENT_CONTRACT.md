@@ -24,10 +24,11 @@ Every agent token is checked on every request: the tokens of a PC that left the 
 | `GET /api/agente/pc` | The PC's link: household, older adult, who approved it, consent (PC token) | US-28 |
 | `POST /api/agente/pc/senal` | The PC's heartbeat, with its version and system (PC token) | US-30 |
 | `DELETE /api/agente/pc` | «Desvincular esta PC» (PC token); the family is notified | US-31 |
+| `PUT /api/agente/pc/camaras/inventario` | The webcams the PC detects; returns their rooms and the tokens of those in use (PC token) | US-29 |
+| `GET /api/agente/pc/camaras` | The PC's webcams, their rooms and tokens, e.g. after reconnecting (PC token) | US-29 |
 | `GET /api/agente/ambientes` | The household's rooms and which camera is in each one (PC token) | US-29 |
-| `GET /api/agente/pc/camaras` | The PC's cameras in use (PC token) | US-29 |
-| `PUT /api/agente/pc/camaras` | «Usar esta cámara» in a room, or move it; returns its per-camera token (PC token) | US-29 |
-| `DELETE /api/agente/pc/camaras/{camaraId}` | «Dejar de usar» (PC token) | US-29 |
+| `PUT /api/agente/pc/camaras` | Installer's fallback: «Usar esta cámara» in a room from the PC (PC token) | US-29 |
+| `DELETE /api/agente/pc/camaras/{camaraId}` | Installer's fallback: «Dejar de usar» from the PC (PC token) | US-29 |
 | `POST /api/agente/pc/camaras/tokens` | New per-camera tokens for the PC's cameras (PC token) | US-29 |
 
 ## Detected event
@@ -107,6 +108,8 @@ Decided by the project owner on 2026-10-07; it replaces the WebSocket JPEG relay
 | `{"transmitir":true,"urlPublicacion":"rtsp://…/camaras/<camaraId>","usuario":"agente","clave":"<publish token>","modo":"VIDEO"}` | The first open live view session of the camera starts. Also on every connection while sessions are open, with a **new** `clave` (the previous one stops working) |
 | `{"modo":"VIDEO_CON_POSTURA"}` | The mode changes during a transmission |
 | `{"transmitir":false}` | The last session ends or expires, the camera is paused, or the consent is revoked. On pause and revocation the API also disconnects the publisher through MediaMTX |
+| `{"camara":{…}}` | PC channel only: the owner assigned, moved or stopped using a webcam, or renamed its room (see "Cameras of a linked PC") |
+| `{"buscarCamaras":true}` | PC channel only: «Buscar de nuevo» in the app (CA-29.6): look for webcams and report them with `PUT /api/agente/pc/camaras/inventario` |
 | `{"desvincular":true}` | The PC was removed from the household (US-31). Sent on the PC's own channel and on each of its cameras' channels, which the API then closes with code `4001`. The agent stops capturing, deletes its credentials and shows the link code (CA-31.1) |
 
 **Preparing (`preparar`, live view v3):** the agent warms up **only what stays on the PC**, so that the publication starts at once on `transmitir`: open the capture at the live view rate in memory, create the H.264 encoder, resolve the MediaMTX host and, if it can be done without publishing, open the TLS connection. **No frame leaves the PC before `transmitir`** (privacy rule of the product: video leaves the PC only during a live view); an RTSP publish session cannot be opened without sending media, so it is not opened early. The warm state lasts at most 60 s (implementation choice) and is discarded on timeout, on `{"transmitir":false}`, on a pause, on a revoked consent (`capturaPermitida: false`) and when the agent stops. A new `preparar` restarts the 60 s.
@@ -185,26 +188,29 @@ token=<refresh_token>&token_type_hint=refresh_token&client_id=te-tengo-captura
 **Removed from the app (CA-31.1, CA-31.2).** The PC hears it as `{"desvincular":true}` on its control channels if it is online, or as `401 PC_DESVINCULADA` (or `invalid_grant` when renewing) at its next request. Either way: stop capturing at once, delete the credentials and show the link code, with D-31.2 («Esta PC se quitó de la casa de Rosa Huamán»).
 
 ## Cameras of a linked PC (US-29, US-30)
-The PC finds its webcams and shows them with a local preview that never leaves the PC (CA-29.1, CA-29.6); the API only hears about the ones the family chooses. Each one is known by the **operating system's unique device id**, not its index, so plugging another webcam or restarting does not change which camera watches each room (CA-29.4). With the PC's own access token:
+Product decision of 2026-10-10: **the owner assigns the cameras to rooms from the phone.** The PC reports the webcams it detects, the app shows them in «Elige las cámaras» and assigns them, and the PC follows: **only cameras in use capture**. Each webcam is known by the **operating system's unique device id**, not its index, so plugging another webcam or restarting does not change which camera watches each room (CA-29.4). The PC's own preview stays local (CA-29.1). With the PC's own access token:
 
-- `GET /api/agente/ambientes` → `200 [Ambiente]` (API contract §9): every room of the household, with the camera in use in it, on this PC or another (`pcNombre`). The PC offers the usual rooms (Sala, Dormitorio, Cocina, Comedor, Pasillo) and «Otro», and marks the rooms that have a camera «Ya tiene cámara» (CA-29.3).
-- `PUT /api/agente/pc/camaras` — «Usar esta cámara», or a new room for it:
+**1. Report the webcams** — `PUT /api/agente/pc/camaras/inventario`, at startup and whenever a webcam is plugged in or out (the whole list each time; an empty list when it finds none, CA-29.6):
 ```json
-{ "dispositivoId": "\\\\?\\usb#vid_046d&pid_0825#…", "nombreDispositivo": "Logitech C920",
-  "ambienteId": "0192…" }
+{ "webcams": [
+  { "dispositivoId": "\\\\?\\usb#vid_046d&pid_0825#…", "nombreDispositivo": "Logitech C920", "conectada": true },
+  { "dispositivoId": "…", "nombreDispositivo": "Webcam USB HD", "conectada": true } ] }
 ```
-  or `"nombreAmbiente": "Dormitorio de Rosa"` instead of `ambienteId` (a name the household does not have creates the room; names compare ignoring case). `dispositivoId` up to 300 characters, `nombreDispositivo` up to 100.
-  → `200 CamaraDeLaPc`:
+`dispositivoId` up to 300 characters, `nombreDispositivo` up to 100, at most 32 webcams; `conectada` defaults to true. New webcams are added «sin usar»; webcams missing from the list count as unplugged and **keep their room** (CA-29.5). → `200 [CamaraDeLaPc]`, every webcam of the PC:
 ```json
 { "camaraId": "0192…", "dispositivoId": "…", "nombreDispositivo": "Logitech C920",
-  "ambienteId": "0192…", "nombreHabitacion": "Dormitorio", "estadoConexion": "DESCONECTADA",
-  "pausadaHasta": null, "token": "<per-camera JWT>", "expiraEn": "2026-10-10T16:31:00Z" }
+  "enUso": true, "conectada": true, "ambienteId": "0192…", "nombreHabitacion": "Dormitorio",
+  "estadoConexion": "EN_LINEA", "pausadaHasta": null,
+  "token": "<per-camera JWT>", "expiraEn": "2026-10-10T16:31:00Z" }
 ```
-  - It is an upsert by `dispositivoId`: the same webcam is always the same `camaraId`, also after «Dejar de usar». The camera starts detecting in that room at once (CA-29.2): it uses the per-camera token exactly like an installation's camera (heartbeat every 30 s, `estado-captura`, events, clips, its control channel). Its `nombreHabitacion` is what the alerts say.
-  - Errors: `409 AMBIENTE_OCUPADO {ambiente, camara: {id, pcId, pcNombre, nombreDispositivo}}` (CA-29.3: «Ya hay una cámara en el ambiente Sala (PC Sala-Rosa). Por ahora, cada ambiente usa una sola cámara.»), `422 AMBIENTE_NOMBRE_VACIO` (CA-29.2: «Escribe el nombre del ambiente.»), `422 AMBIENTE_NOMBRE_MUY_LARGO`, `404 AMBIENTE_NO_ENCONTRADO`, `400 VALIDACION` (`campos.dispositivoId`, `campos.nombreDispositivo`, or `campos.ambienteElegido` with neither room field).
-- `DELETE /api/agente/pc/camaras/{camaraId}` → `204`: «Dejar de usar». The camera leaves its room and the app, and its token answers `401 PC_DESVINCULADA` from then on (stop that camera's worker; the PC itself is still linked). `404 CAMARA_NO_ENCONTRADA` for a camera of another PC.
-- `GET /api/agente/pc/camaras` → `200 [CamaraDeLaPc]` with `token: null`: the cameras in use, e.g. at startup.
-- `POST /api/agente/pc/camaras/tokens` → `200 [CamaraDeLaPc]` with a new token for each camera in use. Camera tokens last as long as the PC's access token (1 h): renew them right after renewing the PC's tokens.
-- **A disconnected camera stays in its room** (CA-29.5): report it with `webcamConectada: false` on its heartbeat, as today; the room is not given to another camera and the app warns as in CA-07.2.
-- The family can rename a room in the app; the next heartbeat's `nombreHabitacion` (and `GET /api/agente/pc/camaras`) gives the new name.
+For `enUso: false` the room fields and `token` are null. Start a worker for each camera in use with its token (heartbeat every 30 s, `estado-captura`, events, clips, its control channel), exactly like an installation's camera; its `nombreHabitacion` is what the alerts say.
 
+**2. Follow the owner's changes** on the PC's own control channel (see "Live view"): `{"camara": {"camaraId", "dispositivoId", "nombreDispositivo", "enUso", "ambienteId", "nombreHabitacion"}}` when the owner assigns a webcam, moves it, renames its room or stops using it. On `enUso: true` get its token with `POST /api/agente/pc/camaras/tokens` and start it; on `enUso: false` stop it at once (its token already answers `401 PC_DESVINCULADA`). While offline the PC misses them: **after every (re)connection call `GET /api/agente/pc/camaras`** (same body as step 1, with the tokens of the cameras in use) and reconcile.
+
+**3. Previews.** The owner may preview any webcam, also one «sin usar», to recognise it (the app's `POST /api/camaras/{id}/vista-previa`). A camera in use gets the usual `transmitir` on its own channel. A webcam «sin usar» has no channel of its own: the PC's channel gets the same live view messages with the camera and device ids added, `{"transmitir":true,"urlPublicacion":"…/camaras/<camaraId>","usuario":"agente","clave":"…","modo":"VIDEO","camaraId":"…","dispositivoId":"…"}`, then `{"transmitir":false,"camaraId":"…","dispositivoId":"…"}` (and `{"modo":…,"camaraId":…,"dispositivoId":…}`). Publish that webcam to `urlPublicacion` exactly as a live view (nothing leaves the PC before `transmitir`; stop on `transmitir:false`). Previews last 2 minutes at most.
+
+**Other endpoints:**
+- `POST /api/agente/pc/camaras/tokens` → `200 [CamaraDeLaPc]` with a new token for each camera in use. Camera tokens last as long as the PC's access token (1 h): renew them right after renewing the PC's tokens.
+- `GET /api/agente/ambientes` → `200 [Ambiente]` (API contract §9): the rooms and the camera in use in each, on this PC or another (`pcNombre`).
+- **Installer's fallback, «Elegir aquí»** (CA-29.8; the owner's app is the normal way), with the same rules as the app (CA-29.2 to CA-29.4) and a preview that only shows on the PC; the assignment appears in the app. When the app and the PC both change a camera, the last change wins, and the activity log records where each came from: `PUT /api/agente/pc/camaras` with `{dispositivoId, nombreDispositivo, ambienteId | nombreAmbiente}` assigns a webcam from the PC (an upsert by `dispositivoId`; → `200 CamaraDeLaPc` with its token), and `DELETE /api/agente/pc/camaras/{camaraId}` stops using one. Errors: `409 AMBIENTE_OCUPADO {ambiente, camara: {id, pcId, pcNombre, nombreDispositivo}}` (CA-29.3: «Ya hay una cámara en el ambiente Sala (PC Sala-Rosa). Por ahora, cada ambiente usa una sola cámara.»), `422 AMBIENTE_NO_PERMITIDO` («Por privacidad, Te Tengo no admite cámaras en el baño.»), `422 AMBIENTE_NOMBRE_VACIO` (CA-29.2), `422 AMBIENTE_NOMBRE_MUY_LARGO`, `404 AMBIENTE_NO_ENCONTRADO`, `404 CAMARA_NO_ENCONTRADA` (a camera of another PC), `400 VALIDACION`.
+- **A disconnected camera stays in its room** (CA-29.5): report it with `webcamConectada: false` on its heartbeat, as today, and in the next inventory; the room is not given to another camera and the app warns as in CA-07.2.

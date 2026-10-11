@@ -22,7 +22,8 @@ final class PcMapper {
                         ? null
                         : new PcResponse.Usuario(pc.getVinculadaPor(), consultada.vinculadaPorNombre()),
                 pc.getOrigen().name(),
-                consultada.camaras().stream().map(CamaraMapper::aRespuesta).toList());
+                consultada.camaras().stream().map(CamaraMapper::aRespuesta).toList(),
+                consultada.camarasSinUsar());
     }
 
     static PcDelAgenteResponse aRespuesta(PcDelAgente pc) {
