@@ -7,6 +7,8 @@ import java.time.Instant;
  *
  * @param retencionDias null: not stored in the cloud
  * @param datosDesde start of the oldest movement stored («Hay movimientos desde»)
+ * @param archivos movement files in the index
+ * @param tamanoBytes bytes stored: the movement files plus their confirmed light replay files (ADR 0011)
  */
 public record MovimientosEnLaNubeConsultados(
         Integer retencionDias, boolean consentimientoVigente, Instant datosDesde, long archivos, long tamanoBytes) {}

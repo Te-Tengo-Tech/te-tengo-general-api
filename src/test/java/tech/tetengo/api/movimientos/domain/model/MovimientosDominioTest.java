@@ -78,4 +78,48 @@ class MovimientosDominioTest {
         assertThat(repeticion.finalizar(T0.plusSeconds(200))).isFalse();
         assertThat(repeticion.duracionSegundos(T0.plus(Duration.ofHours(3)))).isEqualTo(130);
     }
+
+    @Test
+    void adr0011_elArchivoLigeroVaJuntoAlDeMovimientosYSeConfirmaUnaVez() {
+        UUID hogar = UUID.randomUUID();
+        UUID camara = UUID.randomUUID();
+        var archivo = new ArchivoDeMovimiento(hogar, camara, T0, T0.plusSeconds(300), 10, "a".repeat(64), 2400);
+        assertThat(archivo.claveLigera())
+                .isEqualTo("movimientos/%s/%s/2026/10/10/15/42.ttmov".formatted(hogar, camara));
+        assertThat(archivo.claves()).containsExactly(archivo.getClave(), archivo.claveLigera());
+        assertThat(archivo.ligeroDisponible()).isFalse();
+
+        // Nothing to confirm before asking for the upload.
+        assertThatThrownBy(() -> archivo.confirmarLigero(5, T0))
+                .isInstanceOfSatisfying(
+                        ErrorDeNegocio.class,
+                        e -> assertThat(e.error().codigo()).isEqualTo("ARCHIVO_NO_SUBIDO"));
+
+        archivo.prepararLigero(6, "b".repeat(64));
+        archivo.prepararLigero(7, "c".repeat(64));
+        assertThat(archivo.getLigeroTamanoBytes()).isEqualTo(7);
+        assertThat(archivo.getLigeroSha256()).isEqualTo("c".repeat(64));
+        assertThat(archivo.ligeroDisponible()).isFalse();
+
+        assertThat(archivo.confirmarLigero(5, T0)).isTrue();
+        assertThat(archivo.confirmarLigero(9, T0.plusSeconds(1))).isFalse();
+        assertThat(archivo.ligeroDisponible()).isTrue();
+        assertThat(archivo.getLigeroTamanoBytes()).isEqualTo(5);
+        assertThat(archivo.getLigeroSubidoEn()).isEqualTo(T0);
+        assertThatThrownBy(() -> archivo.prepararLigero(6, "b".repeat(64)))
+                .isInstanceOfSatisfying(
+                        ErrorDeNegocio.class,
+                        e -> assertThat(e.error().codigo()).isEqualTo("ARCHIVO_YA_SUBIDO"));
+
+        archivo.quitarLigero();
+        assertThat(archivo.ligeroDisponible()).isFalse();
+        assertThat(archivo.getLigeroSha256()).isNull();
+        assertThat(archivo.getLigeroTamanoBytes()).isNull();
+    }
+
+    @Test
+    void adr0011_laClaveLigeraCambiaSoloLaExtension() {
+        assertThat(ArchivoDeMovimiento.claveLigera("movimientos/h/c/2026/10/10/15/42.parquet"))
+                .isEqualTo("movimientos/h/c/2026/10/10/15/42.ttmov");
+    }
 }

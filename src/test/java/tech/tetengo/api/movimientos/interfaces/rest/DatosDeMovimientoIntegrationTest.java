@@ -308,7 +308,9 @@ class DatosDeMovimientoIntegrationTest extends AbstractIntegrationTest {
         tareas.eliminarRevocados();
 
         assertThat(movimientos.subidas()).isEmpty();
-        assertThat(movimientos.eliminadas()).containsExactly(clave(desde));
+        // The movement file and its light replay file (ADR 0011), even when the PC uploaded none.
+        assertThat(movimientos.eliminadas())
+                .containsExactly(clave(desde), clave(desde).replace(".parquet", ".ttmov"));
         String terminado = ver("/api/hogar/consentimiento-movimientos");
         assertThat(campo(terminado, "$.eliminacion.estado")).isEqualTo("TERMINADA");
         assertThat(campo(terminado, "$.eliminacion.archivos")).isEqualTo("1");

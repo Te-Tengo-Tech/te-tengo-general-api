@@ -20,7 +20,12 @@ interface ArchivoDeMovimientoJpaRepository extends JpaRepository<ArchivoDeMovimi
     @Query("select min(a.desde) from ArchivoDeMovimiento a where a.estado = :estado")
     Optional<Instant> primero(EstadoArchivo estado);
 
-    @Query("select count(a), coalesce(sum(a.tamanoBytes), 0) from ArchivoDeMovimiento a where a.estado = :estado")
+    /** Count and bytes, the confirmed light replay files included (ADR 0011). */
+    @Query("""
+            select count(a),
+                   coalesce(sum(a.tamanoBytes), 0L)
+                   + coalesce(sum(case when a.ligeroSubidoEn is not null then a.ligeroTamanoBytes else 0L end), 0L)
+            from ArchivoDeMovimiento a where a.estado = :estado""")
     List<Object[]> totales(EstadoArchivo estado);
 
     List<ArchivoDeMovimiento> findByHastaLessThanOrderByHastaAsc(Instant antesDe, Pageable pagina);
