@@ -17,5 +17,6 @@ record HogarResponse(
         EliminacionResponse eliminacion) {
 
     /** {@code estado}: {@code PROGRAMADA} or {@code TERMINADA}; {@code terminadaEn} null until then. */
-    record EliminacionResponse(String estado, long clips, Instant programadaEn, Instant terminadaEn) {}
+    record EliminacionResponse(
+            String estado, long clips, Instant programadaEn, Instant terminadaEn, long movimientos) {}
 }

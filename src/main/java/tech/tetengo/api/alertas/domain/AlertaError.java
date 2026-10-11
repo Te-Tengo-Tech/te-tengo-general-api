@@ -11,7 +11,12 @@ public enum AlertaError implements CodigoError {
     CLIP_ELIMINADO("CLIP_ELIMINADO", HttpStatus.GONE, "La grabación ya no está disponible."),
     ALERTA_CERRADA("ALERTA_CERRADA", HttpStatus.CONFLICT, "La alerta ya fue atendida o marcada como falsa alarma."),
     DISPOSITIVO_NO_ENCONTRADO(
-            "DISPOSITIVO_NO_ENCONTRADO", HttpStatus.NOT_FOUND, "Este dispositivo no está registrado en tu cuenta.");
+            "DISPOSITIVO_NO_ENCONTRADO", HttpStatus.NOT_FOUND, "Este dispositivo no está registrado en tu cuenta."),
+    SIN_CONSENTIMIENTO_DE_MOVIMIENTOS(
+            "SIN_CONSENTIMIENTO_DE_MOVIMIENTOS",
+            HttpStatus.CONFLICT,
+            "El adulto mayor no autorizó guardar sus movimientos."),
+    VALIDACION("VALIDACION", HttpStatus.BAD_REQUEST, "Revisa los datos ingresados.");
 
     private final String codigo;
     private final HttpStatus estado;

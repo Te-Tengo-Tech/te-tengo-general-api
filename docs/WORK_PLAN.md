@@ -31,6 +31,8 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 
 - [x] **T26 `camaras` — US-29 cameras and rooms.** Rooms of the household (one camera per room by rule, not schema, no bathrooms), webcams reported by the PC and assigned from the phone with a preview, pushed to the PC over its control channel, per-camera tokens, migration of room names (V25). — *cameras of linked PCs and the household's rooms (US-29)*
 
+- [x] **T27 `movimientos` — US-35 to US-39 movement data, US-40 report.** Separate consent, R2 uploads with pre-signed URLs and an index, cloud retention with a daily job, deletion on revocation, replay with its access log, clip landmarks, «Hubo una caída y no avisó» (ADR 0010). — *movement data with consent, retention and replay (US-35 to US-40)*
+
 ### Sprint 3
 - [x] **T01 `cuentas` — US-01 register.** `POST /api/cuentas`; BCrypt passwords; unique email (`409 CORREO_EN_USO`); `400 VALIDACION` with `campos`. — *register accounts (US-01)*
 - [x] **T02 `cuentas` — US-02 sessions.** — *sign in, refresh and sign out with JWTs and lockout (US-02)*

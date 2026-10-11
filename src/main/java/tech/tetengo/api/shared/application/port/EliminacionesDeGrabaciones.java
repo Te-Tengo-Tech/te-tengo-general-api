@@ -16,9 +16,19 @@ public interface EliminacionesDeGrabaciones {
     /** Recordings of the household in context that are not deleted yet. */
     long clipsGuardados();
 
+    /** Movement files of the household in context still stored in the cloud (US-37). */
+    default long movimientosGuardados() {
+        return 0;
+    }
+
     /**
      * A deletion scheduled at {@code programadaEn} (the revocation time). {@code terminadaEn} and
      * {@code clipsEliminados} (recordings it deleted) are null while it is pending.
      */
-    record Eliminacion(Instant programadaEn, Instant terminadaEn, Long clipsEliminados) {}
+    record Eliminacion(Instant programadaEn, Instant terminadaEn, Long clipsEliminados, Long movimientosEliminados) {
+
+        public Eliminacion(Instant programadaEn, Instant terminadaEn, Long clipsEliminados) {
+            this(programadaEn, terminadaEn, clipsEliminados, null);
+        }
+    }
 }

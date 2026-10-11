@@ -85,6 +85,13 @@ public class Alerta extends EntidadDelHogar {
     @Column(name = "clip_eliminado_en")
     private Instant clipEliminadoEn;
 
+    /**
+     * US-36: object key of the clip's body landmarks ({@code clips/<alerta>.landmarks.parquet}), once
+     * the agent asked to upload them; null when there are none or they were deleted (CA-36.3).
+     */
+    @Column(name = "puntos_clave", length = 300)
+    private String puntosClave;
+
     protected Alerta() {}
 
     private Alerta(TipoAlerta tipo, UUID camaraId, String habitacion, Instant ocurridaEn) {
@@ -212,6 +219,24 @@ public class Alerta extends EntidadDelHogar {
             clipEliminadoEn = instante;
             clipSubido = false;
         }
+    }
+
+    /** US-36: the clip's landmarks file; returns the key it replaces, if any. */
+    public String asignarPuntos(String clave) {
+        String anterior = puntosClave;
+        puntosClave = clave;
+        return anterior;
+    }
+
+    /** CA-36.3: the landmarks were deleted with their clip, or with the movements. Returns the key. */
+    public String quitarPuntos() {
+        String anterior = puntosClave;
+        puntosClave = null;
+        return anterior;
+    }
+
+    public String getPuntosClave() {
+        return puntosClave;
     }
 
     /** CA-18.2, CA-26.3: what the app can show about the clip. */

@@ -44,7 +44,8 @@ final class HogarMapper {
                 eliminacion.estado().name(),
                 eliminacion.clips(),
                 eliminacion.programadaEn(),
-                eliminacion.terminadaEn());
+                eliminacion.terminadaEn(),
+                eliminacion.movimientos());
     }
 
     static ConsentimientoResponse aRespuesta(ConsentimientoConsultado consultado) {

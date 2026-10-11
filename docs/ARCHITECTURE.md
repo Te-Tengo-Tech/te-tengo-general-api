@@ -26,6 +26,7 @@ Household agent ──RTSP(S): live video──► MediaMTX ──WebRTC (WHEP),
 | `alertas` | EP03 Detection and alerts | US-11 to US-21; alert list (US-25) and clips (US-18, US-26) | Done |
 | `monitoreo` | EP04 Monitoring and privacy | US-22 to US-24 | Done (live view through MediaMTX, ADR 0007) |
 | `historial` | EP05 History and summary | US-26 retention, US-27 | Done (retention period pending) |
+| `movimientos` | EP08 Movement data | US-35, US-37, US-39 (ADR 0010); the clip landmarks (US-36) and US-40's report live in `alertas` | Done, pending the change request and its legal review |
 
 Open decisions and missing credentials are in [BLOCKERS.md](BLOCKERS.md).
 
@@ -45,6 +46,8 @@ cuentas ◄── hogares ◄── camaras ◄── monitoreo
 | `monitoreo` | `camaras`, `cuentas`, `hogares` | Pauses and live view through `CamarasDelHogar`; names for the access log; listens to `ConsentimientoRevocado` to stop live view and to `PcDesvinculada` to stop the PC's cameras and send `desvincular` on its control channels. Declares the `AlertasDeCamara` SPI, which `alertas` implements (CA-23.2) |
 | `alertas` | `camaras`, `hogares`, `monitoreo`, `cuentas` | Camera name, capture state and detection reliability; members and alert order; listens to camera, consent and pause events to send their pushes |
 | `historial` | `alertas` | `ConteoDeAlertas` (weekly summary) and `RetencionDeClips` |
+| `movimientos` | `camaras`, `hogares`, `cuentas` | Cameras for uploads and replays; `ConsentimientoDelHogar` (the movement consent needs the monitoring one) and `ConsentimientoRevocado` (it ends with it); names for the replay log |
+| `alertas` | `movimientos` | `DatosDeMovimiento`: the consent for the clip landmarks (US-36), deleting movements with the recordings (CA-09.1); listens to `ConsentimientoDeMovimientosRevocado` (landmarks) and `MovimientosEliminados` (push) |
 
 Cross-module listeners are `@Async @TransactionalEventListener`: they run after the publishing transaction commits, Spring Modulith keeps each publication in `event_publication`, and the listener binds the event's household with `EjecutorEnHogar` (see [MULTITENANCY.md](MULTITENANCY.md)).
 
@@ -56,6 +59,7 @@ Every external service sits behind a port with a fake adapter, so tests never ca
 | `NotificadorCorreo` (`shared`) | Amazon SES or any SMTP relay | `tetengo.correo.proveedor`: logs by default, `ses` (Floci's SES with the `local` profile) or `smtp` (`spring.mail.*`); see [NOTIFICATIONS.md](NOTIFICATIONS.md) |
 | `NotificadorPush` (`shared`) | Amazon SNS (FCM, APNs), or Firebase Cloud Messaging directly | `tetengo.push.proveedor`: logs by default, `fcm`, `sns` (Floci's SNS with the `local` profile) or `simulador` (iOS simulator); see [NOTIFICATIONS.md](NOTIFICATIONS.md) and [ADR 0006](adr/0006-push-provider-switch.md) |
 | `ServicioDeTransmision` (`monitoreo`) | MediaMTX control API | `ServicioDeTransmisionMediaMtx` against `TT_VIVO_MEDIAMTX_API` (MediaMTX of `compose.yaml`); tests use `TransmisionDePrueba`, and `MediaMtxIntegrationTest` a MediaMTX container |
+| `AlmacenamientoDeMovimientos` (`movimientos`) | Cloudflare R2 (S3 API) or Amazon S3, pre-signed URLs | `AlmacenamientoDeMovimientosEnS3` when `tetengo.movimientos.s3.bucket` is set (by default the clips' bucket; Floci locally); otherwise in memory |
 | `AlmacenamientoDeClips` (`alertas`) | Amazon S3 or an S3-compatible store (Cloudflare R2), pre-signed URLs | `AlmacenamientoDeClipsEnS3` when `TT_CLIPS_BUCKET` is set (Floci with the `local` profile of `bootRun`); otherwise in memory, placeholder URLs |
 
 Tests replace them with recording fakes (the AWS adapters have their own tests against a Floci container, the SMTP one against a Mailpit container) (`CorreoDePrueba`, `PushDePrueba`, `AlmacenamientoDePrueba`) and move time with `RelojDePrueba`.
@@ -73,6 +77,8 @@ All are idempotent, find their candidates with a native query across households 
 | `FinalizarPausasVencidas` | `monitoreo` | US-22 |
 | `FinalizarSesionesDeVistaEnVivo` | `monitoreo` | US-23, US-24: live view sessions nobody closed (30 s without reads, 10 min at most) |
 | `AplicarRetencionDeGrabaciones` | `historial` | US-26, only when the retention period is set |
+| `TareasDeMovimientos.aplicarRetencion` | `movimientos` | CA-37.4: daily, deletes movement files older than the household's retention (all without one) |
+| `TareasDeMovimientos.eliminarRevocados` | `movimientos` | CA-35.4: every minute, deletes the cloud movements after a revocation and sends `MOVIMIENTOS_ELIMINADOS` |
 
 ## Quality gates
 - `ModularidadTest` (Spring Modulith) and `ArquitecturaTest` (ArchUnit).
