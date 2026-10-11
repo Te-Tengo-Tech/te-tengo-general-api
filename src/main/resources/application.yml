@@ -140,6 +140,28 @@ tetengo:
       access-key: ${TT_CLIPS_ACCESS_KEY:}
       secret-key: ${TT_CLIPS_SECRET_KEY:}
       crear-bucket: false
+  movimientos:
+    # Movement data (US-35 to US-39; ADR 0010). Implementation choices: the text version the consent
+    # records, short-lived URLs, files of at most 10 minutes (the PC writes one per 5 minutes) and
+    # 50 MB, replays logged for at most 1 hour and asked 1 hour at a time.
+    version-texto-vigente: ${TT_MOVIMIENTOS_VERSION_TEXTO:1}
+    vigencia-url-subida: 10m
+    vigencia-url-lectura: 10m
+    duracion-maxima-archivo: 10m
+    tamano-maximo: 50MB
+    duracion-maxima-repeticion: 1h
+    rango-maximo-consulta: 1h
+    # Cloudflare R2 (S3 API) or Amazon S3; by default the clips' bucket and credentials. The objects are
+    # movimientos/<hogar>/<camara>/YYYY/MM/DD/HH/mm.parquet; the clips' landmarks go next to the clips
+    # (clips/<alerta>.landmarks.parquet). Without a bucket, an in-memory fake.
+    s3:
+      bucket: ${TT_MOVIMIENTOS_BUCKET:${TT_CLIPS_BUCKET:}}
+      region: ${TT_MOVIMIENTOS_REGION:${TT_CLIPS_REGION:}}
+      endpoint: ${TT_MOVIMIENTOS_ENDPOINT:${TT_CLIPS_ENDPOINT:}}
+      path-style: ${TT_MOVIMIENTOS_PATH_STYLE:${TT_CLIPS_PATH_STYLE:false}}
+      access-key: ${TT_MOVIMIENTOS_ACCESS_KEY:${TT_CLIPS_ACCESS_KEY:}}
+      secret-key: ${TT_MOVIMIENTOS_SECRET_KEY:${TT_CLIPS_SECRET_KEY:}}
+      crear-bucket: false
   vista-en-vivo:
     # Live view through MediaMTX (docs/API_CONTRACT.md §4, ADR 0007). The agent publishes to
     # url-publicacion ({camaraId} is replaced; rtsps:// in production), the app plays LL-HLS from url-hls

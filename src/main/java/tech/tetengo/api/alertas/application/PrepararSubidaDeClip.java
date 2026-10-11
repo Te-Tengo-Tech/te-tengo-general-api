@@ -55,6 +55,11 @@ public class PrepararSubidaDeClip {
         String anterior = alerta.asignarClip(clave);
         if (anterior != null && !anterior.equals(clave)) {
             almacenamiento.eliminar(anterior);
+            // US-36: the landmarks belonged to the replaced clip.
+            String puntos = alerta.quitarPuntos();
+            if (puntos != null) {
+                almacenamiento.eliminar(puntos);
+            }
         }
         Instant expira = reloj.instant().plus(propiedades.vigenciaUrlSubida());
         var subida =

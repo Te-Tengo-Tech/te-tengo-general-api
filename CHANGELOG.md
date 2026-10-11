@@ -21,6 +21,16 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 - `GET /api/accesos-vista-en-vivo` also returns `camaraId` and `vistaPrevia`.
 - `Camara.ambienteId` and `Camara.nombreDispositivo`; `PATCH /api/camaras/{id}` also takes `{ambienteId}`. Migration `V25` creates the rooms from the cameras' room names (equal names share one) and adds `camaras.ambiente_id`, `dispositivo_id` and `nombre_dispositivo`; `nombre_habitacion` stays and holds the room's name.
 
+- Movement data (US-35 to US-39; ADR 0010), new module `movimientos`:
+  - The separate, optional consent to store movements (US-35): `GET`/`POST`/`DELETE /api/hogar/consentimiento-movimientos`, with who gave it, who registered it, when and the text version (CA-35.2); it needs the monitoring consent; revoking it deletes the cloud movements and sends push `MOVIMIENTOS_ELIMINADOS` (CA-35.4).
+  - Cloud retention (US-37): `GET`/`PUT /api/hogar/movimientos-en-la-nube`, off by default, 7, 30, 90 or 365 days; a daily job deletes older files (CA-37.4).
+  - Uploads straight from the PC to object storage (R2, S3 API) with pre-signed URLs: `POST /api/agente/movimientos` and `/{archivoId}/confirmacion`, keys `movimientos/<hogar>/<camara>/YYYY/MM/DD/HH/mm.parquet`, an index row per file and daily counts per camera; `GET /api/agente/movimientos/estado` tells the PC whether it may store.
+  - Replay (US-39): `POST /api/camaras/{id}/repeticiones`, `GET /api/repeticiones/{id}/archivos`, `DELETE /api/repeticiones/{id}` and the access log `GET /api/accesos-repeticiones` (CA-39.3).
+- The clip's body landmarks (US-36): `POST /api/agente/eventos/{eventoId}/clip/puntos` (`clips/<alerta>.landmarks.parquet`), and `GET /api/alertas/{id}/clip` returns `puntos` or `puntosNoDisponibles`; they are deleted with their clip and with the movement consent.
+- «Hubo una caída y no avisó» (CA-40.4): `POST /api/reportes-de-caida`, stored as a possible false negative and logged for the team.
+- `GET /api/hogar` `eliminacion.movimientos`: a monitoring consent revocation also deletes the cloud movements (and ends the movement consent) within the deletion of recordings.
+- Migration `V26`: `consentimientos_de_movimientos`, `configuraciones_de_movimientos`, `archivos_de_movimiento`, `resumenes_de_movimiento`, `eliminaciones_de_movimientos`, `repeticiones_de_movimiento`, `reportes_de_caida_sin_alerta`, `alertas.puntos_clave`, `eliminaciones_de_grabaciones.movimientos_eliminados`.
+
 ### Changed
 - `PATCH /api/camaras/{id}` with `{nombreHabitacion}` now works on rooms: it uses the room of that name, renames the camera's own room when it is alone in it, or creates one; it answers `409 AMBIENTE_OCUPADO` when the room has another camera.
 - Agent endpoints of one camera answer `403 TOKEN_DE_CAMARA_REQUERIDO` instead of a `500` when called with a token without a camera.

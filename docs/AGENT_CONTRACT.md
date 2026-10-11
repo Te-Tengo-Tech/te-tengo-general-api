@@ -18,6 +18,10 @@ Every agent token is checked on every request: the tokens of a PC that left the 
 | `POST /api/agente/eventos` | Detected event (body below); idempotent by `eventoId` | US-11 to US-21 |
 | `POST /api/agente/eventos/{eventoId}/clip` | Returns a pre-signed S3 PUT URL to upload the 6 s + 6 s clip | US-18 |
 | `GET /api/agente/configuracion` | Current classification thresholds and agent version, so agents can update themselves | — |
+| `POST /api/agente/eventos/{eventoId}/clip/puntos` | Pre-signed PUT URL for the body landmarks of the event's clip | US-36 |
+| `GET /api/agente/movimientos/estado` | Whether movements may be stored, on the PC and in the cloud (camera or PC token) | US-35, US-37 |
+| `POST /api/agente/movimientos` | Pre-signed PUT URL for a 5-minute movement file of the camera | US-37 |
+| `POST /api/agente/movimientos/{archivoId}/confirmacion` | The file was uploaded: it enters the index | US-37 |
 | `POST /api/agente/vinculacion` | PC link: asks for a code (RFC 8628 device authorization; no token) | US-28 |
 | `POST /api/agente/token` | PC link: polls for the tokens, and renews them (RFC 6749 token endpoint; no token) | US-28 |
 | `POST /api/agente/token/revocacion` | PC link: revokes the refresh token, which unlinks the PC (RFC 7009; no token) | US-31 |
@@ -214,3 +218,24 @@ For `enUso: false` the room fields and `token` are null. Start a worker for each
 - `GET /api/agente/ambientes` → `200 [Ambiente]` (API contract §9): the rooms and the camera in use in each, on this PC or another (`pcNombre`).
 - **Installer's fallback, «Elegir aquí»** (CA-29.8; the owner's app is the normal way), with the same rules as the app (CA-29.2 to CA-29.4) and a preview that only shows on the PC; the assignment appears in the app. When the app and the PC both change a camera, the last change wins, and the activity log records where each came from: `PUT /api/agente/pc/camaras` with `{dispositivoId, nombreDispositivo, ambienteId | nombreAmbiente}` assigns a webcam from the PC (an upsert by `dispositivoId`; → `200 CamaraDeLaPc` with its token), and `DELETE /api/agente/pc/camaras/{camaraId}` stops using one. Errors: `409 AMBIENTE_OCUPADO {ambiente, camara: {id, pcId, pcNombre, nombreDispositivo}}` (CA-29.3: «Ya hay una cámara en el ambiente Sala (PC Sala-Rosa). Por ahora, cada ambiente usa una sola cámara.»), `422 AMBIENTE_NO_PERMITIDO` («Por privacidad, Te Tengo no admite cámaras en el baño.»), `422 AMBIENTE_NOMBRE_VACIO` (CA-29.2), `422 AMBIENTE_NOMBRE_MUY_LARGO`, `404 AMBIENTE_NO_ENCONTRADO`, `404 CAMARA_NO_ENCONTRADA` (a camera of another PC), `400 VALIDACION`.
 - **A disconnected camera stays in its room** (CA-29.5): report it with `webcamConectada: false` on its heartbeat, as today, and in the next inventory; the room is not given to another camera and the app warns as in CA-07.2.
+
+## Movement data (US-35 to US-38)
+Body landmarks only, never images (ADR 0010). **Nothing is stored, on the PC or in the cloud, without the consent to store movements** (CA-35.3); detection and alerts work the same without it.
+
+**May I store?** — `GET /api/agente/movimientos/estado` (camera or PC token) → `200 {consentimientoVigente, guardarEnLaPc, guardarEnLaNube, retencionDias | null, versionTextoVigente}`.
+- `guardarEnLaPc` is the consent: the local storage options (US-38) are disabled without it, with the reason «Requiere el permiso de Rosa para guardar movimientos. Se registra en la app Te Tengo.».
+- `guardarEnLaNube`: the consent and a cloud retention chosen by the owner (`retencionDias` 7, 30, 90 or 365). Ask at startup, every 5 minutes before an upload, and after any `409` of the endpoints below. When the consent turns off, stop storing at once and ask the person at the PC whether to delete the local movements too (CA-35.4).
+
+**Upload a movement file** (CA-37.2), one per camera every 5 minutes of capture: Parquet with zstd, the columns of the PC's own format (33 quantized MediaPipe points, time, θ, P, v, phase). In the agent's queue it goes in the lowest-priority lane, after urgent events, other events and clips; files made without internet wait on disk and are uploaded when it returns (CA-37.3).
+1. `POST /api/agente/movimientos` (camera token)
+```json
+{ "desde": "2026-10-10T15:40:00Z", "hasta": "2026-10-10T15:45:00Z",
+  "tamanoBytes": 412345, "sha256": "<64 hex>", "fotogramas": 2400 }
+```
+   → `201 {archivoId, urlSubida, cabeceras: {nombre: valor}, expiraEn}` (10 minutes). The object key is `movimientos/<hogar>/<camara>/YYYY/MM/DD/HH/mm.parquet` from `desde` in UTC: one file per camera and start.
+2. `PUT urlSubida` with exactly those headers (`Content-Type: application/vnd.apache.parquet`) and the file. The bytes go straight to the storage, never through the API.
+3. `POST /api/agente/movimientos/{archivoId}/confirmacion` → `200 {archivoId, estado: "DISPONIBLE", tamanoBytes}`: the file enters the index. `409 ARCHIVO_NO_SUBIDO`: the storage does not have it; upload it again.
+- Errors of step 1: `409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` or `409 MOVIMIENTOS_EN_LA_NUBE_DESACTIVADOS` (stop uploading and check the state), `422 MOVIMIENTOS_FUERA_DEL_PLAZO` (already older than the retention: drop it from the queue), `409 ARCHIVO_YA_SUBIDO {archivoId}` (it is already in the index: drop it), `400 VALIDACION` (`hasta` after `desde`, at most 10 minutes, `desde` not ahead of the server's clock by more than 1 minute, `tamanoBytes` up to 50 MB, `sha256` 64 hex characters). Asking again for a file still pending returns a new URL for the same `archivoId`.
+- If the consent is revoked between the upload and the confirmation, the confirmation answers `409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` and the API deletes the object.
+
+**Landmarks of a clip** (US-36): after uploading the clip of an event, `POST /api/agente/eventos/{eventoId}/clip/puntos` (camera token, no body) → `201 {urlSubida, cabeceras, expiraEn}`; `PUT` the landmarks of the clip's 12 seconds as Parquet with those headers. The app draws them over the clip, synchronized by time. `409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` without the consent (do not upload them); `404 EVENTO_NO_ENCONTRADO` like the clip. They are deleted with their clip (CA-36.3).

@@ -58,7 +58,8 @@ public class ConsultarHogar {
                             EliminacionConsultada.de(
                                     consentimiento.map(c -> c.consentimiento().getRevocadoEn()),
                                     eliminaciones.ultima(),
-                                    eliminaciones::clipsGuardados));
+                                    eliminaciones::clipsGuardados,
+                                    eliminaciones::movimientosGuardados));
                 })
                 .orElseThrow(() -> new ErrorDeNegocio(HogarError.SIN_MEMBRESIA));
     }

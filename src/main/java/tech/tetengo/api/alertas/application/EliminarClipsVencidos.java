@@ -41,6 +41,10 @@ public class EliminarClipsVencidos implements RetencionDeClips {
                     int cantidad = 0;
                     for (Alerta alerta : alertas.conClipAnteriorA(limite)) {
                         almacenamiento.eliminar(alerta.getClipClave());
+                        String puntos = alerta.quitarPuntos();
+                        if (puntos != null) {
+                            almacenamiento.eliminar(puntos); // CA-36.3
+                        }
                         alerta.marcarClipEliminado(ahora);
                         cantidad++;
                     }

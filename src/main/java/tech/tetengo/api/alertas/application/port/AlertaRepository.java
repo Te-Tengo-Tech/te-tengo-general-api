@@ -34,6 +34,9 @@ public interface AlertaRepository {
     /** Alerts of the household in context whose clip has not been deleted. */
     List<Alerta> conClip();
 
+    /** US-36: alerts of the household in context whose clip has a landmarks file. */
+    List<Alerta> conPuntos();
+
     /** How many alerts of the household in context have a clip that has not been deleted. */
     long contarConClip();
 

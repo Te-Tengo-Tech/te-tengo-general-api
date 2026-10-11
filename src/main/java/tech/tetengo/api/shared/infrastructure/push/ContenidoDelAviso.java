@@ -138,6 +138,14 @@ public record ContenidoDelAviso(String titulo, String cuerpo, String etiqueta, M
                             "Se borraron las grabaciones al revocar el consentimiento.",
                             null
                         };
+                    case MOVIMIENTOS_ELIMINADOS ->
+                        new String[] {
+                            "Se borraron los movimientos",
+                            nombre == null
+                                    ? "Listo. Ya no guardamos los movimientos."
+                                    : "Listo. Ya no guardamos los movimientos de " + nombre + ".",
+                            null
+                        };
                     case PC_DESVINCULADA ->
                         new String[] {
                             "Una PC se desvinculó de la casa",

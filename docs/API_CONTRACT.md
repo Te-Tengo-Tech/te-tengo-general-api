@@ -51,6 +51,7 @@
 | `DELETE /api/hogar/consentimiento` | owner | → `202 {eliminacionProgramada: true, clips}`. Stops capture and schedules deletion of every recording (CA-09.1); `clips`: how many recordings it deletes, counted at the revocation. A push `DATOS_ELIMINADOS` is sent when done (CA-09.3), and `GET /api/hogar` `eliminacion` tells the progress. An older backend does not send `clips` | `404 SIN_CONSENTIMIENTO`: there is no current consent to revoke |
 
 `adultoMayor = {nombre, edad, direccion, convivencia, telefono | null}`
+- `eliminacion.movimientos` (US-37): movement files to delete or deleted with the recordings; a monitoring consent revocation also deletes the cloud movements and ends the movement consent (§11). An older backend does not send it.
 - `edad`: whole years, required, from 50 to 120. The prototype's profile form asks for «Edad» and rejects other values with «Escribe una edad válida, en años.»; the app shows «Rosa Huamán, 78 años». Households registered before this field existed answer `edad: null` until the owner saves the profile again.
 - `telefono`: optional; the number that «Llamar a Rosa · 987 654 321» dials from the alert (prototype alert screen). Digits and spaces with an optional leading `+`, 6 to 20 characters **[implementation choice]**; a blank value is stored as null.
 - `convivencia` values, from the prototype's profile screen:
@@ -135,7 +136,8 @@ Alerta = {
 | `GET /api/alertas/{id}` | member | → `200 Alerta`. Active alerts must be visible when the app opens, even if the push failed (CA-16.4) | `404 ALERTA_NO_ENCONTRADA` |
 | `POST /api/alertas/{id}/atencion` | member | → `200 Alerta` with `ATENDIDA`, `atendidaPor` and `atendidaEn`. Pushes `ALERTA_ATENDIDA` to the other members (CA-19.1, CA-19.3) | `409 ALERTA_CERRADA` |
 | `POST /api/alertas/{id}/falsa-alarma` | member | → `200 Alerta` with `FALSA_ALARMA`; excluded from the fall count (CA-19.2) | `409 ALERTA_CERRADA` |
-| `GET /api/alertas/{id}/clip` | member | Query `descarga=true` for the download disposition → `200 {url, expiraEn}`, a short-lived pre-signed URL of the clip covering 6 s before and 6 s after the event (CA-18.1, CA-26.1, CA-26.2) | `404 CLIP_NO_DISPONIBLE` (CA-18.2) · `410 CLIP_ELIMINADO` (CA-26.3) |
+| `GET /api/alertas/{id}/clip` | member | Query `descarga=true` for the download disposition → `200 {url, expiraEn, puntos: {url, expiraEn} \| null, puntosNoDisponibles}`, a short-lived pre-signed URL of the clip covering 6 s before and 6 s after the event (CA-18.1, CA-26.1, CA-26.2). `puntos` (US-36): the clip's body landmarks, a Parquet file to draw the skeleton over the clip, synchronized by time (CA-36.1); when null, `puntosNoDisponibles` is `SIN_CONSENTIMIENTO` (the consent to store movements is not in force) or `SIN_ARCHIVO` (this clip has none) and the switch shows that reason while the clip plays normally (CA-36.2). An older backend sends neither field | `404 CLIP_NO_DISPONIBLE` (CA-18.2) · `410 CLIP_ELIMINADO` (CA-26.3) |
+| `POST /api/reportes-de-caida` | member | `{camaraId \| null, habitacion \| null, ocurridaAproximadamenteEn, nota \| null}` → `201 {id, recibidoEn, movimientosDisponibles}`: «¿Hubo una caída y no avisó?» (CA-40.4). Stored as a possible false negative for the team's evaluation; it creates no alert and notifies nobody. `camaraId` (its room is recorded) or `habitacion`, or neither for «No sé»; `nota` up to 300 characters. `movimientosDisponibles`: movements of that time may be in the cloud (consent and retention on): «Revisaremos los movimientos de ese momento»; otherwise «revisaremos lo que nos cuentes» | `400 VALIDACION` with `campos.ocurridaAproximadamenteEn` («Elige una hora que ya pasó.», up to 5 min ahead is tolerated) or `campos.nota` · `404 CAMARA_NO_ENCONTRADA` |
 
 **Escalation (backend job):**
 - If an alert is still `ACTIVA` after `esperaMinutos`, the secondary contact receives push `ALERTA_ESCALADA` (CA-20.1).
@@ -179,6 +181,7 @@ Data payload: `{tipo, alertaId?, camaraId?, habitacion?, ocurridaEn}`. `tipo` is
 | `DETECCION_NO_CONFIABLE` | Over 5 min with only discarded frames; the app shows what to check: light and framing | CA-15.3 |
 | `PAUSA_FINALIZADA` | Automatic resume | CA-22.3 |
 | `DATOS_ELIMINADOS` | Recordings deleted after revocation | CA-09.3 |
+| `MOVIMIENTOS_ELIMINADOS` | The cloud movements were deleted after the consent to store them was revoked (§11) | CA-35.4 |
 | `PC_DESVINCULADA` | A PC left the household without the app: from the PC itself, for security (a stolen refresh token) or after 90 days without connecting. Not sent when the owner removes it from the app. The app shows «Ver PCs y cámaras» (§9) | CA-31.3 |
 
 ## 8. Household agent endpoints
@@ -244,4 +247,37 @@ Pc = {
 - `400 VALIDACION` · `403 SOLO_TITULAR`.
 
 **Status and notices.** A PC with no heartbeat for 90 s shows as `DESCONECTADA` with its cameras (CA-30.3); each camera still sends `CAMARA_DESCONECTADA` (§7), and the app shows what to check (the PC on, internet, Te Tengo Captura open). A PC that went 90 days without connecting is removed and must be linked again (CA-28.7). Push `PC_DESVINCULADA` (§7) tells the family when a PC left without the app (CA-31.3).
+
+## 11. Movement data (`movimientos`) — US-35 to US-39
+Change request «PCs, cámaras y datos de movimiento» (pending approval; ADR 0010 of the backend). With a **separate, optional consent**, the PC stores the older adult's **movements**: the body landmarks it computes, never images or video. The alerts work the same without it (CA-35.1).
+
+`ConsentimientoDeMovimientos = {vigente, versionTextoVigente, constancia: {otorgadoEn, otorgadoPor, representante, registradoPor: {id, nombre}, versionTexto, revocadoEn | null} | null, eliminacion: {estado: "PROGRAMADA" | "TERMINADA", archivos, programadaEn, terminadaEn | null} | null}`
+- `constancia`: the latest consent, in force or revoked (CA-35.2: who gave it, who registered it, when, the text version); null if none was ever registered.
+- `versionTextoVigente`: the version of the consent text the app must show (`"1"` for now); registering another version is refused.
+- `eliminacion`: the deletion of the cloud movements after the latest revocation; the app polls it like the recordings' (§2).
+
+| Method and path | Auth | Body → response | Errors |
+|---|---|---|---|
+| `GET /api/hogar/consentimiento-movimientos` | member | → `200 ConsentimientoDeMovimientos` (always; `vigente: false` and `constancia: null` before the first one) | — |
+| `POST /api/hogar/consentimiento-movimientos` | owner | `{otorgadoPor, representante: boolean, aceptado: true, versionTexto}` → `201 ConsentimientoDeMovimientos`. `otorgadoPor`: the older adult's name, or the representative's (`representante: true`, «Su representante»), up to 120 characters. Movements are stored only from now on (CA-35.2). Registering again replaces the one in force | `409 SIN_CONSENTIMIENTO`: the monitoring consent comes first (CA-35.1) · `422 CONSENTIMIENTO_NO_ACEPTADO` · `422 VERSION_DE_TEXTO_INVALIDA` · `400 VALIDACION` |
+| `DELETE /api/hogar/consentimiento-movimientos` | owner | → `202 {eliminacionProgramada: true, archivos}`: nothing more is stored; every cloud movement, and the clips' landmarks, are deleted and push `MOVIMIENTOS_ELIMINADOS` is sent when done (CA-35.4); the cloud retention goes back to off. The monitoring consent and the alerts stay. The PC asks whether to delete its local movements too | `404 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` |
+| `GET /api/hogar/movimientos-en-la-nube` | member | → `200 {retencionDias: 7 \| 30 \| 90 \| 365 \| null, opciones: [7, 30, 90, 365], maximoRecomendadoDias: 365, mbPorCamaraPorDia: {minimo: 40, maximo: 80}, consentimientoVigente, datosDesde \| null, archivos, tamanoBytes}` (CA-37.1). `null`: not stored in the cloud (the default). `mbPorCamaraPorDia` is the change request's estimate | — |
+| `PUT /api/hogar/movimientos-en-la-nube` | owner | `{retencionDias}` → `200` (same body). A shorter period deletes the files older than it at the next daily run (CA-37.4): before confirming, the app says «Borraremos los movimientos anteriores al {hoy − retencionDias}». `null` stops storing in the cloud and deletes them all at the next run | `422 RETENCION_INVALIDA` · `409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` (a period needs the consent) |
+| `POST /api/camaras/{id}/repeticiones` | member | `{desde, hasta}` (at most 1 h; `desde` not in the future) → `201 Repeticion` (CA-39.1). Logged in the access log (CA-39.3) | `409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` (CA-39.4) · `404 CAMARA_NO_ENCONTRADA` · `400 VALIDACION` with `campos.desde` or `campos.hasta` |
+| `GET /api/repeticiones/{id}/archivos` | member | Query `desde`, `hasta` (at most 1 h) → `200 Repeticion` with the files of that range: the member moved along the timeline; the same log entry, whose moment grows. Only the replay's own member, while it is open (at most 1 h) | `404 REPETICION_NO_ENCONTRADA` · `409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` · `400 VALIDACION` |
+| `DELETE /api/repeticiones/{id}` | member | → `204`: the member closed the replay; its duration is recorded (CA-39.3; the app shows the toast «Acceso registrado»). Closing someone else's or a closed one changes nothing | — |
+| `GET /api/accesos-repeticiones` | member | → `200 [{id, usuario: {id, nombre}, camaraId, habitacion, momentoDesde, momentoHasta, inicio, duracionSegundos}]`, newest first. The app shows them with `GET /api/accesos-vista-en-vivo` in one log, with chips «Todo · Vista en vivo · Repeticiones» | — |
+
+```
+Repeticion = {
+  id, camaraId, habitacion, desde, hasta,
+  disponiblesDesde | null,   // start of the oldest movement stored: «Hay movimientos desde el 10/09/2026» (CA-39.4)
+  guardadoEnLaNube: boolean, // false: the owner chose no cloud retention («No guardamos movimientos en la nube»)
+  archivos: [{id, desde, hasta, tamanoBytes, fotogramas, sha256, url}],   // oldest first; url: pre-signed GET, until urlsExpiranEn
+  urlsExpiranEn
+}
+```
+- **Files:** Parquet compressed with zstd, one per camera and 5 minutes, written by Te Tengo Captura (its contract defines the columns). Check `sha256` before drawing. A moment outside the retention returns `archivos: []` with `disponiblesDesde` (CA-39.4).
+- **Gaps** (CA-39.5): frames exist only while a person is in the image; time between frames inside a file is «Sin persona en la imagen», time without files is «PC apagada» or «En pausa» (the pause of the camera is known from the alerts and the camera; the API does not mark it). The timeline's events come from `GET /api/alertas?desde=&hasta=`, filtered by `camaraId` in the app.
+- **Without internet** the app says «Sin internet. La repetición necesita conexión.»; a revoked consent while watching makes the next request answer `409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` («Rosa ya no autoriza guardar sus movimientos.»).
 
