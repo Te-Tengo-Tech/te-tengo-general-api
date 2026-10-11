@@ -130,8 +130,14 @@ public class CamarasDetectadas {
     /** «Dejar de usar» from the app: the webcam stays detected, «sin usar», and stops capturing. */
     @Transactional
     public void dejarDeUsar(UUID camaraId) {
+        dejarDeUsar(camaraId, null);
+    }
+
+    /** The same, recording the owner for the activity log (US-33). */
+    @Transactional
+    public void dejarDeUsar(UUID camaraId, UUID titularId) {
         Camara camara = detectada(camaraId);
-        if (camara.dejarDeUsar(reloj.instant())) {
+        if (camara.dejarDeUsar(titularId, reloj.instant())) {
             camaras.guardar(camara);
         }
     }

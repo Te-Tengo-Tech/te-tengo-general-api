@@ -109,7 +109,11 @@ class VinculacionDelAgenteController {
     @SecurityRequirements
     @PostMapping(path = "/token/revocacion", consumes = FORMULARIO, version = ApiVersioning.V1)
     ResponseEntity<Void> revocar(@RequestParam MultiValueMap<String, String> formulario) {
-        desvincular.revocandoToken(formulario.getFirst("client_id"), formulario.getFirst("token"), propiedades);
+        desvincular.revocandoToken(
+                formulario.getFirst("client_id"),
+                formulario.getFirst("token"),
+                propiedades,
+                "true".equalsIgnoreCase(formulario.getFirst("datos_locales_borrados")));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).build();
     }
 

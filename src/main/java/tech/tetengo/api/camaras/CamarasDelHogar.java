@@ -40,6 +40,15 @@ public interface CamarasDelHogar {
     /** Ends the camera's pause if it is over (CA-22.3); empty if it did not end now. */
     Optional<EstadoDeCamara> finalizarPausaSiVencio(UUID camaraId, Instant ahora);
 
+    /**
+     * The name of a PC of the household in context, linked or not (US-33: the activity log names the
+     * PC as it was called); empty for an unknown PC.
+     */
+    Optional<String> nombreDePc(UUID pcId);
+
+    /** The PC of a camera of the household in context, also retired; empty without one. */
+    Optional<UUID> pcDeCamara(UUID camaraId);
+
     /** Paused cameras whose pause is over, across households: only for the resume job. */
     List<CamaraEnHogar> conPausaVencida(Instant ahora);
 

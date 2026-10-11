@@ -3,8 +3,10 @@ package tech.tetengo.api.camaras.application;
 import java.time.Clock;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tech.tetengo.api.camaras.DatosDeLaPcBorrados;
 import tech.tetengo.api.camaras.application.port.PcRepository;
 import tech.tetengo.api.camaras.application.port.TokenDeRenovacionRepository;
 import tech.tetengo.api.camaras.domain.CamaraError;
@@ -32,6 +34,7 @@ public class DesvincularPc {
     private final TokenDeRenovacionRepository tokens;
     private final DesvinculacionDePcs desvinculacion;
     private final EjecutorEnHogar enHogar;
+    private final ApplicationEventPublisher eventos;
     private final Clock reloj;
 
     public DesvincularPc(
@@ -39,11 +42,13 @@ public class DesvincularPc {
             TokenDeRenovacionRepository tokens,
             DesvinculacionDePcs desvinculacion,
             EjecutorEnHogar enHogar,
+            ApplicationEventPublisher eventos,
             Clock reloj) {
         this.pcs = pcs;
         this.tokens = tokens;
         this.desvinculacion = desvinculacion;
         this.enHogar = enHogar;
+        this.eventos = eventos;
         this.reloj = reloj;
     }
 
@@ -57,8 +62,20 @@ public class DesvincularPc {
     /** CA-31.3: «Desvincular esta PC» on the PC, with its access token. */
     @Transactional
     public void desdeLaPc(UUID pcId) {
+        desdeLaPc(pcId, false);
+    }
+
+    /**
+     * The same; with {@code datosBorrados} the PC also deletes its data folder (CA-31.6), which the
+     * activity log records.
+     */
+    @Transactional
+    public void desdeLaPc(UUID pcId, boolean datosBorrados) {
         var pc = pcs.buscarParaActualizar(pcId).orElseThrow(() -> new ErrorDeNegocio(CamaraError.PC_NO_ENCONTRADA));
-        desvinculacion.desvincular(pc, MotivoDesvinculacion.DESDE_LA_PC, null, reloj.instant());
+        var ahora = reloj.instant();
+        if (desvinculacion.desvincular(pc, MotivoDesvinculacion.DESDE_LA_PC, null, ahora) && datosBorrados) {
+            eventos.publishEvent(new DatosDeLaPcBorrados(pc.getHogarId(), pc.getId(), pc.getNombre(), ahora));
+        }
     }
 
     /**
@@ -66,6 +83,12 @@ public class DesvincularPc {
      * revoked tokens change nothing, and the answer is the same (RFC 7009 §2.2).
      */
     public void revocandoToken(String cliente, String token, PropiedadesDeVinculacion propiedades) {
+        revocandoToken(cliente, token, propiedades, false);
+    }
+
+    /** The same; {@code datosBorrados}: CA-31.6. */
+    public void revocandoToken(
+            String cliente, String token, PropiedadesDeVinculacion propiedades, boolean datosBorrados) {
         SolicitarVinculacion.exigirCliente(cliente, propiedades);
         if (token == null || token.isBlank()) {
             throw new ErrorOAuth(ErrorOAuth.SOLICITUD_INVALIDA, "Falta token.");
@@ -76,8 +99,11 @@ public class DesvincularPc {
         leido.ifPresent(t -> enHogar.ejecutar(t.getHogarId(), () -> {
             var ahora = reloj.instant();
             tokens.revocarTodosDe(t.getPcId(), ahora);
-            pcs.buscarParaActualizar(t.getPcId())
-                    .ifPresent(pc -> desvinculacion.desvincular(pc, MotivoDesvinculacion.DESDE_LA_PC, null, ahora));
+            pcs.buscarParaActualizar(t.getPcId()).ifPresent(pc -> {
+                if (desvinculacion.desvincular(pc, MotivoDesvinculacion.DESDE_LA_PC, null, ahora) && datosBorrados) {
+                    eventos.publishEvent(new DatosDeLaPcBorrados(pc.getHogarId(), pc.getId(), pc.getNombre(), ahora));
+                }
+            });
         }));
     }
 }

@@ -64,15 +64,21 @@ public class Consentimiento extends EntidadDelHogar {
             throw new ErrorDeNegocio(HogarError.CONSENTIMIENTO_NO_ACEPTADO);
         }
         Consentimiento consentimiento = new Consentimiento(otorgadoPor, registradoPor, ahora);
-        consentimiento.registrarEvento(new ConsentimientoOtorgado(hogarId, ahora));
+        consentimiento.registrarEvento(
+                new ConsentimientoOtorgado(hogarId, ahora, registradoPor, consentimiento.otorgadoPor));
         return consentimiento;
     }
 
     /** US-09 / CA-09.1: the owner revokes it; capture stops and the recordings are deleted. */
     public void revocar(Instant ahora) {
+        revocar(null, ahora);
+    }
+
+    /** The same, recording who revoked it for the activity log (US-33). */
+    public void revocar(UUID usuarioId, Instant ahora) {
         if (vigente()) {
             revocadoEn = ahora;
-            registrarEvento(new ConsentimientoRevocado(getHogarId(), ahora));
+            registrarEvento(new ConsentimientoRevocado(getHogarId(), ahora, usuarioId));
         }
     }
 

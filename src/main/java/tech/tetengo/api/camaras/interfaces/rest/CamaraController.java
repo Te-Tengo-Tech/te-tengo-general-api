@@ -56,7 +56,7 @@ class CamaraController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void dejarDeUsar(@PathVariable UUID id) {
         UsuarioActual.exigirTitular();
-        detectadas.dejarDeUsar(id);
+        detectadas.dejarDeUsar(id, UsuarioActual.id());
     }
 
     @Operation(

@@ -29,6 +29,11 @@ class PcRepositoryAdapter implements PcRepository {
     }
 
     @Override
+    public Optional<Pc> buscarAunqueDesvinculada(UUID id) {
+        return jpa.findById(id);
+    }
+
+    @Override
     public Optional<Pc> buscarParaActualizar(UUID id) {
         return jpa.findByIdAndEstadoForUpdate(id, EstadoPc.VINCULADA);
     }

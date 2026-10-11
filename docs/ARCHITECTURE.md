@@ -26,6 +26,7 @@ Household agent ──RTSP(S): live video──► MediaMTX ──WebRTC (WHEP),
 | `alertas` | EP03 Detection and alerts | US-11 to US-21; alert list (US-25) and clips (US-18, US-26) | Done |
 | `monitoreo` | EP04 Monitoring and privacy | US-22 to US-24 | Done (live view through MediaMTX, ADR 0007) |
 | `historial` | EP05 History and summary | US-26 retention, US-27 | Done (retention period pending) |
+| `actividad` | EP07 Diagnosis and activity | US-33 (US-32 and US-34 are the PC's) | Done, pending the change request |
 | `movimientos` | EP08 Movement data | US-35, US-37, US-39 (ADR 0010); the clip landmarks (US-36) and US-40's report live in `alertas` | Done, pending the change request and its legal review |
 
 Open decisions and missing credentials are in [BLOCKERS.md](BLOCKERS.md).
@@ -46,6 +47,7 @@ cuentas ◄── hogares ◄── camaras ◄── monitoreo
 | `monitoreo` | `camaras`, `cuentas`, `hogares` | Pauses and live view through `CamarasDelHogar`; names for the access log; listens to `ConsentimientoRevocado` to stop live view and to `PcDesvinculada` to stop the PC's cameras and send `desvincular` on its control channels. Declares the `AlertasDeCamara` SPI, which `alertas` implements (CA-23.2) |
 | `alertas` | `camaras`, `hogares`, `monitoreo`, `cuentas` | Camera name, capture state and detection reliability; members and alert order; listens to camera, consent and pause events to send their pushes |
 | `historial` | `alertas` | `ConteoDeAlertas` (weekly summary) and `RetencionDeClips` |
+| `actividad` | `camaras`, `monitoreo`, `hogares`, `movimientos`, `cuentas` | Listens to their change events to write the log; PC names; members' names. Nobody depends on it |
 | `movimientos` | `camaras`, `hogares`, `cuentas` | Cameras for uploads and replays; `ConsentimientoDelHogar` (the movement consent needs the monitoring one) and `ConsentimientoRevocado` (it ends with it); names for the replay log |
 | `alertas` | `movimientos` | `DatosDeMovimiento`: the consent for the clip landmarks (US-36), deleting movements with the recordings (CA-09.1); listens to `ConsentimientoDeMovimientosRevocado` (landmarks) and `MovimientosEliminados` (push) |
 
