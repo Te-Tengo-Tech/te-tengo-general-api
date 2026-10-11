@@ -11,9 +11,20 @@ public interface CamaraRepository {
 
     Camara guardar(Camara camara);
 
+    /** A camera in use: retired cameras (their PC was unlinked) are not found. */
     Optional<Camara> buscar(UUID id);
 
+    /** The cameras in use, by room name. */
     List<Camara> listar();
+
+    /** The cameras in use of a PC of the household. */
+    List<Camara> deLaPc(UUID pcId);
+
+    /**
+     * How an agent token of the camera stands, read without the household in context (the token is
+     * checked before it is bound): a native query, only for {@code ComprobadorDeAgentes}.
+     */
+    Optional<CamaraDeAgente> deAgente(UUID hogarId, UUID camaraId);
 
     /**
      * Online cameras of every household whose last heartbeat is older than {@code limite}. A native
@@ -25,4 +36,10 @@ public interface CamaraRepository {
     List<CamaraDeUnHogar> conPausaVencida(Instant ahora);
 
     record CamaraDeUnHogar(UUID camaraId, UUID hogarId) {}
+
+    /**
+     * @param pcId the camera's PC, null for cameras older than PCs
+     * @param pcVinculada whether that PC is still linked (true without a PC)
+     */
+    record CamaraDeAgente(UUID pcId, boolean retirada, boolean pcVinculada) {}
 }

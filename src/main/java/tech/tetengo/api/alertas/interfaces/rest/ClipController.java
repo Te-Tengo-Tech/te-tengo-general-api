@@ -44,7 +44,7 @@ class ClipController {
     SubidaDeClipResponse subir(
             @PathVariable UUID eventoId, @Valid @RequestBody(required = false) SolicitudDeClipRequest pedido) {
         SubidaDeClip subida = prepararSubida.ejecutar(
-                UsuarioActual.camaraId().orElseThrow(), eventoId, pedido == null ? null : pedido.contentType());
+                UsuarioActual.camaraDelAgente(), eventoId, pedido == null ? null : pedido.contentType());
         return new SubidaDeClipResponse(subida.urlSubida(), subida.cabeceras(), subida.expiraEn());
     }
 

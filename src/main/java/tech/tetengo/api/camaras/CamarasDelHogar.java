@@ -51,7 +51,8 @@ public interface CamarasDelHogar {
             Instant pausadaHasta,
             boolean deteccionConfiable,
             Instant instaladaEn,
-            Instant noConfiableDesde) {}
+            Instant noConfiableDesde,
+            UUID pcId) {}
 
     record CamaraEnHogar(UUID camaraId, UUID hogarId) {}
 }

@@ -13,7 +13,8 @@ record CamaraResponse(
         Instant pausadaHasta,
         boolean deteccionConfiable,
         Instant instaladaEn,
-        Instant noConfiableDesde) {
+        Instant noConfiableDesde,
+        UUID pcId) {
 
     static CamaraResponse de(EstadoDeCamara camara) {
         return new CamaraResponse(
@@ -24,6 +25,7 @@ record CamaraResponse(
                 camara.pausadaHasta(),
                 camara.deteccionConfiable(),
                 camara.instaladaEn(),
-                camara.noConfiableDesde());
+                camara.noConfiableDesde(),
+                camara.pcId());
     }
 }

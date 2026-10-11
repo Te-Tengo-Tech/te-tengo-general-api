@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.UUID;
 import tech.tetengo.api.camaras.CamaraDesconectada;
 import tech.tetengo.api.camaras.CamaraReconectada;
 import tech.tetengo.api.camaras.domain.CamaraError;
@@ -39,11 +40,53 @@ public class Camara extends EntidadDelHogar {
     @Column(name = "no_confiable_desde")
     private Instant noConfiableDesde;
 
+    /** The PC the camera is connected to (US-30); null only for rows older than PCs that had none. */
+    @Column(name = "pc_id")
+    private UUID pcId;
+
+    /**
+     * When the camera stopped being used: its PC was unlinked (US-31). A retired camera is no longer
+     * listed, its tokens stop working and its alerts keep their room name.
+     */
+    @Column(name = "retirada_en")
+    private Instant retiradaEn;
+
     protected Camara() {}
 
     public Camara(String nombreHabitacion) {
         renombrar(nombreHabitacion);
         this.estadoConexion = EstadoConexion.DESCONECTADA;
+    }
+
+    /** A camera of a PC (US-29, US-30). */
+    public Camara(String nombreHabitacion, UUID pcId) {
+        this(nombreHabitacion);
+        this.pcId = Objects.requireNonNull(pcId, "pcId");
+    }
+
+    /** A camera of an installation, created before PCs existed, joins the installation's PC. */
+    public void asignarPc(UUID pcId) {
+        if (this.pcId == null) {
+            this.pcId = Objects.requireNonNull(pcId, "pcId");
+        }
+    }
+
+    /**
+     * US-31: the camera's PC was unlinked. It goes offline silently: the family already knows, so no
+     * {@code CAMARA_DESCONECTADA} notice is sent, and its pause ends. Returns whether it changed.
+     */
+    public boolean retirar(Instant ahora) {
+        if (retiradaEn != null) {
+            return false;
+        }
+        retiradaEn = ahora;
+        estadoConexion = EstadoConexion.DESCONECTADA;
+        pausadaHasta = null;
+        return true;
+    }
+
+    public boolean retirada() {
+        return retiradaEn != null;
     }
 
     /** CA-06.2 and CA-06.3: the name cannot be empty. */
@@ -135,6 +178,14 @@ public class Camara extends EntidadDelHogar {
     /** CA-22.1: a paused camera neither captures nor detects until its pause ends. */
     public boolean estaPausada(Instant ahora) {
         return pausadaHasta != null && ahora.isBefore(pausadaHasta);
+    }
+
+    public UUID getPcId() {
+        return pcId;
+    }
+
+    public Instant getRetiradaEn() {
+        return retiradaEn;
     }
 
     public String getNombreHabitacion() {

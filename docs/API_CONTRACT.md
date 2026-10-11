@@ -74,7 +74,9 @@
 | `PUT /api/hogar/aviso` | owner | `{principalId, secundarioId \| null, esperaMinutos: 3 \| 5 \| 10}` → `200` (CA-10.1, CA-10.2) | `422 ESPERA_INVALIDA` · `422 CONTACTO_NO_ES_FAMILIAR` |
 
 ## 4. Cameras and monitoring (`camaras`, `monitoreo`) — US-06, US-07, US-15, US-22, US-23, US-24
-`Camara = {id, nombreHabitacion, estadoConexion: "EN_LINEA" | "DESCONECTADA", ultimaSenal | null, pausadaHasta | null, deteccionConfiable: boolean, instaladaEn, noConfiableDesde | null}`
+`Camara = {id, nombreHabitacion, estadoConexion: "EN_LINEA" | "DESCONECTADA", ultimaSenal | null, pausadaHasta | null, deteccionConfiable: boolean, instaladaEn, noConfiableDesde | null, pcId | null}`
+- `pcId`: the PC the camera is connected to (§9). Every camera has one; it is null only for rows older than PCs that had no installation. An older backend does not send it.
+- Cameras of a removed PC (US-31) are no longer listed and answer `404 CAMARA_NO_ENCONTRADA`; their alerts keep their room name.
 - `instaladaEn`: when the project team installed the camera, that is, the agent's first registration (CA-06.1). The camera header shows it as «Instalada el».
 - `noConfiableDesde`: when detection stopped being reliable, the time of the agent's `deteccion_no_confiable` event (CA-15.3); null while `deteccionConfiable` is true. The camera detail shows «La detección no es confiable desde las 10:36».
 
@@ -175,6 +177,45 @@ Data payload: `{tipo, alertaId?, camaraId?, habitacion?, ocurridaEn}`. `tipo` is
 | `DETECCION_NO_CONFIABLE` | Over 5 min with only discarded frames; the app shows what to check: light and framing | CA-15.3 |
 | `PAUSA_FINALIZADA` | Automatic resume | CA-22.3 |
 | `DATOS_ELIMINADOS` | Recordings deleted after revocation | CA-09.3 |
+| `PC_DESVINCULADA` | A PC left the household without the app: from the PC itself, for security (a stolen refresh token) or after 90 days without connecting. Not sent when the owner removes it from the app. The app shows «Ver PCs y cámaras» (§9) | CA-31.3 |
 
 ## 8. Household agent endpoints
 Used only by the desktop agent (`te-tengo-desktop-pywebview`). They are described in the backend repository at `docs/AGENT_CONTRACT.md` and do not concern the mobile app.
+
+## 9. PCs and their link (`camaras`) — US-28, US-30, US-31
+Change request «PCs, cámaras y datos de movimiento» (pending the advisor's approval; built ahead of it, additively). A household has one or more **PCs** running Te Tengo Captura, each with its own cameras. The owner links a PC from the app with the code the PC shows (OAuth 2.0 device grant, RFC 8628; ADR 0009 of the backend); installations made by the project team before this appear as a PC named «PC de la casa» of origin `INSTALACION`.
+
+```
+Pc = {
+  id, nombre, sistemaOperativo | null, versionAgente | null,
+  estadoConexion: "EN_LINEA" | "DESCONECTADA",   // a heartbeat of the PC or of one of its cameras in the last 90 s (CA-30.2, CA-30.3)
+  ultimaSenal | null,                            // the latest of them: «Sin conexión desde las HH:MM»
+  vinculadaEn, vinculadaPor: {id, nombre} | null, // null for installations
+  origen: "VINCULACION" | "INSTALACION",
+  camaras: [Camara]                              // the PC's cameras in use (§4)
+}
+```
+
+| Method and path | Auth | Body → response | Errors |
+|---|---|---|---|
+| `GET /api/pcs` | member | → `200 [Pc]`, the linked PCs, oldest first, each with its cameras (CA-30.2). The invited member sees them read-only | — |
+| `POST /api/vinculaciones/consulta` | owner | `{codigo}` → `200 {codigo: "KQWT-MXHD", nombrePc, sistemaOperativo \| null, versionAgente \| null, expiraEn}`: the approval screen shows the PC before «Aprobar» (CA-28.4) | see below |
+| `POST /api/vinculaciones/aprobacion` | owner | `{codigo}` → `201 Pc`: the PC joins the household; other PCs keep their cameras (CA-28.1, CA-30.1). The PC gets its tokens at its next poll, within 5 s | see below |
+| `POST /api/vinculaciones/rechazo` | owner | `{codigo}` → `204`: «No reconozco esta PC»; the PC is not linked (CA-28.4) | see below |
+| `PATCH /api/pcs/{id}` | owner | `{nombre}` (1–60 chars) → `200 Pc` | `422 PC_NOMBRE_VACIO` · `422 PC_NOMBRE_MUY_LARGO` · `404 PC_NO_ENCONTRADA` |
+| `DELETE /api/pcs/{id}` | owner | → `204`: «Quitar esta PC». The app stops showing it and its cameras at once; the PC stops capturing, deletes its credentials and shows the QR again at once if online (CA-31.1), or as soon as it connects (CA-31.2). No push is sent for it | `404 PC_NO_ENCONTRADA` |
+
+**The code (`codigo`).**
+- 8 letters of `BCDFGHJKLMNPQRSTVWXZ` (no vowels, no digits), shown `XXXX-XXXX`. The app accepts it in lowercase, with or without the hyphen, and only those letters (CA-28.2); anything else is `400 VALIDACION` with `campos.codigo` («El código tiene 8 letras, solo consonantes y sin números.»).
+- **QR:** the PC's QR is `https://app.tetengo.reqsai.tech/vincular?codigo=KQWT-MXHD` (`verification_uri_complete`; domain pending confirmation, BLOCKERS). The app reads `codigo` from it when it scans it, and should also open that link (app link or the PWA's `/vincular` route) when the phone's camera app scans it. «Escribir el código» is the fallback (CA-28.2).
+- It lasts **10 minutes** and works **once**; the PC shows a new one on its own when it expires (CA-28.3).
+- Only the owner may look it up, approve or reject it: `403 SOLO_TITULAR` for an invited member, who sees «Solo Carmen (titular) puede vincular una PC» (CA-28.5).
+
+**Errors of the three `vinculaciones` endpoints:**
+- `404 CODIGO_INCORRECTO {intentosRestantes}`: no such code; it counts as a wrong attempt («Ese código no existe. Revísalo letra por letra.»).
+- `423 VINCULACION_BLOQUEADA {bloqueadaHasta}`: 5 wrong codes in a row from the same account block code entry for 15 minutes; the fifth wrong code already answers it (CA-28.6, «Podrás volver a intentarlo a las 10:57»). A code that exists resets the count.
+- `410 CODIGO_VENCIDO`: expired or already used (approved or rejected) (CA-28.3); it does not count as wrong.
+- `400 VALIDACION` · `403 SOLO_TITULAR`.
+
+**Status and notices.** A PC with no heartbeat for 90 s shows as `DESCONECTADA` with its cameras (CA-30.3); each camera still sends `CAMARA_DESCONECTADA` (§7), and the app shows what to check (the PC on, internet, Te Tengo Captura open). A PC that went 90 days without connecting is removed and must be linked again (CA-28.7). Push `PC_DESVINCULADA` (§7) tells the family when a PC left without the app (CA-31.3).
+

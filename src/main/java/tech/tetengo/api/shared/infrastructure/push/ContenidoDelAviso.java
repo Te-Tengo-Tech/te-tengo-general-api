@@ -138,6 +138,12 @@ public record ContenidoDelAviso(String titulo, String cuerpo, String etiqueta, M
                             "Se borraron las grabaciones al revocar el consentimiento.",
                             null
                         };
+                    case PC_DESVINCULADA ->
+                        new String[] {
+                            "Una PC se desvinculó de la casa",
+                            "Sus cámaras ya no detectan caídas. Revisa PCs y cámaras en la app.",
+                            null
+                        };
                 };
         return new ContenidoDelAviso(texto[0], texto[1], texto[2], datos(aviso, texto[2]));
     }

@@ -4,6 +4,20 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- PC link (US-28, US-30, US-31; ADR 0009), built ahead of the change request «PCs, cámaras y datos de movimiento», which is pending the advisor's approval. Everything is additive: installation credentials, agent tokens and every existing endpoint keep working.
+  - OAuth 2.0 Device Authorization Grant (RFC 8628) for Te Tengo Captura: `POST /api/agente/vinculacion` (256-bit device code and an 8-letter user code `XXXX-XXXX` of `BCDFGHJKLMNPQRSTVWXZ`, both stored hashed, 10 minutes, the QR's `verification_uri_complete`), `POST /api/agente/token` (`authorization_pending`, `slow_down` +5 s, `access_denied`, `expired_token`; single-use device code) and RFC 7009 revocation `POST /api/agente/token/revocacion`. Form-encoded, RFC 6749 errors, `Cache-Control: no-store`.
+  - The owner looks up, approves or rejects a code from the app: `POST /api/vinculaciones/consulta`, `/aprobacion`, `/rechazo` (owner only; lowercase and hyphen-less codes accepted; 5 wrong codes in a row block code entry for 15 minutes, `423 VINCULACION_BLOQUEADA`, CA-28.6).
+  - PC tokens: a 1-hour access token (`pc_id`, `hogar_id`, `rol = AGENTE`) and a refresh token that rotates on every use (RFC 9700); reusing a rotated one revokes everything and unlinks the PC; 90 days without renewing unlinks it (CA-28.7), also through a daily job.
+  - `GET /api/pcs` (any member), `PATCH /api/pcs/{id}` and `DELETE /api/pcs/{id}` (owner); `GET /api/agente/pc`, `POST /api/agente/pc/senal` and `DELETE /api/agente/pc` for the PC.
+  - Unlinking revokes the PC's tokens at once: every agent token is checked against the database (`401 PC_DESVINCULADA`), the PC's cameras are retired (no longer listed, their live view stops), its control channels get `{"desvincular":true}` and are closed, and push `PC_DESVINCULADA` tells the family when it was not done from the app (CA-31.3).
+  - A linked PC may open the agent control channel with its own token.
+- `Camara.pcId`; migration `V24` turns each existing installation with a camera into a PC «PC de la casa» of origin `INSTALACION` (tables `pcs`, `autorizaciones_de_dispositivo`, `tokens_de_renovacion_de_pc`, `intentos_de_vinculacion`; `camaras.pc_id`, `camaras.retirada_en`, `instalaciones.pc_id`).
+- `docs/references`: the backlog with US-28 to US-40 and a copy of the change request.
+
+### Changed
+- Agent endpoints of one camera answer `403 TOKEN_DE_CAMARA_REQUERIDO` instead of a `500` when called with a token without a camera.
+
 ## [0.3.4] - 2026-10-10
 
 ### Fixed

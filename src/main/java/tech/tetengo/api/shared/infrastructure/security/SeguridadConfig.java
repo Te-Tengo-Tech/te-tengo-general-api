@@ -18,6 +18,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
+import tech.tetengo.api.shared.application.port.ComprobadorDeAgentes;
 import tech.tetengo.api.shared.application.port.ComprobadorDeMembresia;
 import tech.tetengo.api.shared.domain.model.Rol;
 import tech.tetengo.api.shared.infrastructure.multitenancy.FiltroHogarActual;
@@ -42,7 +43,10 @@ public class SeguridadConfig {
 
     @Bean
     SecurityFilterChain cadenaDeSeguridad(
-            HttpSecurity http, ObjectProvider<ComprobadorDeMembresia> membresias, PropiedadesDeCors cors)
+            HttpSecurity http,
+            ObjectProvider<ComprobadorDeMembresia> membresias,
+            ObjectProvider<ComprobadorDeAgentes> agentes,
+            PropiedadesDeCors cors)
             throws Exception {
         var sinSesion = new EntradaSinSesion();
         return http.csrf(csrf -> csrf.disable())
@@ -59,6 +63,11 @@ public class SeguridadConfig {
                                 API + "/recuperaciones",
                                 API + "/recuperaciones/confirmacion",
                                 API + "/agente/camaras/registro",
+                                // PC link (RFC 8628 device grant): the PC has no token yet, or only its
+                                // refresh token (RFC 6749 token endpoint, RFC 7009 revocation).
+                                API + "/agente/vinculacion",
+                                API + "/agente/token",
+                                API + "/agente/token/revocacion",
                                 API + "/invitaciones/*/aceptacion",
                                 // MediaMTX's authorization hook: checked by its shared secret.
                                 API + "/interno/mediamtx/autorizar")
@@ -71,7 +80,8 @@ public class SeguridadConfig {
                 .oauth2ResourceServer(rs -> rs.authenticationEntryPoint(sinSesion)
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(convertidorDeRoles())))
                 .addFilterAfter(
-                        new FiltroHogarActual(membresias::getIfAvailable), BearerTokenAuthenticationFilter.class)
+                        new FiltroHogarActual(membresias::getIfAvailable, agentes::getIfAvailable),
+                        BearerTokenAuthenticationFilter.class)
                 .build();
     }
 

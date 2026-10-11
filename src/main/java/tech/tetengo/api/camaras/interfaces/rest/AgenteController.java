@@ -52,7 +52,8 @@ class AgenteController {
     @PostMapping(path = "/senal", version = ApiVersioning.V1)
     EstadoDeCapturaResponse senal(@RequestBody(required = false) SenalRequest pedido) {
         boolean conectada = pedido == null || pedido.conectada();
-        return aRespuesta(registrarSenal.ejecutar(UsuarioActual.camaraId().orElseThrow(), conectada));
+        return aRespuesta(registrarSenal.ejecutar(
+                UsuarioActual.camaraDelAgente(), conectada, pedido == null ? null : pedido.versionAgente()));
     }
 
     @Operation(
@@ -78,8 +79,7 @@ class AgenteController {
                     "Whether the agent may process video: a current consent (CA-05.2) and no active pause (CA-22.1); motivo says why not.")
     @GetMapping(path = "/estado-captura", version = ApiVersioning.V1)
     EstadoDeCapturaResponse estadoDeCaptura() {
-        return aRespuesta(
-                consultarEstadoDeCaptura.ejecutar(UsuarioActual.camaraId().orElseThrow()));
+        return aRespuesta(consultarEstadoDeCaptura.ejecutar(UsuarioActual.camaraDelAgente()));
     }
 
     @Operation(

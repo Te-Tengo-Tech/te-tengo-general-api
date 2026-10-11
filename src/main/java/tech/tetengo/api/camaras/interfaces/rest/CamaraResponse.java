@@ -12,4 +12,5 @@ record CamaraResponse(
         Instant pausadaHasta,
         boolean deteccionConfiable,
         Instant instaladaEn,
-        Instant noConfiableDesde) {}
+        Instant noConfiableDesde,
+        UUID pcId) {}

@@ -40,6 +40,10 @@ class DocumentacionOpenApiIntegrationTest extends AbstractIntegrationTest {
             "POST /api/recuperaciones/confirmacion",
             "POST /api/invitaciones/{}/aceptacion",
             "POST /api/agente/camaras/registro",
+            // PC link: OAuth endpoints of RFC 8628, RFC 6749 and RFC 7009 (ADR 0009).
+            "POST /api/agente/vinculacion",
+            "POST /api/agente/token",
+            "POST /api/agente/token/revocacion",
             // MediaMTX's authorization hook: no JWT, checked by its shared secret.
             "POST /api/interno/mediamtx/autorizar");
 

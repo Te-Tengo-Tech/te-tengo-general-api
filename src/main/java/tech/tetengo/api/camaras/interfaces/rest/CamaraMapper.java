@@ -15,6 +15,7 @@ final class CamaraMapper {
                 camara.getPausadaHasta(),
                 camara.isDeteccionConfiable(),
                 camara.getInstaladaEn(),
-                camara.getNoConfiableDesde());
+                camara.getNoConfiableDesde(),
+                camara.getPcId());
     }
 }

@@ -22,7 +22,7 @@ Household agent ──RTSP(S): live video──► MediaMTX ──WebRTC (WHEP),
 | `shared` | — | Base entities, multi-tenancy (with the membership check), security and token issuing, errors, versioning, OpenAPI, clock, ports for e-mail and push | Done |
 | `cuentas` | EP01 Accounts and access | US-01 to US-03 | Done |
 | `hogares` | EP02 Profile, consent and family | US-04, US-05, US-08 to US-10 | Done |
-| `camaras` | EP02 Cameras | US-06, US-07; camera side of US-05, US-15, US-22 | Done (**reference slice**) |
+| `camaras` | EP02 Cameras, EP06 Installation and cameras | US-06, US-07; camera side of US-05, US-15, US-22; PC link and PCs (US-28, US-30, US-31, ADR 0009) | Done (**reference slice**); EP06 pending the change request |
 | `alertas` | EP03 Detection and alerts | US-11 to US-21; alert list (US-25) and clips (US-18, US-26) | Done |
 | `monitoreo` | EP04 Monitoring and privacy | US-22 to US-24 | Done (live view through MediaMTX, ADR 0007) |
 | `historial` | EP05 History and summary | US-26 retention, US-27 | Done (retention period pending) |
@@ -41,8 +41,8 @@ cuentas ◄── hogares ◄── camaras ◄── monitoreo
 | From | To | What for |
 |---|---|---|
 | `hogares` | `cuentas` | `ServicioDeSesiones` (sessions after creating or switching households, accepting invitations), `AltaDeCuentas`, `DirectorioDeUsuarios`; implements the `MembresiasDeUsuario` SPI that sign-in uses |
-| `camaras` | `hogares` | Listens to `ConsentimientoOtorgado` / `ConsentimientoRevocado` to keep the capture state |
-| `monitoreo` | `camaras`, `cuentas`, `hogares` | Pauses and live view through `CamarasDelHogar`; names for the access log; listens to `ConsentimientoRevocado` to stop live view. Declares the `AlertasDeCamara` SPI, which `alertas` implements (CA-23.2) |
+| `camaras` | `hogares`, `cuentas` | Listens to `ConsentimientoOtorgado` / `ConsentimientoRevocado` to keep the capture state; the older adult's name and the approver's name for the PC (US-28); implements the `ComprobadorDeAgentes` SPI that rejects the tokens of unlinked PCs |
+| `monitoreo` | `camaras`, `cuentas`, `hogares` | Pauses and live view through `CamarasDelHogar`; names for the access log; listens to `ConsentimientoRevocado` to stop live view and to `PcDesvinculada` to stop the PC's cameras and send `desvincular` on its control channels. Declares the `AlertasDeCamara` SPI, which `alertas` implements (CA-23.2) |
 | `alertas` | `camaras`, `hogares`, `monitoreo`, `cuentas` | Camera name, capture state and detection reliability; members and alert order; listens to camera, consent and pause events to send their pushes |
 | `historial` | `alertas` | `ConteoDeAlertas` (weekly summary) and `RetencionDeClips` |
 
@@ -66,6 +66,7 @@ All are idempotent, find their candidates with a native query across households 
 | Job | Module | Story |
 |---|---|---|
 | `DetectarCamarasDesconectadas` | `camaras` | US-07: 3 missed 30-second heartbeats |
+| `VencerPcsSinUso` | `camaras` | CA-28.7: daily, unlinks PCs with no token for 90 days and deletes expired link requests |
 | `ReintentarAvisos` | `alertas` | CA-16.4: retries pushes the service did not accept |
 | `EscalarAlertas` | `alertas` | US-20 |
 | `EliminarGrabaciones` | `alertas` | US-09: deletes recordings after revocation |

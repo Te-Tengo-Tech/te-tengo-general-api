@@ -5,13 +5,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionalEventListener;
 import tech.tetengo.api.camaras.CamaraDesconectada;
 import tech.tetengo.api.camaras.CamaraReconectada;
+import tech.tetengo.api.camaras.PcDesvinculada;
 import tech.tetengo.api.shared.application.port.NotificadorPush.Aviso;
 import tech.tetengo.api.shared.application.port.TipoAviso;
 import tech.tetengo.api.shared.infrastructure.multitenancy.EjecutorEnHogar;
 
 /**
  * US-07: tells the family when a camera disconnects (CA-07.2; the app shows what to check: cable, PC
- * on and internet) and when monitoring is restored (CA-07.3).
+ * on and internet) and when monitoring is restored (CA-07.3), and when a PC left the household without
+ * the app (US-31 / CA-31.3).
  */
 @Service
 public class AvisosDeCamaras {
@@ -48,5 +50,17 @@ public class AvisosDeCamaras {
                         evento.camaraId(),
                         evento.habitacion(),
                         evento.ocurridaEn())));
+    }
+
+    /** CA-31.3: unlinked from the PC itself (or for security, or expired): the family is told. */
+    @Async
+    @TransactionalEventListener
+    public void alDesvincularsePc(PcDesvinculada evento) {
+        if (!evento.avisarALaFamilia()) {
+            return;
+        }
+        enHogar.ejecutar(
+                evento.hogarId(),
+                () -> avisos.alHogar(new Aviso(TipoAviso.PC_DESVINCULADA, null, null, null, evento.ocurridaEn())));
     }
 }

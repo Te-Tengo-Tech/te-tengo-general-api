@@ -15,5 +15,11 @@ public final class ClaimsDelToken {
     /** Camera of a household agent token. */
     public static final String CAMARA = "camara_id";
 
+    /**
+     * PC of a household agent token issued through the PC link (RFC 8628 device grant): the PC's own
+     * access token, and the per-camera tokens of its cameras.
+     */
+    public static final String PC = "pc_id";
+
     private ClaimsDelToken() {}
 }

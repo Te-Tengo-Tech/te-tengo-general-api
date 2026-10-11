@@ -12,5 +12,6 @@ Michael Nygard's format: context, decision, status and consequences (Nygard, 201
 | [0006](0006-push-provider-switch.md) | Push provider chosen by configuration (registro, FCM, SNS, iOS simulator) | Accepted |
 | [0007](0007-live-view-through-mediamtx.md) | Live view through MediaMTX (LL-HLS, API-authorized tokens, agent control channel) | Accepted |
 | [0008](0008-live-view-webrtc-whep.md) | Live view over WebRTC (WHEP) with LL-HLS as the fallback, and `preparar` | Accepted |
+| [0009](0009-pc-link-device-grant.md) | PC link with the OAuth 2.0 device grant (RFC 8628) and rotating refresh tokens, implemented in-house | Proposed (change request pending) |
 
 Nygard, M. (2011, November 15). *Documenting architecture decisions*. Cognitect. https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions
