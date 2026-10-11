@@ -218,10 +218,16 @@ public class Camara extends EntidadDelHogar {
 
     /** US-29: «Dejar de usar» on the PC. Returns whether it changed. */
     public boolean dejarDeUsar(Instant ahora) {
+        return dejarDeUsar(null, ahora);
+    }
+
+    /** The same, recording the owner who did it from the app (null: on the PC). */
+    public boolean dejarDeUsar(UUID usuarioId, Instant ahora) {
         if (!retirar(ahora)) {
             return false;
         }
-        registrarEvento(new CamaraRetirada(getHogarId(), getId(), pcId, nombreDispositivo, nombreHabitacion, ahora));
+        registrarEvento(
+                new CamaraRetirada(getHogarId(), getId(), pcId, nombreDispositivo, nombreHabitacion, ahora, usuarioId));
         actualizada(ahora);
         return true;
     }

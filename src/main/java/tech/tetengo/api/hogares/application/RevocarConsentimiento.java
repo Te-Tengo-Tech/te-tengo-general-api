@@ -49,7 +49,7 @@ public class RevocarConsentimiento {
                 .filter(Consentimiento::vigente)
                 .orElseThrow(() -> new ErrorDeNegocio(HogarError.SIN_CONSENTIMIENTO));
         long clips = eliminaciones.clipsGuardados();
-        consentimiento.revocar(reloj.instant());
+        consentimiento.revocar(usuarioId, reloj.instant());
         consentimientos.guardar(consentimiento);
         return clips;
     }

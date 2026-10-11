@@ -14,6 +14,9 @@ public interface PcRepository {
     /** A linked PC of the household; unlinked PCs are not found. */
     Optional<Pc> buscar(UUID id);
 
+    /** A PC of the household, linked or not (its name for the activity log). */
+    Optional<Pc> buscarAunqueDesvinculada(UUID id);
+
     /** The same, locking the row until the transaction ends (concurrent unlink and renewal). */
     Optional<Pc> buscarParaActualizar(UUID id);
 

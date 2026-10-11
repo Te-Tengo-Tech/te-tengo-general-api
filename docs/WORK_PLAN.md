@@ -33,6 +33,8 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 
 - [x] **T27 `movimientos` — US-35 to US-39 movement data, US-40 report.** Separate consent, R2 uploads with pre-signed URLs and an index, cloud retention with a daily job, deletion on revocation, replay with its access log, clip landmarks, «Hubo una caída y no avisó» (ADR 0010). — *movement data with consent, retention and replay (US-35 to US-40)*
 
+- [x] **T28 `actividad` — US-33 activity log.** Append-only log fed by the modules' events and by the PC's own changes; list for any member. — *activity log of the household's configuration (US-33)*
+
 ### Sprint 3
 - [x] **T01 `cuentas` — US-01 register.** `POST /api/cuentas`; BCrypt passwords; unique email (`409 CORREO_EN_USO`); `400 VALIDACION` with `campos`. — *register accounts (US-01)*
 - [x] **T02 `cuentas` — US-02 sessions.** — *sign in, refresh and sign out with JWTs and lockout (US-02)*

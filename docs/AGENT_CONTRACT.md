@@ -22,6 +22,7 @@ Every agent token is checked on every request: the tokens of a PC that left the 
 | `GET /api/agente/movimientos/estado` | Whether movements may be stored, on the PC and in the cloud (camera or PC token) | US-35, US-37 |
 | `POST /api/agente/movimientos` | Pre-signed PUT URL for a 5-minute movement file of the camera | US-37 |
 | `POST /api/agente/movimientos/{archivoId}/confirmacion` | The file was uploaded: it enters the index | US-37 |
+| `POST /api/agente/pc/actividad` | The PC's own changes for the activity log, also those made offline (PC token) | US-33 |
 | `POST /api/agente/vinculacion` | PC link: asks for a code (RFC 8628 device authorization; no token) | US-28 |
 | `POST /api/agente/token` | PC link: polls for the tokens, and renews them (RFC 6749 token endpoint; no token) | US-28 |
 | `POST /api/agente/token/revocacion` | PC link: revokes the refresh token, which unlinks the PC (RFC 7009; no token) | US-31 |
@@ -181,12 +182,13 @@ grant_type=refresh_token&refresh_token=<refresh_token>&client_id=te-tengo-captur
 **The PC's own endpoints** (its access token):
 - `GET /api/agente/pc` → `200 PcDelAgente = {pcId, hogarId, nombre, nombreAdultoMayor, vinculadaEn, vinculadaPor | null, consentimientoVigente}`. D-28.4: «Esta PC quedó vinculada a la casa de Rosa Huamán · Aprobada por Carmen a las 10:31»; with `consentimientoVigente: false` the PC says it waits for the consent and sends no video (CA-28.1). `vinculadaPor` is the approver's name, null for installations.
 - `POST /api/agente/pc/senal` every 30 s, like the cameras' heartbeat, with an optional `{versionAgente, sistemaOperativo}` → `200 PcDelAgente`. It keeps the PC «En línea» in the app even with no camera in use (CA-30.2); camera heartbeats count too.
-- `DELETE /api/agente/pc` → `204`: «Desvincular esta PC» (CA-31.3). The API revokes the PC's tokens, retires its cameras and sends push `PC_DESVINCULADA` to the family; the PC then deletes its credentials and shows the link code. Revoking the refresh token does the same and works without a valid access token:
+- `DELETE /api/agente/pc` → `204`: «Desvincular esta PC» (CA-31.3). The API revokes the PC's tokens, retires its cameras and sends push `PC_DESVINCULADA` to the family; the PC then deletes its credentials and shows the link code. Add `?datosLocalesBorrados=true` when the person also checked «Borrar también los datos guardados en esta PC» (CA-31.6): the PC deletes its data folder (movements, video and clips) itself; the API only records it in the activity log (`DATOS_LOCALES_ELIMINADOS`). Without it the folder stays, encrypted. Revoking the refresh token does the same and works without a valid access token:
 
 **Unlink with the refresh token** — `POST /api/agente/token/revocacion` (RFC 7009)
 ```
 token=<refresh_token>&token_type_hint=refresh_token&client_id=te-tengo-captura
 ```
+(add `&datos_locales_borrados=true` for CA-31.6, as above)
 → always `200` with an empty body, also for an unknown or already revoked token (RFC 7009 §2.2). Errors: `invalid_request`, `invalid_client`.
 
 **Removed from the app (CA-31.1, CA-31.2).** The PC hears it as `{"desvincular":true}` on its control channels if it is online, or as `401 PC_DESVINCULADA` (or `invalid_grant` when renewing) at its next request. Either way: stop capturing at once, delete the credentials and show the link code, with D-31.2 («Esta PC se quitó de la casa de Rosa Huamán»).
@@ -239,3 +241,18 @@ Body landmarks only, never images (ADR 0010). **Nothing is stored, on the PC or 
 - If the consent is revoked between the upload and the confirmation, the confirmation answers `409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` and the API deletes the object.
 
 **Landmarks of a clip** (US-36): after uploading the clip of an event, `POST /api/agente/eventos/{eventoId}/clip/puntos` (camera token, no body) → `201 {urlSubida, cabeceras, expiraEn}`; `PUT` the landmarks of the clip's 12 seconds as Parquet with those headers. The app draws them over the clip, synchronized by time. `409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` without the consent (do not upload them); `404 EVENTO_NO_ENCONTRADO` like the clip. They are deleted with their clip (CA-36.3).
+
+## Activity log (US-32, US-33)
+The API logs on its own every change it sees (the PC linked or unlinked, a camera's room, «Dejar de usar», pauses, consents, the cloud retention). The PC reports the changes only it knows about, which it also keeps in its local log (shown «Pendiente de enviar» until sent, CA-33.3):
+
+`POST /api/agente/pc/actividad` (PC token)
+```json
+{ "cambios": [
+  { "id": "0192…", "tipo": "MODO_AVANZADO_ACTIVADO", "ocurridoEn": "2026-10-10T16:02:00Z" },
+  { "id": "0192…", "tipo": "GUARDADO_LOCAL_CAMBIADO", "ocurridoEn": "2026-10-10T16:05:00Z",
+    "objeto": "Video continuo", "valorAnterior": "No", "valorNuevo": "Sí, 7 días" } ] }
+```
+→ `200 {registrados, repetidos}`.
+- `tipo`: `MODO_AVANZADO_ACTIVADO`, `MODO_AVANZADO_DESACTIVADO` (CA-32.1), `GUARDADO_LOCAL_CAMBIADO` (US-38: folder, a type on or off, its period, the space limit; one entry per setting) or `DATOS_LOCALES_ELIMINADOS` (e.g. the local movements after a revocation, CA-35.4). Anything else is `400 VALIDACION` (`campos["cambios[i].tipo"]`).
+- `id`: a UUID the PC generates once per change; sending a change again (after a timeout, or the whole offline queue) stores it once (`repetidos`). `ocurridoEn`: when it happened on the PC, not more than 5 minutes ahead of the server. `objeto` up to 120 characters, `valorAnterior` and `valorNuevo` up to 200. At most 100 changes per request.
+- The family sees them in the app as «Desde la PC Sala-Rosa: …»; the PC shows the household's log with `GET /api/actividad` only through the app (the PC has no member token).

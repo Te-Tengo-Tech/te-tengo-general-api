@@ -14,6 +14,7 @@ import tech.tetengo.api.camaras.application.port.PcRepository;
 import tech.tetengo.api.camaras.domain.model.Camara;
 import tech.tetengo.api.camaras.domain.model.EstadoConexion;
 import tech.tetengo.api.camaras.domain.model.EstadoDeCaptura;
+import tech.tetengo.api.camaras.domain.model.Pc;
 
 @Service
 public class ServicioDeCamaras implements CamarasDelHogar {
@@ -62,6 +63,18 @@ public class ServicioDeCamaras implements CamarasDelHogar {
                             consentimiento && !(enUso && camara.estaPausada(ahora)),
                             enUso && camara.estaPausada(ahora) ? camara.getPausadaHasta() : null);
                 });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> nombreDePc(UUID pcId) {
+        return pcs.buscarAunqueDesvinculada(pcId).map(Pc::getNombre);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> pcDeCamara(UUID camaraId) {
+        return camaras.buscarAunqueRetirada(camaraId).map(Camara::getPcId);
     }
 
     @Override

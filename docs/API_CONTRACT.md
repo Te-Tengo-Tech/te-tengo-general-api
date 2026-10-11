@@ -248,6 +248,43 @@ Pc = {
 
 **Status and notices.** A PC with no heartbeat for 90 s shows as `DESCONECTADA` with its cameras (CA-30.3); each camera still sends `CAMARA_DESCONECTADA` (§7), and the app shows what to check (the PC on, internet, Te Tengo Captura open). A PC that went 90 days without connecting is removed and must be linked again (CA-28.7). Push `PC_DESVINCULADA` (§7) tells the family when a PC left without the app (CA-31.3).
 
+## 10. Activity log (`actividad`) — US-33
+Who changed what and when in the system's configuration, from the app or from a PC (CA-33.1). **Append-only:** nobody can edit or delete it (the database refuses it too). Any member, owner or invited, reads it (CA-33.2).
+
+```
+Actividad = {
+  id, ocurridaEn, registradaEn, tipo,
+  actor: {tipo: "FAMILIAR" | "PC" | "SISTEMA", usuario: {id, nombre} | null},   // FAMILIAR: who; PC: see pc
+  pc: {id, nombre} | null,      // the PC it was done from or is about, named as it was then
+  camaraId | null, objeto | null, valorAnterior | null, valorNuevo | null
+}
+```
+
+| Method and path | Auth | Body → response | Errors |
+|---|---|---|---|
+| `GET /api/actividad` | member | Query `pcId`, `tipo`, `desde`, `hasta`, `pagina` (from 0), `tamano` (default 50, at most 100) → `200 {elementos: [Actividad], total}`, newest first by `ocurridaEn`. The app groups by day («Hoy», «Ayer», «08/10/2026») and filters by PC with chips (CA-33.2). Empty list when there is none: «Aún no hay actividad registrada» (CA-33.4) | `400 VALIDACION` |
+
+`tipo`, with the brief's example sentence (draft copy) and the fields it uses:
+
+| `tipo` | Example | `actor` | `objeto` · `valorAnterior` → `valorNuevo` |
+|---|---|---|---|
+| `PC_VINCULADA` | «Carmen vinculó la PC Sala-Rosa» | FAMILIAR | PC name |
+| `PC_RENOMBRADA` | «Carmen renombró la PC Cocina-Rosa a Cocina» | FAMILIAR | `PC` · old → new name |
+| `PC_DESVINCULADA` | «Carmen quitó la PC Sala-Rosa» / «Desde la PC Sala-Rosa: se desvinculó» | FAMILIAR (from the app), PC (from the PC) or SISTEMA (stolen token, 90 days) | PC name · rooms that lost detection → `DESDE_LA_APP` \| `DESDE_LA_PC` \| `REUSO_DE_TOKEN` \| `VENCIDA` |
+| `CAMARA_ASIGNADA` | «Carmen puso la cámara Logitech C920 en el Dormitorio» / «Desde la PC Sala-Rosa: la cámara Logitech C920 pasó a Dormitorio» | FAMILIAR (from the app, CA-29.2) or PC («Elegir aquí», CA-29.8). When both change a camera the last change wins; both entries stay | webcam name · old room (null: it started being used) → new room |
+| `CAMARA_RETIRADA` | «Carmen dejó de usar la cámara Logitech C920» / «Desde la PC Sala-Rosa: …» | FAMILIAR (from the app) or PC («Elegir aquí», CA-29.8) | webcam name · room → null |
+| `AMBIENTE_RENOMBRADO` | «Carmen cambió el nombre de Sala a Sala comedor» | FAMILIAR | `Ambiente` · old → new name |
+| `CAMARA_PAUSADA` | «Luis pausó la cámara de la Sala hasta las 11:42» | FAMILIAR | room · → `pausadaHasta` (ISO-8601) |
+| `CAMARA_REANUDADA` | «Luis reanudó la cámara de la Sala» / «Terminó la pausa de la Sala» | FAMILIAR, or SISTEMA when the pause ended on its own | room |
+| `CONSENTIMIENTO_OTORGADO` / `CONSENTIMIENTO_REVOCADO` | «Carmen registró el consentimiento de monitoreo» | FAMILIAR | `Consentimiento de monitoreo` · → who gave it |
+| `CONSENTIMIENTO_MOVIMIENTOS_OTORGADO` / `_REVOCADO` | «Carmen registró el permiso de Rosa para guardar movimientos» | FAMILIAR, or SISTEMA when it ended with the monitoring consent | `Guardar movimientos` · → «Rosa Huamán (versión 1)» or the reason |
+| `RETENCION_MOVIMIENTOS_CAMBIADA` | «Carmen cambió los movimientos en la nube de 7 a 30 días» | FAMILIAR | `Movimientos en la nube` · «7 días» → «30 días» («No guardar» when off) |
+| `MODO_AVANZADO_ACTIVADO` / `MODO_AVANZADO_DESACTIVADO` | «Desde la PC Sala-Rosa: se activó el modo avanzado» | PC | as the PC reports it |
+| `GUARDADO_LOCAL_CAMBIADO` | «Desde la PC Sala-Rosa: video continuo pasó de No a Sí, 7 días» | PC | as the PC reports it |
+| `DATOS_LOCALES_ELIMINADOS` | «Desde la PC Sala-Rosa: se borraron los datos guardados en la PC» | PC | as the PC reports it, or `Datos guardados en la PC` → «Borrados al desvincular» when it was unlinked with that option (CA-31.6) |
+
+Unknown future values of `tipo` should be shown with a neutral generic sentence. Entries are written right after each change, in the background: one may appear a second later.
+
 ## 11. Movement data (`movimientos`) — US-35 to US-39
 Change request «PCs, cámaras y datos de movimiento» (pending approval; ADR 0010 of the backend). With a **separate, optional consent**, the PC stores the older adult's **movements**: the body landmarks it computes, never images or video. The alerts work the same without it (CA-35.1).
 
@@ -280,4 +317,3 @@ Repeticion = {
 - **Files:** Parquet compressed with zstd, one per camera and 5 minutes, written by Te Tengo Captura (its contract defines the columns). Check `sha256` before drawing. A moment outside the retention returns `archivos: []` with `disponiblesDesde` (CA-39.4).
 - **Gaps** (CA-39.5): frames exist only while a person is in the image; time between frames inside a file is «Sin persona en la imagen», time without files is «PC apagada» or «En pausa» (the pause of the camera is known from the alerts and the camera; the API does not mark it). The timeline's events come from `GET /api/alertas?desde=&hasta=`, filtered by `camaraId` in the app.
 - **Without internet** the app says «Sin internet. La repetición necesita conexión.»; a revoked consent while watching makes the next request answer `409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` («Rosa ya no autoriza guardar sus movimientos.»).
-
