@@ -2,6 +2,7 @@ package tech.tetengo.api.alertas.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -23,12 +24,22 @@ import tech.tetengo.api.shared.infrastructure.multitenancy.EjecutorEnHogar;
  * ({@code clips/<alerta>.landmarks.parquet}). The agent uploads it with a pre-signed URL, only with the
  * consent to store movements in force (CA-36.2); it is deleted with its clip (CA-36.3) and when that
  * consent is revoked (they are movements, CA-35.4).
+ *
+ * <p>ADR 0011: the same landmarks in the light replay format (TTMOV v1, gzip), the one the app draws,
+ * go next to them as {@code clips/<alerta>.landmarks.ttmov}. It has no confirmation: the app gets it when
+ * the storage has it. Wherever the Parquet landmarks are deleted the light file is deleted too.
  */
 @Service
 public class PuntosDeClips {
 
     /** IANA media type of Apache Parquet. */
     public static final String CONTENT_TYPE = "application/vnd.apache.parquet";
+
+    /** ADR 0011: a light replay file is one gzip member. */
+    public static final String CONTENT_TYPE_LIGERO = "application/gzip";
+
+    private static final String EXTENSION = ".parquet";
+    private static final String EXTENSION_LIGERA = ".ttmov";
 
     private final EventoDeAgenteRepository eventos;
     private final AlertaRepository alertas;
@@ -56,7 +67,20 @@ public class PuntosDeClips {
     }
 
     public static String clave(UUID alertaId) {
-        return "clips/%s.landmarks.parquet".formatted(alertaId);
+        return "clips/%s.landmarks%s".formatted(alertaId, EXTENSION);
+    }
+
+    /** ADR 0011: the light file's key is the landmarks' key with {@code .ttmov} instead of {@code .parquet}. */
+    public static String claveLigera(String clavePuntos) {
+        String base = clavePuntos.endsWith(EXTENSION)
+                ? clavePuntos.substring(0, clavePuntos.length() - EXTENSION.length())
+                : clavePuntos;
+        return base + EXTENSION_LIGERA;
+    }
+
+    /** Every object of a clip's landmarks: the Parquet file and its light file (either may not exist). */
+    public static List<String> claves(String clavePuntos) {
+        return List.of(clavePuntos, claveLigera(clavePuntos));
     }
 
     /** The agent asks where to upload the landmarks of the event's clip. */
@@ -77,11 +101,38 @@ public class PuntosDeClips {
         return new SubidaDeClip(subida.url(), subida.cabeceras(), expira);
     }
 
-    /** CA-36.3: the clip goes, its landmarks too. Call inside the household's transaction. */
+    /**
+     * ADR 0011: the agent asks where to upload the clip's landmarks in the light replay format. Same
+     * checks as {@link #prepararSubida}; the alert records the landmarks' key (keys are deterministic),
+     * so every deletion of the landmarks finds the light file too.
+     */
+    @Transactional
+    public SubidaDeClip prepararSubidaLigera(UUID camaraId, UUID eventoId) {
+        EventoDeAgente evento = eventos.buscarPorEventoId(eventoId)
+                .filter(e -> e.getCamaraId().equals(camaraId) && e.getAlertaId() != null)
+                .orElseThrow(() -> new ErrorDeNegocio(AlertaError.EVENTO_NO_ENCONTRADO));
+        if (!movimientos.consentimientoVigente()) {
+            throw new ErrorDeNegocio(AlertaError.SIN_CONSENTIMIENTO_DE_MOVIMIENTOS);
+        }
+        Alerta alerta = alertas.buscar(evento.getAlertaId())
+                .orElseThrow(() -> new ErrorDeNegocio(AlertaError.EVENTO_NO_ENCONTRADO));
+        if (alerta.getPuntosClave() == null) {
+            alerta.asignarPuntos(clave(alerta.getId()));
+            alertas.guardar(alerta);
+        }
+        Instant expira = reloj.instant().plus(propiedades.vigenciaUrlSubida());
+        var subida = almacenamiento.urlDeSubida(claveLigera(alerta.getPuntosClave()), CONTENT_TYPE_LIGERO, expira);
+        return new SubidaDeClip(subida.url(), subida.cabeceras(), expira);
+    }
+
+    /**
+     * CA-36.3: the clip goes, its landmarks too, in both formats (ADR 0011). Call inside the household's
+     * transaction.
+     */
     public void eliminarDe(Alerta alerta) {
         String clave = alerta.quitarPuntos();
         if (clave != null) {
-            almacenamiento.eliminar(clave);
+            claves(clave).forEach(almacenamiento::eliminar);
         }
     }
 

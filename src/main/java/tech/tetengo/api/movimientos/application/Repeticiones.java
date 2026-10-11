@@ -143,7 +143,13 @@ public class Repeticiones {
                 archivo.getTamanoBytes(),
                 archivo.getFotogramas(),
                 archivo.getSha256(),
-                almacenamiento.urlDeLectura(archivo.getClave(), expira));
+                almacenamiento.urlDeLectura(archivo.getClave(), expira),
+                archivo.ligeroDisponible()
+                        ? new RepeticionAbierta.Ligero(
+                                almacenamiento.urlDeLectura(archivo.claveLigera(), expira),
+                                archivo.getLigeroTamanoBytes(),
+                                archivo.getLigeroSha256())
+                        : null);
     }
 
     private RepeticionDeMovimiento abiertaDe(UUID usuarioId, UUID repeticionId) {

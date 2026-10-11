@@ -71,6 +71,11 @@ class PuntosYReportesIntegrationTest extends AbstractIntegrationTest {
                 post("/api/agente/eventos/" + eventoId + "/clip/puntos").header("Authorization", bearer(agente)));
     }
 
+    private ResultActions pedirPuntosLigeros(String token) throws Exception {
+        return mvc.perform(
+                post("/api/agente/eventos/" + eventoId + "/clip/puntos/ligero").header("Authorization", bearer(token)));
+    }
+
     private String clip() throws Exception {
         return mvc.perform(get("/api/alertas/" + alertaId + "/clip").header("Authorization", bearer(titular)))
                 .andExpect(status().isOk())
@@ -132,6 +137,85 @@ class PuntosYReportesIntegrationTest extends AbstractIntegrationTest {
         await().atMost(Duration.ofSeconds(5))
                 .until(() -> almacenamiento.eliminadas().contains("clips/" + alertaId + ".landmarks.parquet"));
         assertThat(campo(clip(), "$.puntosNoDisponibles")).isEqualTo("SIN_CONSENTIMIENTO");
+    }
+
+    @Test
+    void adr0011_elClipTraeLosPuntosEnElFormatoLigeroCuandoLaPcLosSubio() throws Exception {
+        MovimientosApiDePrueba.otorgar(mvc, titular).andExpect(status().isCreated());
+        pedirPuntos().andExpect(status().isCreated());
+        almacenamiento.completarSubidas();
+        // An older PC: only the Parquet landmarks.
+        assertThat(campo(clip(), "$.puntos.ligero")).isNull();
+
+        String subida = pedirPuntosLigeros(agente)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.cabeceras['Content-Type']").value("application/gzip"))
+                .andExpect(jsonPath("$.expiraEn").exists())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(campo(subida, "$.urlSubida")).contains("clips/" + alertaId + ".landmarks.ttmov");
+        // Not in the storage yet.
+        assertThat(campo(clip(), "$.puntos.ligero")).isNull();
+        almacenamiento.completarSubidas();
+
+        String clip = clip();
+        assertThat(campo(clip, "$.puntos.url")).contains("clips/" + alertaId + ".landmarks.parquet");
+        assertThat(campo(clip, "$.puntos.ligero.url")).contains("clips/" + alertaId + ".landmarks.ttmov");
+        assertThat(campo(clip, "$.puntos.expiraEn")).isEqualTo(campo(clip, "$.expiraEn"));
+    }
+
+    @Test
+    void adr0011_sinLosPuntosEnParquetNoHayPuntosAunqueEsteElArchivoLigero() throws Exception {
+        MovimientosApiDePrueba.otorgar(mvc, titular).andExpect(status().isCreated());
+        pedirPuntosLigeros(agente).andExpect(status().isCreated());
+        almacenamiento.completarSubidas();
+
+        String clip = clip();
+        assertThat(campo(clip, "$.puntos")).isNull();
+        assertThat(campo(clip, "$.puntosNoDisponibles")).isEqualTo("SIN_ARCHIVO");
+    }
+
+    @Test
+    void adr0011_losPuntosLigerosPidenElConsentimientoYSonDeLaCamaraDelEvento() throws Exception {
+        pedirPuntosLigeros(agente)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("SIN_CONSENTIMIENTO_DE_MOVIMIENTOS"));
+        MovimientosApiDePrueba.otorgar(mvc, titular).andExpect(status().isCreated());
+
+        String otra = ApiDePrueba.titularConHogar(mvc, "luis@correo.pe", "Luis");
+        String otroAgente = campo(ApiDePrueba.agenteConConsentimiento(mvc, jdbc, otra, "Sala"), "$.token");
+        MovimientosApiDePrueba.otorgar(mvc, campo(otra, "$.tokenAcceso")).andExpect(status().isCreated());
+        pedirPuntosLigeros(otroAgente)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.codigo").value("EVENTO_NO_ENCONTRADO"));
+        assertThat(almacenamiento.subidas()).noneMatch(c -> c.endsWith(".ttmov"));
+    }
+
+    @Test
+    void adr0011_losPuntosLigerosSeBorranConSuClipYAlRevocarElConsentimiento() throws Exception {
+        MovimientosApiDePrueba.otorgar(mvc, titular);
+        pedirPuntos();
+        pedirPuntosLigeros(agente);
+        almacenamiento.completarSubidas();
+
+        retencion.eliminarAnterioresA(reloj.instant().plus(Duration.ofMinutes(1)));
+        assertThat(almacenamiento.eliminadas())
+                .contains("clips/" + alertaId + ".landmarks.parquet", "clips/" + alertaId + ".landmarks.ttmov");
+    }
+
+    @Test
+    void adr0011_revocarElConsentimientoDeMovimientosBorraLosPuntosLigeros() throws Exception {
+        MovimientosApiDePrueba.otorgar(mvc, titular);
+        pedirPuntosLigeros(agente);
+        almacenamiento.completarSubidas();
+
+        mvc.perform(delete("/api/hogar/consentimiento-movimientos").header("Authorization", bearer(titular)))
+                .andExpect(status().isAccepted());
+
+        await().atMost(Duration.ofSeconds(5))
+                .until(() -> almacenamiento.eliminadas().contains("clips/" + alertaId + ".landmarks.ttmov"));
+        assertThat(almacenamiento.subidas()).noneMatch(c -> c.contains(".landmarks."));
     }
 
     @Test

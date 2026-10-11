@@ -42,7 +42,7 @@ class RepeticionController {
     @Operation(
             summary = "Open a replay of a camera (US-39)",
             description =
-                    "{desde, hasta} (at most 1 h) → the movement files of that moment with short-lived URLs, since when there is data (CA-39.4) and whether the cloud is on. Logged in the access log (CA-39.3); close it with DELETE. Errors: 409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS (CA-39.4), 404 CAMARA_NO_ENCONTRADA, 400 VALIDACION. Any member.")
+                    "{desde, hasta} (at most 1 h) → the movement files of that moment with short-lived URLs (each with its light replay file in ligero once uploaded, ADR 0011), since when there is data (CA-39.4) and whether the cloud is on. Logged in the access log (CA-39.3); close it with DELETE. Errors: 409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS (CA-39.4), 404 CAMARA_NO_ENCONTRADA, 400 VALIDACION. Any member.")
     @PostMapping(path = API + "/camaras/{camaraId}/repeticiones", version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.CREATED)
     RepeticionAbierta abrir(@PathVariable UUID camaraId, @RequestBody MomentoRequest pedido) {

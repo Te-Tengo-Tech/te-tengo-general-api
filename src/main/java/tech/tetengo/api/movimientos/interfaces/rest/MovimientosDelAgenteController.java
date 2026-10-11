@@ -27,7 +27,10 @@ import tech.tetengo.api.movimientos.application.SubidaDeMovimientos;
 import tech.tetengo.api.shared.infrastructure.security.UsuarioActual;
 import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
 
-/** US-37 on the PC: uploading movement files (AGENT_CONTRACT.md, "Movement data"). */
+/**
+ * US-37 on the PC: uploading movement files and their light replay files (AGENT_CONTRACT.md, "Movement
+ * data"; ADR 0011).
+ */
 @RestController
 @Tag(name = "Agente del hogar", description = "Endpoints of the household agent (AGENT_CONTRACT.md).")
 class MovimientosDelAgenteController {
@@ -90,6 +93,31 @@ class MovimientosDelAgenteController {
         return new ConfirmacionResponse(archivo.getId(), archivo.getEstado().name(), archivo.getTamanoBytes());
     }
 
+    @Operation(
+            summary = "Get the upload URL of a light replay file (agent, US-37, US-39)",
+            description =
+                    "ADR 0011: the same frames as one of this camera's movement files in the light replay format (TTMOV v1, gzip), under the Parquet file's key with .ttmov. {tamanoBytes, sha256} → pre-signed PUT URL and the headers the PUT carries (Content-Type: application/gzip); then confirm it. Asking again before the confirmation returns a new URL. Errors: 404 ARCHIVO_NO_ENCONTRADO (not this camera's file), 409 ARCHIVO_YA_SUBIDO {archivoId} (drop it), 409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS, 409 MOVIMIENTOS_EN_LA_NUBE_DESACTIVADOS, 400 VALIDACION. Camera token.")
+    @PostMapping(path = API + "/{archivoId}/ligero", version = ApiVersioning.V1)
+    @ResponseStatus(HttpStatus.CREATED)
+    SubidaLigeraResponse prepararLigero(@PathVariable UUID archivoId, @Valid @RequestBody LigeroRequest pedido) {
+        if (pedido.tamanoBytes() > propiedades.tamanoMaximo().toBytes()) {
+            throw Rangos.invalido("tamanoBytes", "El archivo es demasiado grande.");
+        }
+        var s = subida.prepararLigero(
+                UsuarioActual.camaraDelAgente(), archivoId, pedido.tamanoBytes(), pedido.sha256());
+        return new SubidaLigeraResponse(s.url(), s.cabeceras(), s.expiraEn());
+    }
+
+    @Operation(
+            summary = "Confirm a light replay file was uploaded (agent, US-37, US-39)",
+            description =
+                    "ADR 0011: the app can draw that movement file once the storage has its light file. Errors: 409 ARCHIVO_NO_SUBIDO (upload it again), 404 ARCHIVO_NO_ENCONTRADO, 409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS (revoked meanwhile: the object is deleted). Confirming it again changes nothing. Camera token.")
+    @PostMapping(path = API + "/{archivoId}/ligero/confirmacion", version = ApiVersioning.V1)
+    ConfirmacionLigeraResponse confirmarLigero(@PathVariable UUID archivoId) {
+        var archivo = subida.confirmarLigero(UsuarioActual.camaraDelAgente(), archivoId);
+        return new ConfirmacionLigeraResponse(archivo.getId(), archivo.getLigeroTamanoBytes());
+    }
+
     record ArchivoRequest(
             @NotNull(message = "Falta el inicio.") Instant desde,
             @NotNull(message = "Falta el fin.") Instant hasta,
@@ -99,6 +127,16 @@ class MovimientosDelAgenteController {
             String sha256,
 
             @NotNull @Min(0) Integer fotogramas) {}
+
+    record LigeroRequest(
+            @NotNull @Positive Long tamanoBytes,
+
+            @NotNull @Pattern(regexp = "[0-9a-fA-F]{64}", message = "SHA-256 en hexadecimal.")
+            String sha256) {}
+
+    record SubidaLigeraResponse(URI urlSubida, Map<String, String> cabeceras, Instant expiraEn) {}
+
+    record ConfirmacionLigeraResponse(UUID archivoId, long tamanoBytes) {}
 
     record SubidaResponse(UUID archivoId, URI urlSubida, Map<String, String> cabeceras, Instant expiraEn) {}
 

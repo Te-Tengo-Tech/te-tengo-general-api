@@ -28,4 +28,7 @@ public record PropiedadesDeMovimientos(
 
     /** IANA media type of Apache Parquet. */
     public static final String CONTENT_TYPE = "application/vnd.apache.parquet";
+
+    /** ADR 0011: the light replay files (TTMOV v1) are one gzip member. */
+    public static final String CONTENT_TYPE_LIGERO = "application/gzip";
 }

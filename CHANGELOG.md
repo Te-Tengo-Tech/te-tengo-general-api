@@ -35,6 +35,13 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 - CA-31.6: `DELETE /api/agente/pc?datosLocalesBorrados=true` (and `datos_locales_borrados=true` on the revocation) records in the log that the PC also deleted its local data when it was unlinked.
 - Events carry who made the change: `ConsentimientoOtorgado`, `ConsentimientoRevocado` (new `usuarioId`), new `CamaraPausada` and `CamaraReanudada` of `monitoreo`.
 
+- Light replay files (TTMOV v1, gzip; ADR 0011, US-36, US-37, US-39), so the app can draw movements on every platform:
+  - `POST /api/agente/movimientos/{archivoId}/ligero` `{tamanoBytes, sha256}` → `201 {urlSubida, cabeceras, expiraEn}` (key: the movement file's with `.ttmov`, `Content-Type: application/gzip`) and `POST /api/agente/movimientos/{archivoId}/ligero/confirmacion` → `200 {archivoId, tamanoBytes}` (`HeadObject`); same consent and cloud checks as the movement file.
+  - Replays: each `archivos[*]` has `ligero: {url, tamanoBytes, sha256} | null`, non-null once the light file is confirmed.
+  - Clips: `POST /api/agente/eventos/{eventoId}/clip/puntos/ligero` (`clips/<alerta>.landmarks.ttmov`, no confirmation), and `GET /api/alertas/{id}/clip` returns `puntos.ligero: {url} | null`.
+  - Light files are deleted with their movement file or clip landmarks (retention, revocations, unconfirmed uploads, a replaced clip). `GET /api/hogar/movimientos-en-la-nube` `tamanoBytes` counts the confirmed light files too.
+  - Migration `V28`: `archivos_de_movimiento.ligero_tamano_bytes`, `ligero_sha256`, `ligero_subido_en`.
+
 ### Changed
 - `PATCH /api/camaras/{id}` with `{nombreHabitacion}` now works on rooms: it uses the room of that name, renames the camera's own room when it is alone in it, or creates one; it answers `409 AMBIENTE_OCUPADO` when the room has another camera.
 - Agent endpoints of one camera answer `403 TOKEN_DE_CAMARA_REQUERIDO` instead of a `500` when called with a token without a camera.

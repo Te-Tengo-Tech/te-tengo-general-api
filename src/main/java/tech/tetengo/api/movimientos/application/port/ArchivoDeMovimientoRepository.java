@@ -21,7 +21,10 @@ public interface ArchivoDeMovimientoRepository {
     /** Start of the oldest file in the index; empty without files. */
     Optional<Instant> primero();
 
-    /** Files in the index and their total size. */
+    /**
+     * Files in the index and their total size, which also counts their confirmed light replay files
+     * (ADR 0011): what the household keeps in the cloud.
+     */
     Totales totales();
 
     /** Up to {@code limite} files (any state) that ended before {@code antesDe}, oldest first. */

@@ -11,7 +11,8 @@ import tech.tetengo.api.movimientos.domain.model.ArchivoDeMovimiento;
 /**
  * Deletes movement files from object storage and from the index, in batches, in the household in
  * context and the caller's transaction. Objects go first: an index row is only removed once its
- * object was deleted.
+ * objects were deleted, the Parquet file and its light replay file (ADR 0011; deleting a missing one is
+ * fine).
  */
 @Service
 public class BorradoDeMovimientos {
@@ -58,7 +59,8 @@ public class BorradoDeMovimientos {
     }
 
     private long borrar(List<ArchivoDeMovimiento> lote) {
-        almacenamiento.eliminar(lote.stream().map(ArchivoDeMovimiento::getClave).toList());
+        almacenamiento.eliminar(
+                lote.stream().flatMap(archivo -> archivo.claves().stream()).toList());
         archivos.eliminar(lote);
         return lote.stream().filter(ArchivoDeMovimiento::disponible).count();
     }

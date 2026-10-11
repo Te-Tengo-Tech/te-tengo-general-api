@@ -19,7 +19,7 @@ import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
  * CA-26.1). Without a stored clip the alert is shown without it (CA-18.2, {@code 404
  * CLIP_NO_DISPONIBLE}); a deleted one answers {@code 410 CLIP_ELIMINADO} (CA-26.3). US-36: with the
  * clip's body landmarks when there are any and the consent to store movements is in force (CA-36.1),
- * or why not (CA-36.2).
+ * or why not (CA-36.2), and the same landmarks in the light replay format when uploaded (ADR 0011).
  */
 @Service
 public class ObtenerClip {
@@ -60,13 +60,19 @@ public class ObtenerClip {
         Instant expira = reloj.instant().plus(propiedades.vigenciaUrlLectura());
         URI clip = almacenamiento.urlDeLectura(alerta.getClipClave(), expira, descarga, nombreDeArchivo(alerta));
         if (!movimientos.consentimientoVigente()) {
-            return new UrlDeClip(clip, expira, null, SIN_CONSENTIMIENTO);
+            return new UrlDeClip(clip, expira, null, null, SIN_CONSENTIMIENTO);
         }
         if (alerta.getPuntosClave() == null || !almacenamiento.existe(alerta.getPuntosClave())) {
-            return new UrlDeClip(clip, expira, null, SIN_ARCHIVO);
+            return new UrlDeClip(clip, expira, null, null, SIN_ARCHIVO);
         }
+        // ADR 0011: the light file the app draws, when the PC uploaded it.
+        String ligero = PuntosDeClips.claveLigera(alerta.getPuntosClave());
         return new UrlDeClip(
-                clip, expira, almacenamiento.urlDeLectura(alerta.getPuntosClave(), expira, false, null), null);
+                clip,
+                expira,
+                almacenamiento.urlDeLectura(alerta.getPuntosClave(), expira, false, null),
+                almacenamiento.existe(ligero) ? almacenamiento.urlDeLectura(ligero, expira, false, null) : null,
+                null);
     }
 
     /** CA-36.2: why the clip shows no body landmarks. */
