@@ -22,7 +22,7 @@ Household agent ──RTSP(S): live video──► MediaMTX ──WebRTC (WHEP),
 | `shared` | — | Base entities, multi-tenancy (with the membership check), security and token issuing, errors, versioning, OpenAPI, clock, ports for e-mail and push | Done |
 | `cuentas` | EP01 Accounts and access | US-01 to US-03 | Done |
 | `hogares` | EP02 Profile, consent and family | US-04, US-05, US-08 to US-10 | Done |
-| `camaras` | EP02 Cameras, EP06 Installation and cameras | US-06, US-07; camera side of US-05, US-15, US-22; PC link and PCs (US-28, US-30, US-31, ADR 0009) | Done (**reference slice**); EP06 pending the change request |
+| `camaras` | EP02 Cameras, EP06 Installation and cameras | US-06, US-07; camera side of US-05, US-15, US-22; PC link and PCs (US-28, US-30, US-31, ADR 0009); rooms and cameras of linked PCs (US-29) | Done (**reference slice**); EP06 pending the change request |
 | `alertas` | EP03 Detection and alerts | US-11 to US-21; alert list (US-25) and clips (US-18, US-26) | Done |
 | `monitoreo` | EP04 Monitoring and privacy | US-22 to US-24 | Done (live view through MediaMTX, ADR 0007) |
 | `historial` | EP05 History and summary | US-26 retention, US-27 | Done (retention period pending) |

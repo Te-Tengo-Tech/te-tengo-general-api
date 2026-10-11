@@ -20,6 +20,12 @@ public interface CamaraRepository {
     /** The cameras in use of a PC of the household. */
     List<Camara> deLaPc(UUID pcId);
 
+    /** The cameras in use in a room (CA-29.3: at most one, for now). */
+    List<Camara> enAmbiente(UUID ambienteId);
+
+    /** The PC's camera of that webcam, in use or retired (CA-29.4: same device, same camera). */
+    Optional<Camara> deLaPcPorDispositivo(UUID pcId, String dispositivoId);
+
     /**
      * How an agent token of the camera stands, read without the household in context (the token is
      * checked before it is bound): a native query, only for {@code ComprobadorDeAgentes}.

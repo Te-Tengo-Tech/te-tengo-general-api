@@ -39,6 +39,16 @@ class CamaraRepositoryAdapter implements CamaraRepository {
     }
 
     @Override
+    public List<Camara> enAmbiente(UUID ambienteId) {
+        return jpa.findByAmbienteIdAndRetiradaEnIsNull(ambienteId);
+    }
+
+    @Override
+    public Optional<Camara> deLaPcPorDispositivo(UUID pcId, String dispositivoId) {
+        return jpa.findFirstByPcIdAndDispositivoId(pcId, dispositivoId);
+    }
+
+    @Override
     public Optional<CamaraDeAgente> deAgente(UUID hogarId, UUID camaraId) {
         return jpa.deAgente(hogarId, camaraId).stream()
                 .findFirst()

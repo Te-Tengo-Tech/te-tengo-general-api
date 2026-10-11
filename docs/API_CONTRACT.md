@@ -74,7 +74,9 @@
 | `PUT /api/hogar/aviso` | owner | `{principalId, secundarioId \| null, esperaMinutos: 3 \| 5 \| 10}` → `200` (CA-10.1, CA-10.2) | `422 ESPERA_INVALIDA` · `422 CONTACTO_NO_ES_FAMILIAR` |
 
 ## 4. Cameras and monitoring (`camaras`, `monitoreo`) — US-06, US-07, US-15, US-22, US-23, US-24
-`Camara = {id, nombreHabitacion, estadoConexion: "EN_LINEA" | "DESCONECTADA", ultimaSenal | null, pausadaHasta | null, deteccionConfiable: boolean, instaladaEn, noConfiableDesde | null, pcId | null}`
+`Camara = {id, nombreHabitacion, estadoConexion: "EN_LINEA" | "DESCONECTADA", ultimaSenal | null, pausadaHasta | null, deteccionConfiable: boolean, instaladaEn, noConfiableDesde | null, pcId | null, ambienteId | null, nombreDispositivo | null}`
+- `nombreHabitacion` is the name of the camera's room (`ambienteId`, §9). **Terms:** the backlog and this API say «ambiente»; the apps keep labelling it «habitación» (design session of 2026-10-10), so `nombreHabitacion` keeps its name.
+- `nombreDispositivo`: the webcam's name as the PC shows it («Webcam USB HD»); null for cameras installed by the project team.
 - `pcId`: the PC the camera is connected to (§9). Every camera has one; it is null only for rows older than PCs that had no installation. An older backend does not send it.
 - Cameras of a removed PC (US-31) are no longer listed and answer `404 CAMARA_NO_ENCONTRADA`; their alerts keep their room name.
 - `instaladaEn`: when the project team installed the camera, that is, the agent's first registration (CA-06.1). The camera header shows it as «Instalada el».
@@ -83,7 +85,7 @@
 | Method and path | Auth | Body → response | Errors |
 |---|---|---|---|
 | `GET /api/camaras` | member | → `200 [Camara]`, the cameras installed in the household, with the room name set at installation (CA-06.1, CA-07.1, CA-22.2) | — |
-| `PATCH /api/camaras/{id}` | owner | `{nombreHabitacion}` (1–40 chars) → `200 Camara`; later alerts use the new name (CA-06.2) | `422 CAMARA_NOMBRE_VACIO` (CA-06.3) · `422 CAMARA_NOMBRE_MUY_LARGO` · `404 CAMARA_NO_ENCONTRADA` |
+| `PATCH /api/camaras/{id}` | owner | `{nombreHabitacion}` (1–40 chars) **or** `{ambienteId}` → `200 Camara`; later alerts use the new name (CA-06.2). By name: the room of that name if there is one (ignoring case); otherwise, if the camera is alone in its room, the room is renamed; otherwise a new room is created. By id: the camera moves to that room (US-29) | `422 CAMARA_NOMBRE_VACIO` (CA-06.3) · `422 CAMARA_NOMBRE_MUY_LARGO` · `409 AMBIENTE_OCUPADO {ambiente, camara}`: the room has another camera (CA-29.3) · `404 AMBIENTE_NO_ENCONTRADO` · `404 CAMARA_NO_ENCONTRADA` · `400 VALIDACION` with neither field |
 | `POST /api/camaras/{id}/pausa` | member | `{duracion: "MIN_30" \| "HORA_1" \| "HORAS_2" \| "HASTA_MANANA"}`, the options of the prototype's pause screen; `HASTA_MANANA` means the next 07:00 in the household time zone, `America/Lima` **[implementation choice]**. → `200 Camara` with `pausadaHasta`. Stops capture and detection (CA-22.1); resumes automatically and sends push `PAUSA_FINALIZADA` (CA-22.3) | `422 DURACION_INVALIDA` |
 | `DELETE /api/camaras/{id}/pausa` | member | → `200 Camara` (resume now) | — |
 | `POST /api/vista-en-vivo/preparar` | member | `{camaraId}` → `204`. The camera (or live view) screen opened: the camera's agent warms up so a live view opened next starts sooner (live view v3). No session is opened or recorded and nothing is streamed. Calling it is optional and may be repeated; nothing happens while the camera already streams | `400 VALIDACION` with `campos.camaraId` · `404 CAMARA_NO_ENCONTRADA` · `409 CAMARA_DESCONECTADA` · `409 CAMARA_EN_PAUSA {pausadaHasta}` · `409 SIN_CONSENTIMIENTO`: the same rules as opening a session |
@@ -204,6 +206,19 @@ Pc = {
 | `POST /api/vinculaciones/rechazo` | owner | `{codigo}` → `204`: «No reconozco esta PC»; the PC is not linked (CA-28.4) | see below |
 | `PATCH /api/pcs/{id}` | owner | `{nombre}` (1–60 chars) → `200 Pc` | `422 PC_NOMBRE_VACIO` · `422 PC_NOMBRE_MUY_LARGO` · `404 PC_NO_ENCONTRADA` |
 | `DELETE /api/pcs/{id}` | owner | → `204`: «Quitar esta PC». The app stops showing it and its cameras at once; the PC stops capturing, deletes its credentials and shows the QR again at once if online (CA-31.1), or as soon as it connects (CA-31.2). No push is sent for it | `404 PC_NO_ENCONTRADA` |
+
+**Rooms («ambientes», US-29).** Each camera watches one room of the household; the camera is chosen and placed on the PC (D-29.1), and the app lists, renames and adds rooms. For now a room has **one camera**, on any PC (CA-29.3); the data allows more later.
+
+`Ambiente = {id, nombre, camaras: [{id, pcId, pcNombre, nombreDispositivo, estadoConexion}]}`: the cameras in use in it (at most one, for now).
+
+| Method and path | Auth | Body → response | Errors |
+|---|---|---|---|
+| `GET /api/ambientes` | member | → `200 [Ambiente]`, by name | — |
+| `POST /api/ambientes` | owner | `{nombre}` (1–40 chars) → `201 Ambiente` | `422 AMBIENTE_NOMBRE_VACIO` («Escribe el nombre del ambiente.», CA-29.2) · `422 AMBIENTE_NOMBRE_MUY_LARGO` · `409 AMBIENTE_YA_EXISTE`: names are unique ignoring case |
+| `PATCH /api/ambientes/{id}` | owner | `{nombre}` → `200 Ambiente`; its camera and its later alerts use the new name | the same · `404 AMBIENTE_NO_ENCONTRADO` |
+| `DELETE /api/ambientes/{id}` | owner | → `204` | `409 AMBIENTE_CON_CAMARA`: move or stop its camera first · `404 AMBIENTE_NO_ENCONTRADO` |
+
+`409 AMBIENTE_OCUPADO` carries `ambiente` (its name) and `camara: {id, pcId, pcNombre, nombreDispositivo}`, for «Ya hay una cámara en el ambiente Sala (PC Sala-Rosa). Por ahora, cada ambiente usa una sola cámara.».
 
 **The code (`codigo`).**
 - 8 letters of `BCDFGHJKLMNPQRSTVWXZ` (no vowels, no digits), shown `XXXX-XXXX`. The app accepts it in lowercase, with or without the hyphen, and only those letters (CA-28.2); anything else is `400 VALIDACION` with `campos.codigo` («El código tiene 8 letras, solo consonantes y sin números.»).

@@ -15,6 +15,22 @@ public enum CamaraError implements CodigoError {
     PC_NOMBRE_VACIO("PC_NOMBRE_VACIO", HttpStatus.UNPROCESSABLE_CONTENT, "El nombre de la PC es obligatorio."),
     PC_NOMBRE_MUY_LARGO(
             "PC_NOMBRE_MUY_LARGO", HttpStatus.UNPROCESSABLE_CONTENT, "El nombre de la PC es demasiado largo."),
+    AMBIENTE_NO_ENCONTRADO("AMBIENTE_NO_ENCONTRADO", HttpStatus.NOT_FOUND, "El ambiente no existe en este hogar."),
+    AMBIENTE_NOMBRE_VACIO("AMBIENTE_NOMBRE_VACIO", HttpStatus.UNPROCESSABLE_CONTENT, "Escribe el nombre del ambiente."),
+    AMBIENTE_NOMBRE_MUY_LARGO(
+            "AMBIENTE_NOMBRE_MUY_LARGO",
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "El nombre del ambiente es demasiado largo."),
+    AMBIENTE_YA_EXISTE("AMBIENTE_YA_EXISTE", HttpStatus.CONFLICT, "Ya hay un ambiente con ese nombre."),
+    /** CA-29.3: one camera per room, for now. */
+    AMBIENTE_OCUPADO(
+            "AMBIENTE_OCUPADO",
+            HttpStatus.CONFLICT,
+            "Ese ambiente ya tiene una cámara. Por ahora, cada ambiente usa una sola cámara."),
+    AMBIENTE_CON_CAMARA(
+            "AMBIENTE_CON_CAMARA",
+            HttpStatus.CONFLICT,
+            "El ambiente tiene una cámara en uso; asígnala a otro ambiente antes de borrarlo."),
     /** CA-28.6 counts it: «Ese código no existe. Revísalo letra por letra.» */
     CODIGO_INCORRECTO("CODIGO_INCORRECTO", HttpStatus.NOT_FOUND, "Ese código no existe. Revísalo letra por letra."),
     /** CA-28.3: expired after its 10 minutes, or already used. */

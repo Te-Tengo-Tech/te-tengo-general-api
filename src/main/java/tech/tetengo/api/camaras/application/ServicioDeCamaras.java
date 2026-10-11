@@ -81,7 +81,9 @@ public class ServicioDeCamaras implements CamarasDelHogar {
                 camara.isDeteccionConfiable(),
                 camara.getInstaladaEn(),
                 camara.getNoConfiableDesde(),
-                camara.getPcId());
+                camara.getPcId(),
+                camara.getAmbienteId(),
+                camara.getNombreDispositivo());
     }
 
     @Override

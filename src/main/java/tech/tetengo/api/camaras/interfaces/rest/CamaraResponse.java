@@ -13,4 +13,6 @@ record CamaraResponse(
         boolean deteccionConfiable,
         Instant instaladaEn,
         Instant noConfiableDesde,
-        UUID pcId) {}
+        UUID pcId,
+        UUID ambienteId,
+        String nombreDispositivo) {}

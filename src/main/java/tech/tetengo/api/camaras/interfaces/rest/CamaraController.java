@@ -42,10 +42,11 @@ class CamaraController {
     @Operation(
             summary = "Rename the room (owner, US-06)",
             description =
-                    "Later alerts use the new name (CA-06.2). Errors: 422 CAMARA_NOMBRE_VACIO (CA-06.3), 422 CAMARA_NOMBRE_MUY_LARGO, 404 CAMARA_NO_ENCONTRADA, 403 SOLO_TITULAR.")
+                    "The camera's room by name (nombreHabitacion) or by ambienteId (US-29); later alerts use the new name (CA-06.2). Errors: 422 CAMARA_NOMBRE_VACIO (CA-06.3), 422 CAMARA_NOMBRE_MUY_LARGO, 409 AMBIENTE_OCUPADO (CA-29.3), 404 AMBIENTE_NO_ENCONTRADO, 404 CAMARA_NO_ENCONTRADA, 403 SOLO_TITULAR.")
     @PatchMapping(path = "/{id}", version = ApiVersioning.V1)
     CamaraResponse renombrar(@PathVariable UUID id, @Valid @RequestBody RenombrarCamaraRequest pedido) {
         UsuarioActual.exigirTitular();
-        return CamaraMapper.aRespuesta(renombrarCamara.ejecutar(id, pedido.nombreHabitacion()));
+        return CamaraMapper.aRespuesta(
+                renombrarCamara.ejecutar(id, pedido.nombreHabitacion(), pedido.ambienteId(), UsuarioActual.id()));
     }
 }

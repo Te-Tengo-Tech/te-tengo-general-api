@@ -52,7 +52,9 @@ public interface CamarasDelHogar {
             boolean deteccionConfiable,
             Instant instaladaEn,
             Instant noConfiableDesde,
-            UUID pcId) {}
+            UUID pcId,
+            UUID ambienteId,
+            String nombreDispositivo) {}
 
     record CamaraEnHogar(UUID camaraId, UUID hogarId) {}
 }
