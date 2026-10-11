@@ -41,7 +41,8 @@ import tech.tetengo.api.support.VinculacionDePrueba;
             "spring.security.oauth2.resourceserver.jwt.public-key-location=",
             "tetengo.jwt.clave-privada-location=",
             "tetengo.tareas.habilitadas=false",
-            AbstractIntegrationTest.SECRETO_MEDIAMTX
+            AbstractIntegrationTest.SECRETO_MEDIAMTX,
+            AbstractIntegrationTest.SIN_LIMITES
         })
 class DesvinculacionPorElCanalIntegrationTest extends AbstractIntegrationTest {
 

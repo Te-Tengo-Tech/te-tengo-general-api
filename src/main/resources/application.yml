@@ -201,10 +201,37 @@ tetengo:
   invitaciones:
     # The backlog does not say how long an invitation lasts: placeholder pending (docs/BLOCKERS.md).
     vigencia: 7d
+  limites:
+    # Per-client-address limits of the public endpoints (implementation choices; 0 turns one off).
+    # Over a limit: 429 DEMASIADAS_SOLICITUDES with Retry-After. In memory, per API instance. Override
+    # one value with e.g. TETENGO_LIMITES_VINCULACION_PORMINUTO=20.
+    habilitado: ${TT_LIMITES_HABILITADO:true}
+    max-direcciones: 100000
+    # POST /api/agente/vinculacion: a PC asks for a new code every 10 min while nobody links it.
+    vinculacion:
+      por-minuto: 10
+      por-hora: 60
+    # POST /api/agente/token: a PC polls every 5 s (12 per minute) while it waits to be linked.
+    token:
+      por-minuto: 60
+      por-hora: 0
+    # POST /api/sesiones (the account lockout of CA-02.3 still applies) and POST /api/recuperaciones.
+    sesiones:
+      por-minuto: 20
+      por-hora: 100
+    recuperaciones:
+      por-minuto: 5
+      por-hora: 20
 
 server:
   error:
     include-message: never
+  # The API runs behind Caddy, which sets X-Forwarded-For to the client's address (and ignores the one
+  # the client sends). Tomcat trusts X-Forwarded-* only from a connection of an internal proxy
+  # (server.tomcat.remoteip.internal-proxies; by default the private, loopback and link-local ranges,
+  # where the Docker network is), so the client's address is the request's remote address and a client
+  # that reaches the API directly cannot set it.
+  forward-headers-strategy: native
 
 management:
   endpoints:

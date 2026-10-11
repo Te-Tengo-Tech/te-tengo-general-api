@@ -37,7 +37,7 @@ Option 2, in-house:
 - About a dozen small classes instead of a framework, and no second token format: every agent endpoint, the live view control channel and the multi-tenancy rules stay as they are. The code follows the RFC sections it cites, and the security properties are covered by integration tests (expiry, single use, `slow_down`, brute force, owner only, rotation and reuse detection, revocation, revoked PC rejected, 90 days).
 - If the system later needs standard OAuth for other clients (third parties, OpenID Connect), Spring Authorization Server should replace this, keeping the endpoints' wire format.
 - One more query per agent request (heartbeats every 30 s per camera). Cheap, and it makes unlinking immediate.
-- The device authorization endpoint is public, like sign-up: a client could create many pending requests. Requests are small and deleted a day after they expire; rate limiting by IP belongs to the reverse proxy (docs/BLOCKERS.md).
+- The device authorization endpoint is public, like sign-up: a client could create many pending requests. Requests are small and deleted a day after they expire, and the API limits this endpoint and the token endpoint per client address (in memory, `tetengo.limites`; `429` with `Retry-After`), reading the address from the reverse proxy's `X-Forwarded-For` only on connections from a trusted proxy.
 - The `verification_uri` (`https://app.tetengo.reqsai.tech/vincular`) must open the app's code screen; the domain is pending confirmation.
 
 ## References

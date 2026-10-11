@@ -23,15 +23,16 @@
   - extra properties where stated.
   - Validation failures use `400 VALIDACION` with `campos: { "<field>": "<message>" }`, so the app can highlight the missing field (CA-01.3, CA-04.3).
   - A missing, expired or invalid access token on any protected endpoint answers `401 SESION_EXPIRADA` (with the `WWW-Authenticate: Bearer` header); the app refreshes its tokens only on that code.
+  - Some public endpoints are limited per client address **[implementation choice]**: over the limit they answer `429 DEMASIADAS_SOLICITUDES` with a `Retry-After` header (seconds). The app shows `detail` and lets the person try again later.
 
 ## 1. Accounts and sessions (`cuentas`) — US-01, US-02, US-03
 | Method and path | Auth | Body → response | Errors |
 |---|---|---|---|
 | `POST /api/cuentas` | public | `{correo, contrasena, nombre}` → `201 {id, correo, nombre}` (CA-01.1) | `409 CORREO_EN_USO` (CA-01.2) · `400 VALIDACION` (CA-01.3) |
-| `POST /api/sesiones` | public | `{correo, contrasena}` → `200 Sesion` (CA-02.1) | `401 CREDENCIALES_INVALIDAS` (CA-02.2) · `423 CUENTA_BLOQUEADA {bloqueadaHasta}`: 5 consecutive failures lock the account for 15 min (CA-02.3) |
+| `POST /api/sesiones` | public | `{correo, contrasena}` → `200 Sesion` (CA-02.1) | `401 CREDENCIALES_INVALIDAS` (CA-02.2) · `423 CUENTA_BLOQUEADA {bloqueadaHasta}`: 5 consecutive failures lock the account for 15 min (CA-02.3) · `429 DEMASIADAS_SOLICITUDES`: more than 20 per minute or 100 per hour from one address |
 | `POST /api/sesiones/refresco` | public | `{tokenRefresco}` → `200 Sesion` | `401 SESION_EXPIRADA` |
 | `DELETE /api/sesiones/actual` | user | → `204`. Revokes the refresh token; a new login is required (CA-02.4) | — |
-| `POST /api/recuperaciones` | public | `{correo}` → `202`, **always the same response** whether or not the account exists (CA-03.1, CA-03.2) | — |
+| `POST /api/recuperaciones` | public | `{correo}` → `202`, **always the same response** whether or not the account exists (CA-03.1, CA-03.2) | `429 DEMASIADAS_SOLICITUDES`: more than 5 per minute or 20 per hour from one address |
 | `POST /api/recuperaciones/confirmacion` | public | `{token, nuevaContrasena}` → `204` | `410 ENLACE_VENCIDO`: links are valid for 30 min (CA-03.3) |
 
 `Sesion = {tokenAcceso, tokenRefresco, expiraEn, usuario: {id, nombre, correo}, hogarId | null, rol | null}`
