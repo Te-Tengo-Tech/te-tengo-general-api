@@ -39,6 +39,11 @@ public class ConfiguracionDeMovimientos extends EntidadDelHogar {
 
     /** CA-37.1: a period of the list, or null to stop storing in the cloud. Returns whether it changed. */
     public boolean cambiarRetencion(Integer dias, UUID usuarioId, Instant ahora) {
+        return cambiarRetencion(dias, usuarioId, getHogarId(), ahora);
+    }
+
+    /** The same for a configuration not saved yet, whose household is not filled in. */
+    public boolean cambiarRetencion(Integer dias, UUID usuarioId, UUID hogarId, Instant ahora) {
         if (dias != null && !PLAZOS.contains(dias)) {
             throw new ErrorDeNegocio(MovimientoError.RETENCION_INVALIDA);
         }
@@ -49,7 +54,7 @@ public class ConfiguracionDeMovimientos extends EntidadDelHogar {
         retencionDias = dias;
         cambiadaEn = ahora;
         cambiadaPor = usuarioId;
-        registrarEvento(new RetencionDeMovimientosCambiada(getHogarId(), anterior, dias, usuarioId, ahora));
+        registrarEvento(new RetencionDeMovimientosCambiada(hogarId, anterior, dias, usuarioId, ahora));
         return true;
     }
 

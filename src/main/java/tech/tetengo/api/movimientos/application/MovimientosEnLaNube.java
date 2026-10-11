@@ -11,6 +11,7 @@ import tech.tetengo.api.movimientos.domain.MovimientoError;
 import tech.tetengo.api.movimientos.domain.model.ConfiguracionDeMovimientos;
 import tech.tetengo.api.movimientos.domain.model.ConsentimientoDeMovimientos;
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
+import tech.tetengo.api.shared.infrastructure.multitenancy.HogarActual;
 
 /**
  * US-37: the owner chooses how long movements are kept in the cloud: off (the default) or 7, 30, 90 or
@@ -56,7 +57,8 @@ public class MovimientosEnLaNube {
             throw new ErrorDeNegocio(MovimientoError.SIN_CONSENTIMIENTO_DE_MOVIMIENTOS);
         }
         ConfiguracionDeMovimientos configuracion = configuraciones.actual().orElseGet(ConfiguracionDeMovimientos::new);
-        if (configuracion.cambiarRetencion(dias, titularId, reloj.instant())) {
+        if (configuracion.cambiarRetencion(
+                dias, titularId, HogarActual.obtener().orElseThrow(), reloj.instant())) {
             configuraciones.guardar(configuracion);
         }
         return consultar();
