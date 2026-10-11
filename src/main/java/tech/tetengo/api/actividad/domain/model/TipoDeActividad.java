@@ -24,10 +24,19 @@ public enum TipoDeActividad {
     /** Reported by the PC: folder, a type on or off, a period or the space limit (US-38). */
     GUARDADO_LOCAL_CAMBIADO,
     /** Reported by the PC: it deleted data stored on it (e.g. after a revocation, CA-35.4). */
-    DATOS_LOCALES_ELIMINADOS;
+    DATOS_LOCALES_ELIMINADOS,
+    /**
+     * Reported by the PC: someone replayed a camera's movements on the PC itself, only when it was
+     * played or scrubbed (US-39, CA-39.3). Replays in the app are in the access log instead.
+     */
+    REPETICION_VISTA;
 
     private static final Set<TipoDeActividad> DE_LA_PC = EnumSet.of(
-            MODO_AVANZADO_ACTIVADO, MODO_AVANZADO_DESACTIVADO, GUARDADO_LOCAL_CAMBIADO, DATOS_LOCALES_ELIMINADOS);
+            MODO_AVANZADO_ACTIVADO,
+            MODO_AVANZADO_DESACTIVADO,
+            GUARDADO_LOCAL_CAMBIADO,
+            DATOS_LOCALES_ELIMINADOS,
+            REPETICION_VISTA);
 
     /** The changes only the PC knows about, which it reports itself. */
     public boolean reportadoPorLaPc() {

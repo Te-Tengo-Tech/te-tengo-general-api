@@ -282,6 +282,7 @@ Actividad = {
 | `MODO_AVANZADO_ACTIVADO` / `MODO_AVANZADO_DESACTIVADO` | «Desde la PC Sala-Rosa: se activó el modo avanzado» | PC | as the PC reports it |
 | `GUARDADO_LOCAL_CAMBIADO` | «Desde la PC Sala-Rosa: video continuo pasó de No a Sí, 7 días» | PC | as the PC reports it |
 | `DATOS_LOCALES_ELIMINADOS` | «Desde la PC Sala-Rosa: se borraron los datos guardados en la PC» | PC | as the PC reports it, or `Datos guardados en la PC` → «Borrados al desvincular» when it was unlinked with that option (CA-31.6) |
+| `REPETICION_VISTA` | «Desde la PC Sala-Rosa: se vio qué pasó en la Sala (23/09 10:36–10:46, 3 min)» | PC | room · moment replayed as an ISO-8601 interval `desde/hasta` → seconds watched (e.g. `"180"`); `camaraId` is the camera. A replay watched **on the PC**, reported only when it was played or scrubbed (CA-39.3; agent contract, «Activity log»). Replays in the app are in `GET /api/accesos-repeticiones` instead; the access log shows both |
 
 Unknown future values of `tipo` should be shown with a neutral generic sentence. Entries are written right after each change, in the background: one may appear a second later.
 
@@ -290,7 +291,7 @@ Change request «PCs, cámaras y datos de movimiento» (pending approval; ADR 00
 
 `ConsentimientoDeMovimientos = {vigente, versionTextoVigente, constancia: {otorgadoEn, otorgadoPor, representante, registradoPor: {id, nombre}, versionTexto, revocadoEn | null} | null, eliminacion: {estado: "PROGRAMADA" | "TERMINADA", archivos, programadaEn, terminadaEn | null} | null}`
 - `constancia`: the latest consent, in force or revoked (CA-35.2: who gave it, who registered it, when, the text version); null if none was ever registered.
-- `versionTextoVigente`: the version of the consent text the app must show (`"1"` for now); registering another version is refused.
+- `versionTextoVigente`: the version of the consent text the app must show (`"2"`: version 2 names the cloud store, Cloudflare R2, outside Peru); registering another version is refused (`422 VERSION_DE_TEXTO_INVALIDA`). The app sends the version of the text it shows. A consent keeps the version it was given with (`constancia.versionTexto`) and stays in force when the version changes: nobody is asked to consent again.
 - `eliminacion`: the deletion of the cloud movements after the latest revocation; the app polls it like the recordings' (§2).
 
 | Method and path | Auth | Body → response | Errors |
@@ -303,7 +304,7 @@ Change request «PCs, cámaras y datos de movimiento» (pending approval; ADR 00
 | `POST /api/camaras/{id}/repeticiones` | member | `{desde, hasta}` (at most 1 h; `desde` not in the future) → `201 Repeticion` (CA-39.1). Logged in the access log (CA-39.3) | `409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` (CA-39.4) · `404 CAMARA_NO_ENCONTRADA` · `400 VALIDACION` with `campos.desde` or `campos.hasta` |
 | `GET /api/repeticiones/{id}/archivos` | member | Query `desde`, `hasta` (at most 1 h) → `200 Repeticion` with the files of that range: the member moved along the timeline; the same log entry, whose moment grows. Only the replay's own member, while it is open (at most 1 h) | `404 REPETICION_NO_ENCONTRADA` · `409 SIN_CONSENTIMIENTO_DE_MOVIMIENTOS` · `400 VALIDACION` |
 | `DELETE /api/repeticiones/{id}` | member | → `204`: the member closed the replay; its duration is recorded (CA-39.3; the app shows the toast «Acceso registrado»). Closing someone else's or a closed one changes nothing | — |
-| `GET /api/accesos-repeticiones` | member | → `200 [{id, usuario: {id, nombre}, camaraId, habitacion, momentoDesde, momentoHasta, inicio, duracionSegundos}]`, newest first. The app shows them with `GET /api/accesos-vista-en-vivo` in one log, with chips «Todo · Vista en vivo · Repeticiones» | — |
+| `GET /api/accesos-repeticiones` | member | → `200 [{id, usuario: {id, nombre}, camaraId, habitacion, momentoDesde, momentoHasta, inicio, duracionSegundos}]`, newest first. The app shows them with `GET /api/accesos-vista-en-vivo` in one log, with chips «Todo · Vista en vivo · Repeticiones». Replays watched on a PC are not here: they are `GET /api/actividad?tipo=REPETICION_VISTA` (§10), which the log adds as «Repeticiones» done «En la PC …» | — |
 
 ```
 Repeticion = {

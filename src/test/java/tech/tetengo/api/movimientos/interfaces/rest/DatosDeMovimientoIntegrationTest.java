@@ -111,7 +111,7 @@ class DatosDeMovimientoIntegrationTest extends AbstractIntegrationTest {
         mvc.perform(get("/api/hogar/consentimiento-movimientos").header("Authorization", bearer(otro)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.vigente").value(false))
-                .andExpect(jsonPath("$.versionTextoVigente").value("1"))
+                .andExpect(jsonPath("$.versionTextoVigente").value("2"))
                 .andExpect(jsonPath("$.constancia").doesNotExist());
     }
 
@@ -123,14 +123,14 @@ class DatosDeMovimientoIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.constancia.otorgadoPor").value("Rosa Huamán"))
                 .andExpect(jsonPath("$.constancia.representante").value(false))
                 .andExpect(jsonPath("$.constancia.registradoPor.nombre").value("Carmen"))
-                .andExpect(jsonPath("$.constancia.versionTexto").value("1"))
+                .andExpect(jsonPath("$.constancia.versionTexto").value("2"))
                 .andExpect(jsonPath("$.constancia.otorgadoEn").exists());
         mvc.perform(
                         post("/api/hogar/consentimiento-movimientos")
                                 .header("Authorization", bearer(titular))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(
-                                        "{\"otorgadoPor\":\"Rosa\",\"representante\":false,\"aceptado\":false,\"versionTexto\":\"1\"}"))
+                                        "{\"otorgadoPor\":\"Rosa\",\"representante\":false,\"aceptado\":false,\"versionTexto\":\"2\"}"))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.codigo").value("CONSENTIMIENTO_NO_ACEPTADO"));
         mvc.perform(
@@ -140,6 +140,14 @@ class DatosDeMovimientoIntegrationTest extends AbstractIntegrationTest {
                                 .content(
                                         "{\"otorgadoPor\":\"Rosa\",\"representante\":true,\"aceptado\":true,\"versionTexto\":\"0\"}"))
                 .andExpect(jsonPath("$.codigo").value("VERSION_DE_TEXTO_INVALIDA"));
+        // The previous text version is refused too: the app must show the text in force.
+        mvc.perform(
+                        post("/api/hogar/consentimiento-movimientos")
+                                .header("Authorization", bearer(titular))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"otorgadoPor\":\"Rosa\",\"representante\":false,\"aceptado\":true,\"versionTexto\":\"1\"}"))
+                .andExpect(jsonPath("$.codigo").value("VERSION_DE_TEXTO_INVALIDA"));
 
         UUID invitado = UUID.randomUUID();
         DatosDePrueba.membresia(jdbc, hogar, invitado, Rol.INVITADO);
@@ -147,6 +155,23 @@ class DatosDeMovimientoIntegrationTest extends AbstractIntegrationTest {
         otorgar(mvc, tokenInvitado).andExpect(status().isForbidden());
         mvc.perform(get("/api/hogar/consentimiento-movimientos").header("Authorization", bearer(tokenInvitado)))
                 .andExpect(jsonPath("$.vigente").value(true));
+    }
+
+    @Test
+    void ca35_2_unConsentimientoDeUnaVersionAnteriorSigueVigenteConSuVersion() throws Exception {
+        // Given with text version 1, before version 2 was published: nobody is asked to consent again.
+        jdbc.update("""
+                insert into consentimientos_de_movimientos
+                    (id, hogar_id, otorgado_en, otorgado_por, representante, registrado_por, version_texto,
+                     creado_en, actualizado_en)
+                values (?, ?, now(), 'Rosa Huamán', false, ?, '1', now(), now())
+                """, UUID.randomUUID(), hogar, UUID.fromString(campo(sesion, "$.usuario.id")));
+        mvc.perform(get("/api/hogar/consentimiento-movimientos").header("Authorization", bearer(titular)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vigente").value(true))
+                .andExpect(jsonPath("$.versionTextoVigente").value("2"))
+                .andExpect(jsonPath("$.constancia.versionTexto").value("1"));
+        retencion(mvc, titular, 30).andExpect(status().isOk());
     }
 
     @Test

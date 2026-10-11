@@ -34,6 +34,7 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 - Activity log (US-33), new module `actividad`: `GET /api/actividad` (any member; filters by PC, type and time; newest first) and `POST /api/agente/pc/actividad` for the PC's own changes (advanced mode, local storage, local deletions; idempotent per change, offline queues welcome). It records who (member, PC or system), what, before and after, and when, for PC links and unlinks, camera rooms, pauses and resumes, consents and the cloud retention. Append-only, enforced by a trigger (migration `V27`).
 - CA-31.6: `DELETE /api/agente/pc?datosLocalesBorrados=true` (and `datos_locales_borrados=true` on the revocation) records in the log that the PC also deleted its local data when it was unlinked.
 - Events carry who made the change: `ConsentimientoOtorgado`, `ConsentimientoRevocado` (new `usuarioId`), new `CamaraPausada` and `CamaraReanudada` of `monitoreo`.
+- `REPETICION_VISTA` in `POST /api/agente/pc/actividad` (CA-39.3): a replay watched on the PC, with the camera (`camaraId`, one of that PC), the moment replayed (`momentoDesde`, `momentoHasta`) and the seconds watched (`duracionSegundos`); members read it in `GET /api/actividad` (room in `objeto`, the moment as an ISO-8601 interval in `valorAnterior`, the seconds in `valorNuevo`), and the app adds it to the access log.
 
 - Light replay files (TTMOV v1, gzip; ADR 0011, US-36, US-37, US-39), so the app can draw movements on every platform:
   - `POST /api/agente/movimientos/{archivoId}/ligero` `{tamanoBytes, sha256}` → `201 {urlSubida, cabeceras, expiraEn}` (key: the movement file's with `.ttmov`, `Content-Type: application/gzip`) and `POST /api/agente/movimientos/{archivoId}/ligero/confirmacion` → `200 {archivoId, tamanoBytes}` (`HeadObject`); same consent and cloud checks as the movement file.
@@ -43,6 +44,7 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
   - Migration `V28`: `archivos_de_movimiento.ligero_tamano_bytes`, `ligero_sha256`, `ligero_subido_en`.
 
 ### Changed
+- The movements consent text is version `2` (`TT_MOVIMIENTOS_VERSION_TEXTO`): it names the cloud store (Cloudflare R2) and the cross-border flow. Consents given with version `1` keep their version and stay in force; registering a new one needs version `2`.
 - `PATCH /api/camaras/{id}` with `{nombreHabitacion}` now works on rooms: it uses the room of that name, renames the camera's own room when it is alone in it, or creates one; it answers `409 AMBIENTE_OCUPADO` when the room has another camera.
 - Agent endpoints of one camera answer `403 TOKEN_DE_CAMARA_REQUERIDO` instead of a `500` when called with a token without a camera.
 

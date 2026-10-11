@@ -144,7 +144,9 @@ tetengo:
     # Movement data (US-35 to US-39; ADR 0010). Implementation choices: the text version the consent
     # records, short-lived URLs, files of at most 10 minutes (the PC writes one per 5 minutes) and
     # 50 MB, replays logged for at most 1 hour and asked 1 hour at a time.
-    version-texto-vigente: ${TT_MOVIMIENTOS_VERSION_TEXTO:1}
+    # Version 2 (2026-10-11) names the cloud store (Cloudflare R2) and the cross-border flow; consents
+    # given with version 1 keep their version and stay in force (no re-consent).
+    version-texto-vigente: ${TT_MOVIMIENTOS_VERSION_TEXTO:2}
     vigencia-url-subida: 10m
     vigencia-url-lectura: 10m
     duracion-maxima-archivo: 10m
