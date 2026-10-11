@@ -37,6 +37,7 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 - `REPETICION_VISTA` in `POST /api/agente/pc/actividad` (CA-39.3): a replay watched on the PC, with the camera (`camaraId`, one of that PC), the moment replayed (`momentoDesde`, `momentoHasta`) and the seconds watched (`duracionSegundos`); members read it in `GET /api/actividad` (room in `objeto`, the moment as an ISO-8601 interval in `valorAnterior`, the seconds in `valorNuevo`), and the app adds it to the access log.
 
 ### Changed
+- The movements consent text is version `2` (`TT_MOVIMIENTOS_VERSION_TEXTO`): it names the cloud store (Cloudflare R2) and the cross-border flow. Consents given with version `1` keep their version and stay in force; registering a new one needs version `2`.
 - `PATCH /api/camaras/{id}` with `{nombreHabitacion}` now works on rooms: it uses the room of that name, renames the camera's own room when it is alone in it, or creates one; it answers `409 AMBIENTE_OCUPADO` when the room has another camera.
 - Agent endpoints of one camera answer `403 TOKEN_DE_CAMARA_REQUERIDO` instead of a `500` when called with a token without a camera.
 

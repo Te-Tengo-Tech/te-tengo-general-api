@@ -291,7 +291,7 @@ Change request «PCs, cámaras y datos de movimiento» (pending approval; ADR 00
 
 `ConsentimientoDeMovimientos = {vigente, versionTextoVigente, constancia: {otorgadoEn, otorgadoPor, representante, registradoPor: {id, nombre}, versionTexto, revocadoEn | null} | null, eliminacion: {estado: "PROGRAMADA" | "TERMINADA", archivos, programadaEn, terminadaEn | null} | null}`
 - `constancia`: the latest consent, in force or revoked (CA-35.2: who gave it, who registered it, when, the text version); null if none was ever registered.
-- `versionTextoVigente`: the version of the consent text the app must show (`"1"` for now); registering another version is refused.
+- `versionTextoVigente`: the version of the consent text the app must show (`"2"`: version 2 names the cloud store, Cloudflare R2, outside Peru); registering another version is refused (`422 VERSION_DE_TEXTO_INVALIDA`). The app sends the version of the text it shows. A consent keeps the version it was given with (`constancia.versionTexto`) and stays in force when the version changes: nobody is asked to consent again.
 - `eliminacion`: the deletion of the cloud movements after the latest revocation; the app polls it like the recordings' (§2).
 
 | Method and path | Auth | Body → response | Errors |
