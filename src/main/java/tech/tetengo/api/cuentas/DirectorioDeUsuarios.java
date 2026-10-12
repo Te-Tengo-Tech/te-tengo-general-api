@@ -5,7 +5,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Public API of {@code cuentas}: names and e-mails of users, for other modules' responses. */
+/**
+ * Public API of {@code cuentas}: names, e-mails and profiles of users, for other modules' responses.
+ */
 public interface DirectorioDeUsuarios {
 
     Optional<Usuario> buscar(UUID id);
@@ -16,5 +18,15 @@ public interface DirectorioDeUsuarios {
     /** Users found, by id; unknown ids are left out. */
     Map<UUID, Usuario> buscarTodos(Collection<UUID> ids);
 
-    record Usuario(UUID id, String nombre, String correo) {}
+    /**
+     * @param telefono null when not given (API contract §13)
+     * @param parentesco null when not given
+     * @param fotoClave object key of the user's photo, null without one
+     */
+    record Usuario(UUID id, String nombre, String correo, String telefono, String parentesco, String fotoClave) {
+
+        public Usuario(UUID id, String nombre, String correo) {
+            this(id, nombre, correo, null, null, null);
+        }
+    }
 }

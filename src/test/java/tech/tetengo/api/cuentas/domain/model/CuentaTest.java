@@ -71,4 +71,28 @@ class CuentaTest {
         }
         throw new AssertionError("Se esperaba un error");
     }
+
+    @Test
+    void elPerfilSeReemplazaYLosCamposEnBlancoQuedanVacios() {
+        Cuenta cuenta = new Cuenta("ana@correo.pe", "Ana", "hash");
+        cuenta.actualizarPerfil(" Ana Pérez ", " +51 987 654 321 ", " Hija ");
+        assertThat(cuenta.getNombre()).isEqualTo("Ana Pérez");
+        assertThat(cuenta.getTelefono()).isEqualTo("+51 987 654 321");
+        assertThat(cuenta.getParentesco()).isEqualTo("Hija");
+
+        cuenta.actualizarPerfil("Ana", "  ", null);
+        assertThat(cuenta.getTelefono()).isNull();
+        assertThat(cuenta.getParentesco()).isNull();
+        assertThat(cuenta.getCorreo()).isEqualTo("ana@correo.pe");
+    }
+
+    @Test
+    void cambiarLaFotoDevuelveLaAnteriorParaBorrarla() {
+        Cuenta cuenta = new Cuenta("ana@correo.pe", "Ana", "hash");
+        assertThat(cuenta.cambiarFoto("fotos/usuarios/a/1.jpg")).isEmpty();
+        assertThat(cuenta.cambiarFoto("fotos/usuarios/a/2.jpg")).contains("fotos/usuarios/a/1.jpg");
+        assertThat(cuenta.quitarFoto()).contains("fotos/usuarios/a/2.jpg");
+        assertThat(cuenta.quitarFoto()).isEmpty();
+        assertThat(cuenta.getFotoClave()).isNull();
+    }
 }

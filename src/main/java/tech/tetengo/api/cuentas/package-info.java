@@ -3,7 +3,7 @@
  * recovery; issues the RS256 JWTs with the {@code hogar_id} and {@code rol} claims. Stories US-01 to
  * US-03.
  *
- * <p>Public API: {@code ServicioDeSesiones}, {@code Sesion}, {@code AltaDeCuentas},
+ * <p>Public API: {@code ServicioDeSesiones}, {@code Sesion}, {@code AltaDeCuentas}, {@code FotosDeCuentas},
  * {@code DirectorioDeUsuarios}; {@code MembresiasDeUsuario} is implemented by {@code hogares}.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Cuentas y acceso")
