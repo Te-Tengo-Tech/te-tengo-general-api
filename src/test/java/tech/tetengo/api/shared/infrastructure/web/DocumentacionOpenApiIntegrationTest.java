@@ -45,7 +45,9 @@ class DocumentacionOpenApiIntegrationTest extends AbstractIntegrationTest {
             "POST /api/agente/token",
             "POST /api/agente/token/revocacion",
             // MediaMTX's authorization hook: no JWT, checked by its shared secret.
-            "POST /api/interno/mediamtx/autorizar");
+            "POST /api/interno/mediamtx/autorizar",
+            // US-43: the published versions, read before signing in or linking a PC.
+            "GET /api/versiones");
 
     @Autowired
     MockMvc mvc;

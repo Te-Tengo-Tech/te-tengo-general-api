@@ -88,6 +88,33 @@ class PcsIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void ca43_7_laAppSabeSiLaPcSeActualizaSolaYUnaSenalSinElDatoLoConserva() throws Exception {
+        mvc.perform(get("/api/pcs").header("Authorization", bearer(titular)))
+                .andExpect(jsonPath("$[0].actualizacionAutomatica").doesNotExist());
+        mvc.perform(post("/api/agente/pc/senal")
+                        .header("Authorization", bearer(acceso()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"versionAgente\":\"0.4.3\",\"actualizacionAutomatica\":false}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/pcs").header("Authorization", bearer(titular)))
+                .andExpect(jsonPath("$[0].versionAgente").value("0.4.3"))
+                .andExpect(jsonPath("$[0].actualizacionAutomatica").value(false));
+
+        mvc.perform(post("/api/agente/pc/senal").header("Authorization", bearer(acceso())))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/pcs").header("Authorization", bearer(titular)))
+                .andExpect(jsonPath("$[0].actualizacionAutomatica").value(false));
+
+        mvc.perform(post("/api/agente/pc/senal")
+                        .header("Authorization", bearer(acceso()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"actualizacionAutomatica\":true}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/pcs").header("Authorization", bearer(titular)))
+                .andExpect(jsonPath("$[0].actualizacionAutomatica").value(true));
+    }
+
+    @Test
     void ca30_3_unaPcQueDejaDeConectarseApareceSinConexionDesdeSuUltimaSenal() throws Exception {
         mvc.perform(post("/api/agente/pc/senal").header("Authorization", bearer(acceso())))
                 .andExpect(status().isOk());

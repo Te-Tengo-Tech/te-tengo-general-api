@@ -15,5 +15,6 @@ Michael Nygard's format: context, decision, status and consequences (Nygard, 201
 | [0009](0009-pc-link-device-grant.md) | PC link with the OAuth 2.0 device grant (RFC 8628) and rotating refresh tokens, implemented in-house | Proposed (change request pending) |
 | [0010](0010-movement-data-in-object-storage.md) | Movement data as Parquet files in object storage (R2), uploaded by the PC with pre-signed URLs and indexed in PostgreSQL | Proposed (change request pending) |
 | [0011](0011-light-replay-format.md) | A light replay format (TTMOV v1, gzip) next to each movement file, so the app draws movements on every platform | Proposed (change request pending) |
+| [0012](0012-published-versions-manifests.md) | Published app versions as JSON manifests the release workflows write next to the downloads; `GET /api/versiones` reads them with a cache | Proposed (change request pending) |
 
 Nygard, M. (2011, November 15). *Documenting architecture decisions*. Cognitect. https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions

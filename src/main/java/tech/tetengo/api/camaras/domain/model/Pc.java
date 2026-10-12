@@ -42,6 +42,10 @@ public class Pc extends EntidadDelHogar {
     @Column(name = "version_agente", length = LARGO_MAXIMO_VERSION)
     private String versionAgente;
 
+    /** «Actualizar automáticamente» on the PC (US-43, CA-43.7); null until the PC reports it. */
+    @Column(name = "actualizacion_automatica")
+    private Boolean actualizacionAutomatica;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, updatable = false, length = 20)
     private OrigenPc origen;
@@ -168,7 +172,19 @@ public class Pc extends EntidadDelHogar {
 
     /** Returns whether the reported version or system changed. */
     public boolean actualizarDatos(String version, String sistema) {
+        return actualizarDatos(version, sistema, null);
+    }
+
+    /**
+     * Returns whether the reported version, system or automatic updates changed; a null value keeps
+     * what the PC reported before.
+     */
+    public boolean actualizarDatos(String version, String sistema, Boolean actualizacionAutomatica) {
         boolean cambio = false;
+        if (actualizacionAutomatica != null && !actualizacionAutomatica.equals(this.actualizacionAutomatica)) {
+            this.actualizacionAutomatica = actualizacionAutomatica;
+            cambio = true;
+        }
         String nuevaVersion = recortar(version, LARGO_MAXIMO_VERSION);
         if (nuevaVersion != null && !nuevaVersion.equals(versionAgente)) {
             versionAgente = nuevaVersion;
@@ -231,6 +247,10 @@ public class Pc extends EntidadDelHogar {
 
     public String getVersionAgente() {
         return versionAgente;
+    }
+
+    public Boolean getActualizacionAutomatica() {
+        return actualizacionAutomatica;
     }
 
     public OrigenPc getOrigen() {

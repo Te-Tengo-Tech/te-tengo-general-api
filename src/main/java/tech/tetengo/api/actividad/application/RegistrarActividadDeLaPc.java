@@ -21,6 +21,10 @@ import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
  * the PC's own id, so a batch sent twice is stored once. Changes the API already sees (a camera's
  * room, unlinking) are logged by the API, not reported.
  *
+ * <p>US-43: after installing an update the PC reports {@code PC_ACTUALIZADA} (old → new version), and
+ * {@code ACTUALIZACION_AUTOMATICA_ACTIVADA} / {@code _DESACTIVADA} when «Actualizar automáticamente»
+ * changes (CA-43.2, CA-43.7).
+ *
  * <p>US-39 / CA-39.3: a replay watched on the PC ({@code REPETICION_VISTA}) carries the camera, the
  * moment replayed and how long it was watched; it is stored with the camera, the room as
  * {@code objeto}, the moment as an ISO-8601 interval in {@code valorAnterior} and the seconds
@@ -125,7 +129,7 @@ public class RegistrarActividadDeLaPc {
         }
         throw invalido(
                 "cambios[%d].tipo".formatted(indice),
-                "La PC solo informa MODO_AVANZADO_ACTIVADO, MODO_AVANZADO_DESACTIVADO, GUARDADO_LOCAL_CAMBIADO, DATOS_LOCALES_ELIMINADOS o REPETICION_VISTA.");
+                "La PC solo informa MODO_AVANZADO_ACTIVADO, MODO_AVANZADO_DESACTIVADO, GUARDADO_LOCAL_CAMBIADO, DATOS_LOCALES_ELIMINADOS, REPETICION_VISTA, PC_ACTUALIZADA, ACTUALIZACION_AUTOMATICA_ACTIVADA o ACTUALIZACION_AUTOMATICA_DESACTIVADA.");
     }
 
     private static ErrorDeNegocio invalido(String campo, String mensaje) {

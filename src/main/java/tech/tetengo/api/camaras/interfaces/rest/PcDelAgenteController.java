@@ -42,13 +42,14 @@ class PcDelAgenteController {
     @Operation(
             summary = "PC heartbeat (agent, US-30)",
             description =
-                    "Every 30 s, like the cameras': keeps the PC online in the app even without cameras in use, and updates versionAgente and sistemaOperativo if sent. Answers the PC's link.")
+                    "Every 30 s, like the cameras': keeps the PC online in the app even without cameras in use, and updates versionAgente, sistemaOperativo and actualizacionAutomatica (US-43, CA-43.7) if sent. Answers the PC's link.")
     @PostMapping(path = "/senal", version = ApiVersioning.V1)
     PcDelAgenteResponse senal(@RequestBody(required = false) SenalDePcRequest pedido) {
         return PcMapper.aRespuesta(consultar.senal(
                 UsuarioActual.pcDelAgente(),
                 pedido == null ? null : pedido.versionAgente(),
-                pedido == null ? null : pedido.sistemaOperativo()));
+                pedido == null ? null : pedido.sistemaOperativo(),
+                pedido == null ? null : pedido.actualizacionAutomatica()));
     }
 
     @Operation(

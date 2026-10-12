@@ -1,5 +1,6 @@
 package tech.tetengo.api.shared.infrastructure.security;
 
+import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
 
 import java.util.function.Supplier;
@@ -71,6 +72,9 @@ public class SeguridadConfig {
                                 API + "/invitaciones/*/aceptacion",
                                 // MediaMTX's authorization hook: checked by its shared secret.
                                 API + "/interno/mediamtx/autorizar")
+                        .permitAll()
+                        // US-43: the published versions, read before signing in or linking a PC.
+                        .requestMatchers(GET, API + "/versiones")
                         .permitAll()
                         .requestMatchers(API + "/agente/**")
                         .hasRole(Rol.AGENTE.name())

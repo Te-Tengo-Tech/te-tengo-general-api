@@ -15,6 +15,7 @@ final class PcMapper {
                 pc.getNombre(),
                 pc.getSistemaOperativo(),
                 pc.getVersionAgente(),
+                pc.getActualizacionAutomatica(),
                 (consultada.enLinea() ? EstadoConexion.EN_LINEA : EstadoConexion.DESCONECTADA).name(),
                 consultada.ultimaSenal(),
                 pc.getVinculadaEn(),

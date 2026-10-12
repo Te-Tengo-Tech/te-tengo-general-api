@@ -44,12 +44,16 @@ public class ConsultarPcDelAgente {
         return aVista(pcs.buscar(pcId).orElseThrow(() -> new ErrorDeNegocio(CamaraError.PC_NO_ENCONTRADA)));
     }
 
-    /** The PC's heartbeat, every 30 s like the cameras'. */
+    /**
+     * The PC's heartbeat, every 30 s like the cameras', with its version, system and whether it
+     * updates itself (US-43, CA-43.7); null values keep what it reported before.
+     */
     @Transactional
-    public PcDelAgente senal(UUID pcId, String versionAgente, String sistemaOperativo) {
+    public PcDelAgente senal(
+            UUID pcId, String versionAgente, String sistemaOperativo, Boolean actualizacionAutomatica) {
         Pc pc = pcs.buscarParaActualizar(pcId).orElseThrow(() -> new ErrorDeNegocio(CamaraError.PC_NO_ENCONTRADA));
         pc.registrarSenal(reloj.instant());
-        pc.actualizarDatos(versionAgente, sistemaOperativo);
+        pc.actualizarDatos(versionAgente, sistemaOperativo, actualizacionAutomatica);
         return aVista(pcs.guardar(pc));
     }
 
