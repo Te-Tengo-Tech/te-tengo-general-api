@@ -4,6 +4,8 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-11
+
 ### Added
 - Profiles and photos (API contract §13): `GET` and `PUT /api/cuenta` (`telefono`, `parentesco`), `PUT /api/cuenta/contrasena` (`422 CONTRASENA_ACTUAL_INCORRECTA`), `POST /api/fotos/subidas` (pre-signed PUT, 10 minutes, JPEG, PNG or WebP up to 5 MB), `POST /api/fotos/subidas/{subidaId}/confirmacion` (checks the image, crops it to a centered square, scales it to 512 × 512 at most, applies the EXIF orientation and stores a JPEG without metadata) and `DELETE /api/fotos/{yo|adulto-mayor}`; the older adult's photo is owner-only. `foto` in `adultoMayor`, and `telefono`, `parentesco` and `foto` in `GET /api/familiares`. Activity types `FOTO_ADULTO_MAYOR_CAMBIADA` and `FOTO_ADULTO_MAYOR_QUITADA`. A job deletes unconfirmed uploads after 24 hours. Migration `V31`; WebP is read with TwelveMonkeys `imageio-webp`; storage settings `TT_FOTOS_*`, defaulting to the clips' bucket.
 
