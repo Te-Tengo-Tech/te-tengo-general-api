@@ -59,6 +59,9 @@ public abstract class AbstractIntegrationTest {
     @Autowired
     protected MovimientosDePrueba movimientos;
 
+    @Autowired
+    protected FotosDePrueba fotos;
+
     @BeforeEach
     void prepararEstadoInicial() {
         esperarEventosPendientes();
@@ -68,6 +71,7 @@ public abstract class AbstractIntegrationTest {
         push.antesDeLeer(this::esperarEventosPendientes);
         almacenamiento.limpiar();
         movimientos.limpiar();
+        fotos.limpiar();
         transmision.limpiar();
         List<String> tablas = jdbcDeLimpieza.queryForList(
                 "select tablename from pg_tables where schemaname = 'public' and tablename <> 'flyway_schema_history'",

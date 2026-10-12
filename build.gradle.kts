@@ -9,7 +9,7 @@ plugins {
 
 group = "tech.tetengo"
 
-version = "0.4.0"
+version = "0.4.1"
 
 description = "Backend API del sistema Te Tengo"
 
@@ -67,6 +67,8 @@ dependencies {
 
   // Clips in Amazon S3 (or an S3-compatible store): pre-signed URLs with the AWS SDK v2
   implementation("software.amazon.awssdk:s3")
+  // Profile photos: WebP decoding for ImageIO (JPEG and PNG come with the JDK)
+  implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
   // E-mail through Amazon SES (API v2)
   implementation("software.amazon.awssdk:sesv2")
   // Or through any SMTP relay (JavaMailSender, spring.mail.*)

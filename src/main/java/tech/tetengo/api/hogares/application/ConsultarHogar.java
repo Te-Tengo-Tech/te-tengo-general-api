@@ -26,6 +26,7 @@ public class ConsultarHogar {
     private final MiembrosDelHogar miembros;
     private final DispositivosDePush dispositivos;
     private final EliminacionesDeGrabaciones eliminaciones;
+    private final FotosDelHogar fotos;
 
     public ConsultarHogar(
             HogarRepository hogares,
@@ -33,13 +34,15 @@ public class ConsultarHogar {
             ConsultarConsentimiento consultarConsentimiento,
             MiembrosDelHogar miembros,
             DispositivosDePush dispositivos,
-            EliminacionesDeGrabaciones eliminaciones) {
+            EliminacionesDeGrabaciones eliminaciones,
+            FotosDelHogar fotos) {
         this.hogares = hogares;
         this.miembroActual = miembroActual;
         this.consultarConsentimiento = consultarConsentimiento;
         this.miembros = miembros;
         this.dispositivos = dispositivos;
         this.eliminaciones = eliminaciones;
+        this.fotos = fotos;
     }
 
     @Transactional(readOnly = true)
@@ -59,7 +62,8 @@ public class ConsultarHogar {
                                     consentimiento.map(c -> c.consentimiento().getRevocadoEn()),
                                     eliminaciones.ultima(),
                                     eliminaciones::clipsGuardados,
-                                    eliminaciones::movimientosGuardados));
+                                    eliminaciones::movimientosGuardados),
+                            fotos.delAdultoMayor(hogar));
                 })
                 .orElseThrow(() -> new ErrorDeNegocio(HogarError.SIN_MEMBRESIA));
     }

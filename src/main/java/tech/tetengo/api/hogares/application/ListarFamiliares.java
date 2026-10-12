@@ -10,19 +10,24 @@ import tech.tetengo.api.cuentas.DirectorioDeUsuarios.Usuario;
 import tech.tetengo.api.hogares.application.port.MembresiaRepository;
 import tech.tetengo.api.hogares.domain.model.Membresia;
 
-/** US-08: the family members linked to the household, owner first. */
+/** US-08: the family members linked to the household, owner first, with their profiles (§13). */
 @Service
 public class ListarFamiliares {
 
     private final MembresiaRepository membresias;
     private final MiembroActual miembroActual;
     private final DirectorioDeUsuarios usuarios;
+    private final FotosDelHogar fotos;
 
     public ListarFamiliares(
-            MembresiaRepository membresias, MiembroActual miembroActual, DirectorioDeUsuarios usuarios) {
+            MembresiaRepository membresias,
+            MiembroActual miembroActual,
+            DirectorioDeUsuarios usuarios,
+            FotosDelHogar fotos) {
         this.membresias = membresias;
         this.miembroActual = miembroActual;
         this.usuarios = usuarios;
+        this.fotos = fotos;
     }
 
     @Transactional(readOnly = true)
@@ -34,8 +39,17 @@ public class ListarFamiliares {
         return miembros.stream()
                 .map(m -> {
                     Usuario u = porId.get(m.getUsuarioId());
+                    if (u == null) {
+                        return new Familiar(m.getUsuarioId(), null, null, m.getRol(), null, null, null);
+                    }
                     return new Familiar(
-                            m.getUsuarioId(), u == null ? null : u.nombre(), u == null ? null : u.correo(), m.getRol());
+                            m.getUsuarioId(),
+                            u.nombre(),
+                            u.correo(),
+                            m.getRol(),
+                            u.telefono(),
+                            u.parentesco(),
+                            fotos.de(u.fotoClave()));
                 })
                 .toList();
     }

@@ -189,6 +189,18 @@ tetengo:
       access-key: ${TT_MOVIMIENTOS_ACCESS_KEY:${TT_CLIPS_ACCESS_KEY:}}
       secret-key: ${TT_MOVIMIENTOS_SECRET_KEY:${TT_CLIPS_SECRET_KEY:}}
       crear-bucket: false
+  fotos:
+    # Profile photos (API contract §13): uploads under fotos/subidas/, stored JPEGs under fotos/usuarios/
+    # and fotos/hogares/. By default the clips' bucket and credentials; without a bucket, an in-memory fake.
+    # The PWA uploads from the browser: the bucket's CORS must allow PUT with Content-Type from its origins.
+    s3:
+      bucket: ${TT_FOTOS_BUCKET:${TT_CLIPS_BUCKET:}}
+      region: ${TT_FOTOS_REGION:${TT_CLIPS_REGION:}}
+      endpoint: ${TT_FOTOS_ENDPOINT:${TT_CLIPS_ENDPOINT:}}
+      path-style: ${TT_FOTOS_PATH_STYLE:${TT_CLIPS_PATH_STYLE:false}}
+      access-key: ${TT_FOTOS_ACCESS_KEY:${TT_CLIPS_ACCESS_KEY:}}
+      secret-key: ${TT_FOTOS_SECRET_KEY:${TT_CLIPS_SECRET_KEY:}}
+      crear-bucket: false
   vista-en-vivo:
     # Live view through MediaMTX (docs/API_CONTRACT.md §4, ADR 0007). The agent publishes to
     # url-publicacion ({camaraId} is replaced; rtsps:// in production), the app plays LL-HLS from url-hls
