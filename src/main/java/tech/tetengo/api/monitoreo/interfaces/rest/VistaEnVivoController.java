@@ -11,7 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import tech.tetengo.api.monitoreo.application.AbrirMosaico;
 import tech.tetengo.api.monitoreo.application.AbrirVistaEnVivo;
+import tech.tetengo.api.monitoreo.application.AbrirVistaPrevia;
 import tech.tetengo.api.monitoreo.application.CambiarModoDeVistaEnVivo;
 import tech.tetengo.api.monitoreo.application.CerrarVistaEnVivo;
 import tech.tetengo.api.monitoreo.application.PrepararVistaEnVivo;
@@ -30,16 +32,48 @@ class VistaEnVivoController {
     private final CambiarModoDeVistaEnVivo cambiarModo;
     private final CerrarVistaEnVivo cerrarVistaEnVivo;
     private final PrepararVistaEnVivo prepararVistaEnVivo;
+    private final AbrirVistaPrevia abrirVistaPrevia;
+    private final AbrirMosaico abrirMosaico;
 
     VistaEnVivoController(
             AbrirVistaEnVivo abrirVistaEnVivo,
             CambiarModoDeVistaEnVivo cambiarModo,
             CerrarVistaEnVivo cerrarVistaEnVivo,
-            PrepararVistaEnVivo prepararVistaEnVivo) {
+            PrepararVistaEnVivo prepararVistaEnVivo,
+            AbrirVistaPrevia abrirVistaPrevia,
+            AbrirMosaico abrirMosaico) {
         this.abrirVistaEnVivo = abrirVistaEnVivo;
         this.cambiarModo = cambiarModo;
         this.cerrarVistaEnVivo = cerrarVistaEnVivo;
         this.prepararVistaEnVivo = prepararVistaEnVivo;
+        this.abrirVistaPrevia = abrirVistaPrevia;
+        this.abrirMosaico = abrirMosaico;
+    }
+
+    @Operation(
+            summary = "Open «Ver todas», several cameras at once (US-41)",
+            description =
+                    "No body. Returns {mosaicoId}. Nothing is streamed: open a live view session per visible camera with this mosaicoId; the access log shows them as one entry with the rooms seen (CA-41.6). Cameras that cannot be seen open no session and are not counted.")
+    @PostMapping(path = API + "/vista-en-vivo/mosaicos", version = ApiVersioning.V1)
+    @ResponseStatus(HttpStatus.CREATED)
+    MosaicoResponse abrirMosaico() {
+        return new MosaicoResponse(abrirMosaico.ejecutar(UsuarioActual.id()));
+    }
+
+    @Operation(
+            summary = "Preview a webcam before assigning it (US-29)",
+            description =
+                    "A live view session of a webcam the PC detected, in use or not, to recognise it in «Elige las cámaras»: the same response, playback and rules as the live view, at most 2 minutes, never recorded, logged in the access log as a preview (US-24). Close it with DELETE /api/vista-en-vivo/{sesionId}. Errors: 404 CAMARA_NO_ENCONTRADA, 409 CAMARA_DESCONECTADA, 409 CAMARA_EN_PAUSA with pausadaHasta, 409 SIN_CONSENTIMIENTO.")
+    @PostMapping(path = API + "/camaras/{id}/vista-previa", version = ApiVersioning.V1)
+    @ResponseStatus(HttpStatus.CREATED)
+    SesionDeVistaEnVivoResponse vistaPrevia(@PathVariable UUID id) {
+        SesionDeVistaEnVivo sesion = abrirVistaPrevia.ejecutar(id, UsuarioActual.id());
+        return new SesionDeVistaEnVivoResponse(
+                sesion.sesionId(),
+                sesion.urlTransmision(),
+                sesion.urlWebrtc(),
+                sesion.expiraEn(),
+                sesion.modo().name());
     }
 
     @Operation(
@@ -55,7 +89,7 @@ class VistaEnVivoController {
     @Operation(
             summary = "Open the live view (US-23)",
             description =
-                    "Body {alertaId|null, modo?}. Returns {sesionId, urlTransmision, urlWebrtc, expiraEn, modo}: urlTransmision is the camera's LL-HLS playlist on MediaMTX with the session's viewer token (CA-23.1, CA-23.2); urlWebrtc is the camera's WebRTC (WHEP) endpoint with the same token, or null when WebRTC playback is off. Errors: 400 VALIDACION (alertaId of another camera, unknown modo), 409 CAMARA_DESCONECTADA (CA-23.3), 409 CAMARA_EN_PAUSA with pausadaHasta (CA-23.4), 409 SIN_CONSENTIMIENTO.")
+                    "Body {alertaId|null, modo?, mosaicoId?}. mosaicoId: a «Ver todas» opening of this member (US-41), whose sessions are one access log entry. Returns {sesionId, urlTransmision, urlWebrtc, expiraEn, modo}: urlTransmision is the camera's LL-HLS playlist on MediaMTX with the session's viewer token (CA-23.1, CA-23.2); urlWebrtc is the camera's WebRTC (WHEP) endpoint with the same token, or null when WebRTC playback is off. Errors: 400 VALIDACION (alertaId of another camera, unknown modo, mosaicoId of another member or unknown), 409 CAMARA_DESCONECTADA (CA-23.3), 409 CAMARA_EN_PAUSA with pausadaHasta (CA-23.4), 409 SIN_CONSENTIMIENTO.")
     @PostMapping(path = API + "/camaras/{id}/vista-en-vivo", version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.CREATED)
     SesionDeVistaEnVivoResponse abrir(
@@ -64,7 +98,8 @@ class VistaEnVivoController {
                 id,
                 UsuarioActual.id(),
                 pedido == null ? null : pedido.alertaId(),
-                pedido == null ? null : pedido.modo());
+                pedido == null ? null : pedido.modo(),
+                pedido == null ? null : pedido.mosaicoId());
         return new SesionDeVistaEnVivoResponse(
                 sesion.sesionId(),
                 sesion.urlTransmision(),

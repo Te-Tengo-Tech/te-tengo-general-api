@@ -50,14 +50,52 @@ tetengo:
     # Heartbeat every 30 s; 3 missed heartbeats mean the camera is disconnected (AGENT_CONTRACT.md).
     intervalo-senal: 30s
     senales-perdidas: 3
-    # GET /api/agente/configuracion (AGENT_CONTRACT.md). The agent only logs a different version.
-    # Default: the current release of te-tengo-desktop-pywebview.
+    # GET /api/agente/configuracion (AGENT_CONTRACT.md). The agent only logs a different version. It is
+    # the Windows version of GET /api/versiones (tetengo.versiones below); this value only applies while
+    # no manifest publishes one.
     version-publicada: ${TT_AGENTE_VERSION_PUBLICADA:0.2.0}
     # Classification thresholds by the field names of the agent's `Umbrales`. Empty by default, so
     # every agent keeps the thresholds calibrated at installation; never set values that were not
     # calibrated (docs/BLOCKERS.md). Example:
     # umbrales:
     #   "[velocidad_descenso_min]": 0.5
+  versiones:
+    # GET /api/versiones (US-43, ADR 0012): the latest version of each app. The release workflows of
+    # te-tengo-desktop-pywebview and te-tengo-mobile-flutter write one manifest per channel,
+    # versiones/<windows|mac|apk|play|ios|pwa>.json, to the public downloads bucket when a version
+    # reaches production; the API reads them from TT_VERSIONES_URL_BASE (the bucket's public URL, the
+    # same DESCARGAS_BASE_URL the landing links to) every `vigencia`, keeping the last good read.
+    # Blank: no manifest is read.
+    url-base: ${TT_VERSIONES_URL_BASE:}
+    # «Ir a la descarga» (CA-43.3).
+    pagina-descargas: ${TT_VERSIONES_PAGINA_DESCARGAS:https://tetengo.reqsai.tech/descargas}
+    vigencia: 5m
+    espera: 5s
+    # Te Tengo Captura's version while no manifest publishes one (version only, no download).
+    respaldo-escritorio: ${TT_AGENTE_VERSION_PUBLICADA:}
+    # CA-43.8: the minimum version the backend supports on each channel; an app below it shows
+    # «Actualiza Te Tengo para seguir recibiendo alertas». Blank: every version is supported.
+    minimas:
+      windows: ${TT_VERSION_MINIMA_WINDOWS:}
+      mac: ${TT_VERSION_MINIMA_MAC:}
+      apk: ${TT_VERSION_MINIMA_APK:}
+      play: ${TT_VERSION_MINIMA_PLAY:}
+      ios: ${TT_VERSION_MINIMA_IOS:}
+      pwa: ${TT_VERSION_MINIMA_PWA:}
+  pcs:
+    # PC link with the OAuth 2.0 device grant (RFC 8628; docs/AGENT_CONTRACT.md, ADR 0009).
+    # client_id of Te Tengo Captura, a public client.
+    clientes: te-tengo-captura
+    # verification_uri: the app's page where the owner types the code; the QR adds ?codigo=XXXX-XXXX.
+    # The domain is pending confirmation (docs/BLOCKERS.md).
+    uri-verificacion: ${TT_PCS_URI_VERIFICACION:https://app.tetengo.reqsai.tech/vincular}
+    # Change request: 10-minute code, polling every 5 s (RFC 8628 default), and the PC must connect
+    # at least once every 90 days or be linked again (CA-28.7). The access token lifetime (also the
+    # cameras' tokens of a linked PC) is an implementation choice.
+    vigencia-codigo: 10m
+    intervalo: 5s
+    vigencia-token-acceso: 1h
+    vigencia-token-renovacion: 90d
   correo:
     # E-mail adapter: registro (default, only logs), ses (Amazon SES) or smtp (any SMTP relay,
     # spring.mail above). docs/NOTIFICATIONS.md
@@ -126,6 +164,31 @@ tetengo:
       access-key: ${TT_CLIPS_ACCESS_KEY:}
       secret-key: ${TT_CLIPS_SECRET_KEY:}
       crear-bucket: false
+  movimientos:
+    # Movement data (US-35 to US-39; ADR 0010). Implementation choices: the text version the consent
+    # records, short-lived URLs, files of at most 10 minutes (the PC writes one per 5 minutes) and
+    # 50 MB, replays logged for at most 1 hour and asked 1 hour at a time.
+    # Version 2 (2026-10-11) names the cloud store (Cloudflare R2) and the cross-border flow; consents
+    # given with version 1 keep their version and stay in force (no re-consent).
+    version-texto-vigente: ${TT_MOVIMIENTOS_VERSION_TEXTO:2}
+    vigencia-url-subida: 10m
+    vigencia-url-lectura: 10m
+    duracion-maxima-archivo: 10m
+    tamano-maximo: 50MB
+    duracion-maxima-repeticion: 1h
+    rango-maximo-consulta: 1h
+    # Cloudflare R2 (S3 API) or Amazon S3; by default the clips' bucket and credentials. The objects are
+    # movimientos/<hogar>/<camara>/YYYY/MM/DD/HH/mm.parquet; the clips' landmarks go next to the clips
+    # (clips/<alerta>.landmarks.parquet), and each with its light replay file under the same key with .ttmov
+    # (ADR 0011). Without a bucket, an in-memory fake.
+    s3:
+      bucket: ${TT_MOVIMIENTOS_BUCKET:${TT_CLIPS_BUCKET:}}
+      region: ${TT_MOVIMIENTOS_REGION:${TT_CLIPS_REGION:}}
+      endpoint: ${TT_MOVIMIENTOS_ENDPOINT:${TT_CLIPS_ENDPOINT:}}
+      path-style: ${TT_MOVIMIENTOS_PATH_STYLE:${TT_CLIPS_PATH_STYLE:false}}
+      access-key: ${TT_MOVIMIENTOS_ACCESS_KEY:${TT_CLIPS_ACCESS_KEY:}}
+      secret-key: ${TT_MOVIMIENTOS_SECRET_KEY:${TT_CLIPS_SECRET_KEY:}}
+      crear-bucket: false
   vista-en-vivo:
     # Live view through MediaMTX (docs/API_CONTRACT.md §4, ADR 0007). The agent publishes to
     # url-publicacion ({camaraId} is replaced; rtsps:// in production), the app plays LL-HLS from url-hls
@@ -164,10 +227,37 @@ tetengo:
   invitaciones:
     # The backlog does not say how long an invitation lasts: placeholder pending (docs/BLOCKERS.md).
     vigencia: 7d
+  limites:
+    # Per-client-address limits of the public endpoints (implementation choices; 0 turns one off).
+    # Over a limit: 429 DEMASIADAS_SOLICITUDES with Retry-After. In memory, per API instance. Override
+    # one value with e.g. TETENGO_LIMITES_VINCULACION_PORMINUTO=20.
+    habilitado: ${TT_LIMITES_HABILITADO:true}
+    max-direcciones: 100000
+    # POST /api/agente/vinculacion: a PC asks for a new code every 10 min while nobody links it.
+    vinculacion:
+      por-minuto: 10
+      por-hora: 60
+    # POST /api/agente/token: a PC polls every 5 s (12 per minute) while it waits to be linked.
+    token:
+      por-minuto: 60
+      por-hora: 0
+    # POST /api/sesiones (the account lockout of CA-02.3 still applies) and POST /api/recuperaciones.
+    sesiones:
+      por-minuto: 20
+      por-hora: 100
+    recuperaciones:
+      por-minuto: 5
+      por-hora: 20
 
 server:
   error:
     include-message: never
+  # The API runs behind Caddy, which sets X-Forwarded-For to the client's address (and ignores the one
+  # the client sends). Tomcat trusts X-Forwarded-* only from a connection of an internal proxy
+  # (server.tomcat.remoteip.internal-proxies; by default the private, loopback and link-local ranges,
+  # where the Docker network is), so the client's address is the request's remote address and a client
+  # that reaches the API directly cannot set it.
+  forward-headers-strategy: native
 
 management:
   endpoints:

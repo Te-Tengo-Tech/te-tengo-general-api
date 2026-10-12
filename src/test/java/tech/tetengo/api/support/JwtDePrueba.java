@@ -89,6 +89,18 @@ public class JwtDePrueba {
                 .build());
     }
 
+    /** A linked PC's own access token (AGENT_CONTRACT.md, "PC link"). */
+    public static String tokenDePc(UUID hogarId, UUID pcId) {
+        return firmar(JwtClaimsSet.builder()
+                .subject(pcId.toString())
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(600))
+                .claim("hogar_id", hogarId.toString())
+                .claim("pc_id", pcId.toString())
+                .claim("rol", Rol.AGENTE.name())
+                .build());
+    }
+
     private static String firmar(JwtClaimsSet claims) {
         var cabecera = JwsHeader.with(SignatureAlgorithm.RS256).build();
         return codificador().encode(JwtEncoderParameters.from(cabecera, claims)).getTokenValue();

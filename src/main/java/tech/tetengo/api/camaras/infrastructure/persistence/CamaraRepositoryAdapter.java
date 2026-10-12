@@ -25,12 +25,44 @@ class CamaraRepositoryAdapter implements CamaraRepository {
 
     @Override
     public Optional<Camara> buscar(UUID id) {
+        return jpa.findByIdAndRetiradaEnIsNull(id);
+    }
+
+    @Override
+    public Optional<Camara> buscarAunqueRetirada(UUID id) {
         return jpa.findById(id);
     }
 
     @Override
+    public List<Camara> detectadasDeLaPc(UUID pcId) {
+        return jpa.findByPcIdAndDispositivoIdIsNotNull(pcId, Sort.by("nombreDispositivo"));
+    }
+
+    @Override
     public List<Camara> listar() {
-        return jpa.findAll(Sort.by("nombreHabitacion"));
+        return jpa.findByRetiradaEnIsNull(Sort.by("nombreHabitacion"));
+    }
+
+    @Override
+    public List<Camara> deLaPc(UUID pcId) {
+        return jpa.findByPcIdAndRetiradaEnIsNull(pcId, Sort.by("nombreHabitacion"));
+    }
+
+    @Override
+    public List<Camara> enAmbiente(UUID ambienteId) {
+        return jpa.findByAmbienteIdAndRetiradaEnIsNull(ambienteId);
+    }
+
+    @Override
+    public Optional<Camara> deLaPcPorDispositivo(UUID pcId, String dispositivoId) {
+        return jpa.findFirstByPcIdAndDispositivoId(pcId, dispositivoId);
+    }
+
+    @Override
+    public Optional<CamaraDeAgente> deAgente(UUID hogarId, UUID camaraId) {
+        return jpa.deAgente(hogarId, camaraId).stream()
+                .findFirst()
+                .map(fila -> new CamaraDeAgente((UUID) fila[0], (Boolean) fila[1], (Boolean) fila[2]));
     }
 
     @Override

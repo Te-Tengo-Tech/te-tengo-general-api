@@ -13,6 +13,12 @@ public interface CamarasDelHogar {
 
     Optional<CamaraDelHogar> buscar(UUID camaraId);
 
+    /**
+     * US-29: a webcam of a linked PC of the household, in use or not, e.g. to preview it before
+     * assigning it a room; empty for unknown cameras, retired installation cameras and unlinked PCs.
+     */
+    Optional<CamaraDetectada> buscarDetectada(UUID camaraId);
+
     /** The camera as the app sees it. */
     Optional<EstadoDeCamara> estado(UUID camaraId);
 
@@ -34,6 +40,15 @@ public interface CamarasDelHogar {
     /** Ends the camera's pause if it is over (CA-22.3); empty if it did not end now. */
     Optional<EstadoDeCamara> finalizarPausaSiVencio(UUID camaraId, Instant ahora);
 
+    /**
+     * The name of a PC of the household in context, linked or not (US-33: the activity log names the
+     * PC as it was called); empty for an unknown PC.
+     */
+    Optional<String> nombreDePc(UUID pcId);
+
+    /** The PC of a camera of the household in context, also retired; empty without one. */
+    Optional<UUID> pcDeCamara(UUID camaraId);
+
     /** Paused cameras whose pause is over, across households: only for the resume job. */
     List<CamaraEnHogar> conPausaVencida(Instant ahora);
 
@@ -51,7 +66,25 @@ public interface CamarasDelHogar {
             Instant pausadaHasta,
             boolean deteccionConfiable,
             Instant instaladaEn,
-            Instant noConfiableDesde) {}
+            Instant noConfiableDesde,
+            UUID pcId,
+            UUID ambienteId,
+            String nombreDispositivo) {}
 
     record CamaraEnHogar(UUID camaraId, UUID hogarId) {}
+
+    /**
+     * @param enUso assigned to a room and capturing; otherwise «sin usar»
+     * @param conectada in use: online by its heartbeats; otherwise plugged in at the PC's latest report
+     * @param capturaPermitida the consent is in force and, in use, it is not paused: it may stream
+     */
+    record CamaraDetectada(
+            UUID id,
+            UUID pcId,
+            String dispositivoId,
+            String nombreDispositivo,
+            boolean enUso,
+            boolean conectada,
+            boolean capturaPermitida,
+            Instant pausadaHasta) {}
 }

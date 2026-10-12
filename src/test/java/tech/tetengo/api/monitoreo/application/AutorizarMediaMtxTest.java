@@ -60,7 +60,7 @@ class AutorizarMediaMtxTest {
     }
 
     private AutorizarMediaMtx autorizar(String secreto) {
-        var propiedades = new PropiedadesDeVistaEnVivo(null, null, null, null, secreto, null, null);
+        var propiedades = new PropiedadesDeVistaEnVivo(null, null, null, null, secreto, null, null, null);
         return new AutorizarMediaMtx(
                 accesos, transmisiones, camaras, enHogar, propiedades, Clock.fixed(AHORA, ZoneOffset.UTC));
     }

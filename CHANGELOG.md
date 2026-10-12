@@ -4,6 +4,60 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-11
+
+### Added
+- App updates (US-43; ADR 0012), new module `versiones`: `GET /api/versiones`, public, returns the latest version of Te Tengo Captura (`windows`, `mac`) and of the mobile app (`apk`, `play`, `ios`, `pwa`) with its download, SHA-256, size, date, «Qué cambió» notes and minimum supported version (CA-43.1 to CA-43.8), plus `paginaDescargas`. It reads one manifest per channel (`versiones/<canal>.json`), which the release workflows write to the downloads bucket, from `TT_VERSIONES_URL_BASE` every 5 minutes, keeping the last good read; `Cache-Control: public, max-age=300` and an `ETag` (`304` on `If-None-Match`). Minimum versions: `TT_VERSION_MINIMA_<CANAL>`.
+- `GET /api/agente/configuracion` returns the Windows version of `GET /api/versiones`; `TT_AGENTE_VERSION_PUBLICADA` is only the fallback while none is published.
+- `Pc.actualizacionAutomatica` (CA-43.7): the PC's heartbeat `POST /api/agente/pc/senal` takes `actualizacionAutomatica`; migration `V30` adds `pcs.actualizacion_automatica`.
+- Activity types reported by the PC (US-43): `PC_ACTUALIZADA` (old → new version, CA-43.2), `ACTUALIZACION_AUTOMATICA_ACTIVADA` and `ACTUALIZACION_AUTOMATICA_DESACTIVADA` (CA-43.7).
+- `docs/references/PRODUCT_BACKLOG.md` from docs `a91ae68` (US-41 to US-44, CA-43.7 to CA-43.9).
+- «Ver todas», several cameras at once (US-41, CA-41.6): `POST /api/vista-en-vivo/mosaicos` opens a mosaic of the member (`{mosaicoId}`, nothing is streamed), and `POST /api/camaras/{id}/vista-en-vivo` takes an optional `mosaicoId` (`400 VALIDACION` with `campos.mosaicoId` when unknown or of another member). `GET /api/accesos-vista-en-vivo` shows the sessions of one mosaic as a single entry with `mosaico: true` and the cameras seen in `camaraIds` (in the order they were first watched), from the first session's start to the last one's end; every entry now has `camaraIds` and `mosaico`. Cameras that could not be seen opened no session, so they are not counted. Migration `V29`: `mosaicos_vista_en_vivo` and `accesos_vista_en_vivo.mosaico_id`.
+- Per-client-address limits of the public endpoints, in memory (token buckets; `tetengo.limites`, `TT_LIMITES_HABILITADO`): `POST /api/agente/vinculacion` 10 per minute and 60 per hour, `POST /api/agente/token` 60 per minute, `POST /api/sesiones` 20 per minute and 100 per hour, `POST /api/recuperaciones` 5 per minute and 20 per hour. Over a limit: `429 DEMASIADAS_SOLICITUDES` (`application/problem+json`) with `Retry-After`, plus `"error": "slow_down"` on a device code poll. IPv6 clients are grouped by /64.
+- `server.forward-headers-strategy: native`: the client's address is the `X-Forwarded-For` Caddy sets, trusted only on connections from an internal proxy (`server.tomcat.remoteip.internal-proxies`), so a client cannot choose its own address.
+- PC link (US-28, US-30, US-31; ADR 0009), built ahead of the change request «PCs, cámaras y datos de movimiento», which is pending the advisor's approval. Everything is additive: installation credentials, agent tokens and every existing endpoint keep working.
+  - OAuth 2.0 Device Authorization Grant (RFC 8628) for Te Tengo Captura: `POST /api/agente/vinculacion` (256-bit device code and an 8-letter user code `XXXX-XXXX` of `BCDFGHJKLMNPQRSTVWXZ`, both stored hashed, 10 minutes, the QR's `verification_uri_complete`), `POST /api/agente/token` (`authorization_pending`, `slow_down` +5 s, `access_denied`, `expired_token`; single-use device code) and RFC 7009 revocation `POST /api/agente/token/revocacion`. Form-encoded, RFC 6749 errors, `Cache-Control: no-store`.
+  - The owner looks up, approves or rejects a code from the app: `POST /api/vinculaciones/consulta`, `/aprobacion`, `/rechazo` (owner only; lowercase and hyphen-less codes accepted; 5 wrong codes in a row block code entry for 15 minutes, `423 VINCULACION_BLOQUEADA`, CA-28.6).
+  - PC tokens: a 1-hour access token (`pc_id`, `hogar_id`, `rol = AGENTE`) and a refresh token that rotates on every use (RFC 9700); reusing a rotated one revokes everything and unlinks the PC; 90 days without renewing unlinks it (CA-28.7), also through a daily job.
+  - `GET /api/pcs` (any member), `PATCH /api/pcs/{id}` and `DELETE /api/pcs/{id}` (owner); `GET /api/agente/pc`, `POST /api/agente/pc/senal` and `DELETE /api/agente/pc` for the PC.
+  - Unlinking revokes the PC's tokens at once: every agent token is checked against the database (`401 PC_DESVINCULADA`), the PC's cameras are retired (no longer listed, their live view stops), its control channels get `{"desvincular":true}` and are closed, and push `PC_DESVINCULADA` tells the family when it was not done from the app (CA-31.3).
+  - A linked PC may open the agent control channel with its own token.
+- `Camara.pcId`; migration `V24` turns each existing installation with a camera into a PC «PC de la casa» of origin `INSTALACION` (tables `pcs`, `autorizaciones_de_dispositivo`, `tokens_de_renovacion_de_pc`, `intentos_de_vinculacion`; `camaras.pc_id`, `camaras.retirada_en`, `instalaciones.pc_id`).
+- `docs/references`: the backlog with US-28 to US-40 and a copy of the change request.
+
+- Rooms («ambientes», US-29): `GET`/`POST /api/ambientes` and `PATCH`/`DELETE /api/ambientes/{id}`; a renamed room renames its cameras and their later alerts. One camera per room for now (CA-29.3, `409 AMBIENTE_OCUPADO`), enforced by the use cases so several can be allowed later. The apps keep saying «habitación».
+- Cameras assigned from the phone (product decision of 2026-10-10): the PC reports the webcams it detects (`PUT /api/agente/pc/camaras/inventario`), the owner lists them (`GET /api/pcs/{id}/camaras`, `Pc.camarasSinUsar`), previews one (`POST /api/camaras/{id}/vista-previa`, a 2-minute live view session logged with `vistaPrevia: true`), assigns it a room (`PUT /api/camaras/{id}/ambiente`) or stops using it (`DELETE /api/camaras/{id}/ambiente`), and asks the PC to look again (`POST /api/pcs/{id}/busqueda-de-camaras`, CA-29.6); the PC hears each change on its control channel (`{"camara":{…}}`) and only cameras in use capture. No cameras in the bathroom (`422 AMBIENTE_NO_PERMITIDO`).
+- Cameras of a linked PC, known by the operating system's device id (CA-29.4): `GET /api/agente/ambientes`, `GET`/`PUT /api/agente/pc/camaras` (the PC's own assignment is the installer's fallback), `DELETE /api/agente/pc/camaras/{camaraId}` and `POST /api/agente/pc/camaras/tokens`. Each camera in use gets a per-camera token (with `pc_id`), so heartbeat, events, clips and live view work as with an installation.
+- `GET /api/accesos-vista-en-vivo` also returns `camaraId` and `vistaPrevia`.
+- `Camara.ambienteId` and `Camara.nombreDispositivo`; `PATCH /api/camaras/{id}` also takes `{ambienteId}`. Migration `V25` creates the rooms from the cameras' room names (equal names share one) and adds `camaras.ambiente_id`, `dispositivo_id` and `nombre_dispositivo`; `nombre_habitacion` stays and holds the room's name.
+
+- Movement data (US-35 to US-39; ADR 0010), new module `movimientos`:
+  - The separate, optional consent to store movements (US-35): `GET`/`POST`/`DELETE /api/hogar/consentimiento-movimientos`, with who gave it, who registered it, when and the text version (CA-35.2); it needs the monitoring consent; revoking it deletes the cloud movements and sends push `MOVIMIENTOS_ELIMINADOS` (CA-35.4).
+  - Cloud retention (US-37): `GET`/`PUT /api/hogar/movimientos-en-la-nube`, off by default, 7, 30, 90 or 365 days; a daily job deletes older files (CA-37.4).
+  - Uploads straight from the PC to object storage (R2, S3 API) with pre-signed URLs: `POST /api/agente/movimientos` and `/{archivoId}/confirmacion`, keys `movimientos/<hogar>/<camara>/YYYY/MM/DD/HH/mm.parquet`, an index row per file and daily counts per camera; `GET /api/agente/movimientos/estado` tells the PC whether it may store.
+  - Replay (US-39): `POST /api/camaras/{id}/repeticiones`, `GET /api/repeticiones/{id}/archivos`, `DELETE /api/repeticiones/{id}` and the access log `GET /api/accesos-repeticiones` (CA-39.3).
+- The clip's body landmarks (US-36): `POST /api/agente/eventos/{eventoId}/clip/puntos` (`clips/<alerta>.landmarks.parquet`), and `GET /api/alertas/{id}/clip` returns `puntos` or `puntosNoDisponibles`; they are deleted with their clip and with the movement consent.
+- «Hubo una caída y no avisó» (CA-40.4): `POST /api/reportes-de-caida`, stored as a possible false negative and logged for the team.
+- `GET /api/hogar` `eliminacion.movimientos`: a monitoring consent revocation also deletes the cloud movements (and ends the movement consent) within the deletion of recordings.
+- Migration `V26`: `consentimientos_de_movimientos`, `configuraciones_de_movimientos`, `archivos_de_movimiento`, `resumenes_de_movimiento`, `eliminaciones_de_movimientos`, `repeticiones_de_movimiento`, `reportes_de_caida_sin_alerta`, `alertas.puntos_clave`, `eliminaciones_de_grabaciones.movimientos_eliminados`.
+
+- Activity log (US-33), new module `actividad`: `GET /api/actividad` (any member; filters by PC, type and time; newest first) and `POST /api/agente/pc/actividad` for the PC's own changes (advanced mode, local storage, local deletions; idempotent per change, offline queues welcome). It records who (member, PC or system), what, before and after, and when, for PC links and unlinks, camera rooms, pauses and resumes, consents and the cloud retention. Append-only, enforced by a trigger (migration `V27`).
+- CA-31.6: `DELETE /api/agente/pc?datosLocalesBorrados=true` (and `datos_locales_borrados=true` on the revocation) records in the log that the PC also deleted its local data when it was unlinked.
+- Events carry who made the change: `ConsentimientoOtorgado`, `ConsentimientoRevocado` (new `usuarioId`), new `CamaraPausada` and `CamaraReanudada` of `monitoreo`.
+- `REPETICION_VISTA` in `POST /api/agente/pc/actividad` (CA-39.3): a replay watched on the PC, with the camera (`camaraId`, one of that PC), the moment replayed (`momentoDesde`, `momentoHasta`) and the seconds watched (`duracionSegundos`); members read it in `GET /api/actividad` (room in `objeto`, the moment as an ISO-8601 interval in `valorAnterior`, the seconds in `valorNuevo`), and the app adds it to the access log.
+
+- Light replay files (TTMOV v1, gzip; ADR 0011, US-36, US-37, US-39), so the app can draw movements on every platform:
+  - `POST /api/agente/movimientos/{archivoId}/ligero` `{tamanoBytes, sha256}` → `201 {urlSubida, cabeceras, expiraEn}` (key: the movement file's with `.ttmov`, `Content-Type: application/gzip`) and `POST /api/agente/movimientos/{archivoId}/ligero/confirmacion` → `200 {archivoId, tamanoBytes}` (`HeadObject`); same consent and cloud checks as the movement file.
+  - Replays: each `archivos[*]` has `ligero: {url, tamanoBytes, sha256} | null`, non-null once the light file is confirmed.
+  - Clips: `POST /api/agente/eventos/{eventoId}/clip/puntos/ligero` (`clips/<alerta>.landmarks.ttmov`, no confirmation), and `GET /api/alertas/{id}/clip` returns `puntos.ligero: {url} | null`.
+  - Light files are deleted with their movement file or clip landmarks (retention, revocations, unconfirmed uploads, a replaced clip). `GET /api/hogar/movimientos-en-la-nube` `tamanoBytes` counts the confirmed light files too.
+  - Migration `V28`: `archivos_de_movimiento.ligero_tamano_bytes`, `ligero_sha256`, `ligero_subido_en`.
+
+### Changed
+- The movements consent text is version `2` (`TT_MOVIMIENTOS_VERSION_TEXTO`): it names the cloud store (Cloudflare R2) and the cross-border flow. Consents given with version `1` keep their version and stay in force; registering a new one needs version `2`.
+- `PATCH /api/camaras/{id}` with `{nombreHabitacion}` now works on rooms: it uses the room of that name, renames the camera's own room when it is alone in it, or creates one; it answers `409 AMBIENTE_OCUPADO` when the room has another camera.
+- Agent endpoints of one camera answer `403 TOKEN_DE_CAMARA_REQUERIDO` instead of a `500` when called with a token without a camera.
+
 ## [0.3.4] - 2026-10-10
 
 ### Fixed

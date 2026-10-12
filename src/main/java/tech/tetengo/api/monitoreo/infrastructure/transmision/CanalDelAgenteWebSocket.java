@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
@@ -15,8 +16,10 @@ import tech.tetengo.api.monitoreo.application.port.CanalDelAgente;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The agents' control WebSockets, one per camera; a new connection of the same camera replaces the
- * previous one. Text JSON only (AGENT_CONTRACT.md). In memory: the agent is connected to one API instance.
+ * The agents' control WebSockets, one per camera and one per linked PC (keyed by the camera or PC id;
+ * both are UUID v7, so they never collide); a new connection of the same camera or PC replaces the
+ * previous one. Text JSON only (AGENT_CONTRACT.md). In memory: the agent is connected to one API
+ * instance.
  */
 @Component
 class CanalDelAgenteWebSocket implements CanalDelAgente {
@@ -53,13 +56,24 @@ class CanalDelAgenteWebSocket implements CanalDelAgente {
         }
         try {
             sesion.sendMessage(new TextMessage(json(mensaje)));
+            if (mensaje instanceof Desvincular) {
+                agentes.remove(camaraId, sesion);
+                sesion.close(DESVINCULADA);
+            }
         } catch (IOException | RuntimeException e) {
             log.warn("No se pudo enviar al agente de la cámara {}", camaraId, e);
         }
     }
 
+    /** Close code of a channel whose PC was unlinked (4000-4999 are free for applications, RFC 6455). */
+    static final CloseStatus DESVINCULADA = new CloseStatus(4001, "PC desvinculada");
+
     /** The exact JSON of AGENT_CONTRACT.md, fields in that order. */
     static String json(Mensaje mensaje) {
+        return JSON.writeValueAsString(cuerpo(mensaje));
+    }
+
+    private static Map<String, Object> cuerpo(Mensaje mensaje) {
         Map<String, Object> cuerpo = new LinkedHashMap<>();
         switch (mensaje) {
             case Preparar p -> cuerpo.put("preparar", true);
@@ -72,8 +86,27 @@ class CanalDelAgenteWebSocket implements CanalDelAgente {
             }
             case CambiarModo c -> cuerpo.put("modo", c.modo().name());
             case Detener d -> cuerpo.put("transmitir", false);
+            case Desvincular d -> cuerpo.put("desvincular", true);
+            case BuscarCamaras b -> cuerpo.put("buscarCamaras", true);
+            case ParaCamara p -> {
+                cuerpo.putAll(cuerpo(p.mensaje()));
+                cuerpo.put("camaraId", p.camaraId().toString());
+                cuerpo.put("dispositivoId", p.dispositivoId());
+            }
+            case CamaraDeLaPc c -> {
+                Map<String, Object> camara = new LinkedHashMap<>();
+                camara.put("camaraId", c.camaraId().toString());
+                camara.put("dispositivoId", c.dispositivoId());
+                camara.put("nombreDispositivo", c.nombreDispositivo());
+                camara.put("enUso", c.enUso());
+                camara.put(
+                        "ambienteId",
+                        c.ambienteId() == null ? null : c.ambienteId().toString());
+                camara.put("nombreHabitacion", c.nombreHabitacion());
+                cuerpo.put("camara", camara);
+            }
         }
-        return JSON.writeValueAsString(cuerpo);
+        return cuerpo;
     }
 
     private static boolean mismaSesion(WebSocketSession guardada, WebSocketSession sesion) {

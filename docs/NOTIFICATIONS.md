@@ -86,6 +86,8 @@ Sources are in `te-tengo-mobile-flutter/docs/references/`: the screen PNGs (`scr
 | `DETECCION_NO_CONFIABLE` | La detección no es confiable en la Sala | Hace más de 5 minutos que la cámara no ve bien a Rosa. Revisa la luz y el encuadre. | — | screen 36 (banner); prototipo.html [`noConfiable`], lock screen |
 | `PAUSA_FINALIZADA` | La cámara de la Sala se reactivó | Terminó la pausa a las 11:42. | — | prototipo.html [`finPausa`], in-app toast; screen 35 adds the length («de 1 hora»), see [BLOCKERS.md](BLOCKERS.md) |
 | `DATOS_ELIMINADOS` | Se eliminaron las grabaciones | Se borraron las grabaciones al revocar el consentimiento. | — | **no prototype source** [implementation choice], see [BLOCKERS.md](BLOCKERS.md) |
+| `MOVIMIENTOS_ELIMINADOS` | Se borraron los movimientos | Listo. Ya no guardamos los movimientos de Rosa. | — | brief «PCs, cámaras y datos de movimiento», M-35.3 («Listo. Ya no guardamos los movimientos de Rosa.»); the title is an [implementation choice] |
+| `PC_DESVINCULADA` | Una PC se desvinculó de la casa | Sus cámaras ya no detectan caídas. Revisa PCs y cámaras en la app. | — | brief «PCs, cámaras y datos de movimiento», M-31.2, shortened: the queued notice does not keep the PC's name (draft copy, see [BLOCKERS.md](BLOCKERS.md)) |
 
 Rooms outside the app's list (`Sala`, `Sala comedor`, `Dormitorio`, `Cocina`, `Pasillo`, `Comedor`) go without an article («en Cuarto de Rosa»). If a value cannot be read, the text leaves it out («Posible caída en la Sala»); a notice is never held back for it. The `registro` provider logs the data payload at `INFO` and the title and body, which name the older adult, only at `DEBUG`.
 

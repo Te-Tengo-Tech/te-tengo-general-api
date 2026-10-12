@@ -107,7 +107,11 @@ public class AutorizarMediaMtx {
     }
 
     private boolean capturaPermitida(UUID camaraId) {
-        return camaras.buscar(camaraId).map(CamaraDelHogar::capturaPermitida).orElse(false);
+        // A webcam of a linked PC, in use or being previewed (US-29); otherwise a camera without a PC.
+        return camaras.buscarDetectada(camaraId)
+                .map(CamarasDelHogar.CamaraDetectada::capturaPermitida)
+                .or(() -> camaras.buscar(camaraId).map(CamaraDelHogar::capturaPermitida))
+                .orElse(false);
     }
 
     private boolean secretoValido(String secreto) {

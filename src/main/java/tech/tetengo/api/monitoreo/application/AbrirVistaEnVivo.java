@@ -11,6 +11,7 @@ import tech.tetengo.api.camaras.CamarasDelHogar.CamaraDelHogar;
 import tech.tetengo.api.camaras.CamarasDelHogar.EstadoDeCamara;
 import tech.tetengo.api.monitoreo.AlertasDeCamara;
 import tech.tetengo.api.monitoreo.application.port.AccesoVistaEnVivoRepository;
+import tech.tetengo.api.monitoreo.application.port.MosaicoDeVistaEnVivoRepository;
 import tech.tetengo.api.monitoreo.domain.MonitoreoError;
 import tech.tetengo.api.monitoreo.domain.model.AccesoVistaEnVivo;
 import tech.tetengo.api.monitoreo.domain.model.ModoDeVista;
@@ -21,7 +22,8 @@ import tech.tetengo.api.shared.infrastructure.security.Secretos;
  * US-23: any member watches the camera live, from the home screen (CA-23.1) or from an alert of that
  * camera (CA-23.2). Not while it is disconnected (CA-23.3), paused, saying until when (CA-23.4), or
  * without consent (CA-05.2). The session is recorded for the access log (US-24) and the camera's
- * transmission starts if it was not running.
+ * transmission starts if it was not running. A session opened from «Ver todas» (US-41) carries the
+ * mosaic's id, so the access log shows all of them as one entry (CA-41.6).
  */
 @Service
 public class AbrirVistaEnVivo {
@@ -29,6 +31,7 @@ public class AbrirVistaEnVivo {
     private final CamarasDelHogar camaras;
     private final AlertasDeCamara alertas;
     private final AccesoVistaEnVivoRepository accesos;
+    private final MosaicoDeVistaEnVivoRepository mosaicos;
     private final Transmisiones transmisiones;
     private final PropiedadesDeVistaEnVivo propiedades;
     private final Clock reloj;
@@ -37,12 +40,14 @@ public class AbrirVistaEnVivo {
             CamarasDelHogar camaras,
             AlertasDeCamara alertas,
             AccesoVistaEnVivoRepository accesos,
+            MosaicoDeVistaEnVivoRepository mosaicos,
             Transmisiones transmisiones,
             PropiedadesDeVistaEnVivo propiedades,
             Clock reloj) {
         this.camaras = camaras;
         this.alertas = alertas;
         this.accesos = accesos;
+        this.mosaicos = mosaicos;
         this.transmisiones = transmisiones;
         this.propiedades = propiedades;
         this.reloj = reloj;
@@ -51,6 +56,15 @@ public class AbrirVistaEnVivo {
     /** {@code modo} null keeps the stream's mode ({@code VIDEO} when it starts). */
     @Transactional
     public SesionDeVistaEnVivo ejecutar(UUID camaraId, UUID usuarioId, UUID alertaId, String modo) {
+        return ejecutar(camaraId, usuarioId, alertaId, modo, null);
+    }
+
+    /**
+     * {@code mosaicoId}: the «Ver todas» opening of this member the session belongs to (US-41), or null.
+     * One of another member, or unknown in this household, is {@code 400 VALIDACION}.
+     */
+    @Transactional
+    public SesionDeVistaEnVivo ejecutar(UUID camaraId, UUID usuarioId, UUID alertaId, String modo, UUID mosaicoId) {
         ModoDeVista pedido = modo == null ? null : CambiarModoDeVistaEnVivo.modo(modo);
         Instant ahora = reloj.instant();
         EstadoDeCamara camara = estado(camaras, camaraId);
@@ -58,11 +72,18 @@ public class AbrirVistaEnVivo {
             throw new ErrorDeNegocio(
                     MonitoreoError.VALIDACION, Map.of("campos", Map.of("alertaId", "La alerta no es de esta cámara.")));
         }
+        if (mosaicoId != null
+                && !mosaicos.buscar(mosaicoId).map(m -> m.esDe(usuarioId)).orElse(false)) {
+            throw new ErrorDeNegocio(
+                    MonitoreoError.VALIDACION,
+                    Map.of("campos", Map.of("mosaicoId", "No abriste esta vista de varias cámaras.")));
+        }
         verificarDisponible(camaras, camara, ahora);
         transmisiones.bloquear(camaraId);
         String token = Secretos.generar();
         AccesoVistaEnVivo acceso = accesos.guardar(new AccesoVistaEnVivo(
-                camaraId, usuarioId, alertaId, ahora, propiedades.duracionMaxima(), Secretos.huella(token)));
+                        camaraId, usuarioId, alertaId, ahora, propiedades.duracionMaxima(), Secretos.huella(token))
+                .enMosaico(mosaicoId));
         ModoDeVista modoDelStream = transmisiones.asegurar(camaraId, pedido, ahora);
         return new SesionDeVistaEnVivo(
                 acceso.getId(),

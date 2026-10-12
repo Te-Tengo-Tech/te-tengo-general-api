@@ -47,7 +47,10 @@ To try the three apps together, seed the prototype's demo household (account, ho
 | `TT_ENLACE_BASE` | Base of the e-mailed links, no trailing slash: `tetengo://app` (native app) or the PWA's hash URL, e.g. `https://te-tengo.pages.dev/app/#` ([NOTIFICATIONS.md](docs/NOTIFICATIONS.md#links)) | `tetengo://app` |
 | `TT_ENLACE_RECUPERACION` | Password-reset link sent by e-mail, replacing the whole template; `{token}` is replaced | `<TT_ENLACE_BASE>/nueva-contrasena?token={token}` |
 | `TT_RETENCION_CLIPS` | How long clips are kept, e.g. `30d` (unset: kept; pending, see BLOCKERS) | — |
-| `TT_AGENTE_VERSION_PUBLICADA` | Agent release published by `GET /api/agente/configuracion` (thresholds: `tetengo.agente.umbrales`, empty by default) | `0.2.0` |
+| `TT_AGENTE_VERSION_PUBLICADA` | Fallback agent release: `GET /api/agente/configuracion` and `GET /api/versiones` use it only while no manifest publishes Te Tengo Captura (thresholds: `tetengo.agente.umbrales`, empty by default) | `0.2.0` (configuration) / none (versions) |
+| `TT_VERSIONES_URL_BASE` | Public URL of the downloads bucket where the release workflows write one manifest per channel (`versiones/windows.json`, `mac`, `apk`, `play`, `ios`, `pwa`), read by `GET /api/versiones` every 5 min (US-43, [ADR 0012](docs/adr/0012-published-versions-manifests.md)). Unset: no manifest is read | — |
+| `TT_VERSIONES_PAGINA_DESCARGAS` | The downloads page of «Ir a la descarga» (`paginaDescargas`, CA-43.3) | `https://tetengo.reqsai.tech/descargas` |
+| `TT_VERSION_MINIMA_WINDOWS`, `_MAC`, `_APK`, `_PLAY`, `_IOS`, `_PWA` | Minimum supported version per channel (`versionMinima`, CA-43.8); an app below it asks to update. Unset: every version is supported | — |
 | `TT_CLIPS_BUCKET` | Bucket of the clips (Amazon S3 or an S3-compatible store such as Cloudflare R2, [DEPLOYMENT.md](docs/DEPLOYMENT.md#clips-on-cloudflare-r2)); unset uses an in-memory fake (the `local` profile sets `te-tengo-clips` on Floci) | — |
 | `TT_CLIPS_REGION` | Region of the bucket (`auto` for R2) | SDK default chain |
 | `TT_CLIPS_ENDPOINT` | Endpoint of an S3-compatible store (R2: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`); also the host of the pre-signed URLs | AWS |

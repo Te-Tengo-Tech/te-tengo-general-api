@@ -14,13 +14,16 @@ import tech.tetengo.api.monitoreo.application.ControlDeVistaEnVivo;
 import tech.tetengo.api.shared.infrastructure.security.ClaimsDelToken;
 
 /**
- * {@code /api/agente/transmision}: the household agent's live view control channel, authenticated with
- * its per-camera token (Spring Security only lets {@code AGENTE} tokens reach it). The API sends text
- * JSON; video goes to MediaMTX, never through here.
+ * {@code /api/agente/transmision}: the household agent's control channel, authenticated with a
+ * per-camera token (live view of that camera) or a linked PC's own access token (messages about the
+ * PC, such as {@code desvincular}). Spring Security only lets {@code AGENTE} tokens reach it, and an
+ * unlinked PC's tokens are rejected before the handshake ({@code 401 PC_DESVINCULADA}). The API sends
+ * text JSON; video goes to MediaMTX, never through here.
  */
 class ManejadorDelAgente extends TextWebSocketHandler implements HandshakeInterceptor {
 
     private static final String CAMARA = "camaraId";
+    private static final String PC = "pcId";
     private static final String HOGAR = "hogarId";
 
     private final CanalDelAgenteWebSocket canal;
@@ -37,14 +40,22 @@ class ManejadorDelAgente extends TextWebSocketHandler implements HandshakeInterc
             ServerHttpResponse respuesta,
             WebSocketHandler manejador,
             Map<String, Object> atributos) {
-        if (peticion.getPrincipal() instanceof JwtAuthenticationToken token
-                && token.getToken().getClaimAsString(ClaimsDelToken.CAMARA) != null
-                && token.getToken().getClaimAsString(ClaimsDelToken.HOGAR) != null) {
-            atributos.put(CAMARA, UUID.fromString(token.getToken().getClaimAsString(ClaimsDelToken.CAMARA)));
-            atributos.put(HOGAR, UUID.fromString(token.getToken().getClaimAsString(ClaimsDelToken.HOGAR)));
-            return true;
+        if (!(peticion.getPrincipal() instanceof JwtAuthenticationToken token)
+                || token.getToken().getClaimAsString(ClaimsDelToken.HOGAR) == null) {
+            return false;
         }
-        return false;
+        String camara = token.getToken().getClaimAsString(ClaimsDelToken.CAMARA);
+        String pc = token.getToken().getClaimAsString(ClaimsDelToken.PC);
+        if (camara == null && pc == null) {
+            return false;
+        }
+        atributos.put(HOGAR, UUID.fromString(token.getToken().getClaimAsString(ClaimsDelToken.HOGAR)));
+        if (camara != null) {
+            atributos.put(CAMARA, UUID.fromString(camara));
+        } else {
+            atributos.put(PC, UUID.fromString(pc));
+        }
+        return true;
     }
 
     @Override
@@ -54,12 +65,18 @@ class ManejadorDelAgente extends TextWebSocketHandler implements HandshakeInterc
     @Override
     public void afterConnectionEstablished(WebSocketSession sesion) {
         UUID camara = (UUID) sesion.getAttributes().get(CAMARA);
+        if (camara == null) {
+            canal.conectar((UUID) sesion.getAttributes().get(PC), sesion);
+            return;
+        }
         canal.conectar(camara, sesion);
         control.alConectarseElAgente((UUID) sesion.getAttributes().get(HOGAR), camara);
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession sesion, CloseStatus estado) {
-        canal.desconectar((UUID) sesion.getAttributes().get(CAMARA), sesion);
+        UUID canalId = (UUID) sesion.getAttributes()
+                .getOrDefault(CAMARA, sesion.getAttributes().get(PC));
+        canal.desconectar(canalId, sesion);
     }
 }

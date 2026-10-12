@@ -26,6 +26,19 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 
 ## Tasks
 
+### Change request «PCs, cámaras y datos de movimiento» (no sprint yet; pending the advisor's approval)
+- [x] **T25 `camaras` — US-28, US-30, US-31 PC link.** OAuth 2.0 device grant (RFC 8628), owner approval with brute-force limit, rotating refresh tokens with reuse detection (RFC 9700), PCs in the app, unlink from the app or the PC, 90-day expiry, migration of installations to PCs (ADR 0009). — *link PCs with the OAuth device grant (US-28, US-30, US-31)*
+
+- [x] **T26 `camaras` — US-29 cameras and rooms.** Rooms of the household (one camera per room by rule, not schema, no bathrooms), webcams reported by the PC and assigned from the phone with a preview, pushed to the PC over its control channel, per-camera tokens, migration of room names (V25). — *cameras of linked PCs and the household's rooms (US-29)*
+
+- [x] **T27 `movimientos` — US-35 to US-39 movement data, US-40 report.** Separate consent, R2 uploads with pre-signed URLs and an index, cloud retention with a daily job, deletion on revocation, replay with its access log, clip landmarks, «Hubo una caída y no avisó» (ADR 0010). — *movement data with consent, retention and replay (US-35 to US-40)*
+
+- [x] **T28 `actividad` — US-33 activity log.** Append-only log fed by the modules' events and by the PC's own changes; list for any member. — *activity log of the household's configuration (US-33)*
+
+- [x] **T29 `movimientos` — light replay format (ADR 0011).** The PC uploads a TTMOV v1 file (gzip) next to each movement file and each clip's landmarks; the index records it, replays and clips return its URL, and every deletion removes it too (V28). — *light replay files next to movement files and clip landmarks (US-36, US-37, US-39)*
+
+- [x] **T30 `versiones` — US-43 app updates.** `GET /api/versiones` (public, cached, ETag) from the manifests the release workflows write next to the downloads, with each channel's file, SHA-256, notes and minimum version (ADR 0012); `Pc.actualizacionAutomatica` from the PC's heartbeat (V30); activity types `PC_ACTUALIZADA` and `ACTUALIZACION_AUTOMATICA_*` reported by the PC. — *published app versions and PC updates (US-43)*
+
 ### Sprint 3
 - [x] **T01 `cuentas` — US-01 register.** `POST /api/cuentas`; BCrypt passwords; unique email (`409 CORREO_EN_USO`); `400 VALIDACION` with `campos`. — *register accounts (US-01)*
 - [x] **T02 `cuentas` — US-02 sessions.** — *sign in, refresh and sign out with JWTs and lockout (US-02)*

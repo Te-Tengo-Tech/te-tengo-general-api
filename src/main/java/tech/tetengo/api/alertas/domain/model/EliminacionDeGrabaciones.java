@@ -21,6 +21,10 @@ public class EliminacionDeGrabaciones extends EntidadDelHogar {
     @Column(name = "clips_eliminados")
     private Long clipsEliminados;
 
+    /** Movement files deleted with the recordings (US-37); null while pending. */
+    @Column(name = "movimientos_eliminados")
+    private Long movimientosEliminados;
+
     protected EliminacionDeGrabaciones() {}
 
     public EliminacionDeGrabaciones(Instant solicitadaEn) {
@@ -29,12 +33,22 @@ public class EliminacionDeGrabaciones extends EntidadDelHogar {
 
     /** CA-09.3: done, after deleting {@code clips} recordings; returns false if it already was. */
     public boolean completar(Instant ahora, long clips) {
+        return completar(ahora, clips, 0);
+    }
+
+    /** The same, also counting the movement files it deleted (US-37, CA-09.1). */
+    public boolean completar(Instant ahora, long clips, long movimientos) {
         if (completadaEn != null) {
             return false;
         }
         completadaEn = ahora;
         clipsEliminados = clips;
+        movimientosEliminados = movimientos;
         return true;
+    }
+
+    public Long getMovimientosEliminados() {
+        return movimientosEliminados;
     }
 
     public Instant getSolicitadaEn() {

@@ -19,6 +19,7 @@ import tech.tetengo.api.camaras.application.RegistrarSenal;
 import tech.tetengo.api.camaras.application.RegistroDeCamara;
 import tech.tetengo.api.shared.infrastructure.security.UsuarioActual;
 import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
+import tech.tetengo.api.versiones.VersionesPublicadas;
 
 /** Household agent endpoints of {@code camaras} (AGENT_CONTRACT.md, "Request and response bodies"). */
 @RestController
@@ -32,16 +33,19 @@ class AgenteController {
     private final ConsultarEstadoDeCaptura consultarEstadoDeCaptura;
     private final RegistrarSenal registrarSenal;
     private final PropiedadesDelAgente propiedades;
+    private final VersionesPublicadas versiones;
 
     AgenteController(
             RegistrarCamaraDelAgente registrarCamara,
             ConsultarEstadoDeCaptura consultarEstadoDeCaptura,
             RegistrarSenal registrarSenal,
-            PropiedadesDelAgente propiedades) {
+            PropiedadesDelAgente propiedades,
+            VersionesPublicadas versiones) {
         this.registrarCamara = registrarCamara;
         this.consultarEstadoDeCaptura = consultarEstadoDeCaptura;
         this.registrarSenal = registrarSenal;
         this.propiedades = propiedades;
+        this.versiones = versiones;
     }
 
     /** US-07: periodic heartbeat; updates the time of the last signal and answers the capture state. */
@@ -52,7 +56,8 @@ class AgenteController {
     @PostMapping(path = "/senal", version = ApiVersioning.V1)
     EstadoDeCapturaResponse senal(@RequestBody(required = false) SenalRequest pedido) {
         boolean conectada = pedido == null || pedido.conectada();
-        return aRespuesta(registrarSenal.ejecutar(UsuarioActual.camaraId().orElseThrow(), conectada));
+        return aRespuesta(registrarSenal.ejecutar(
+                UsuarioActual.camaraDelAgente(), conectada, pedido == null ? null : pedido.versionAgente()));
     }
 
     @Operation(
@@ -78,17 +83,17 @@ class AgenteController {
                     "Whether the agent may process video: a current consent (CA-05.2) and no active pause (CA-22.1); motivo says why not.")
     @GetMapping(path = "/estado-captura", version = ApiVersioning.V1)
     EstadoDeCapturaResponse estadoDeCaptura() {
-        return aRespuesta(
-                consultarEstadoDeCaptura.ejecutar(UsuarioActual.camaraId().orElseThrow()));
+        return aRespuesta(consultarEstadoDeCaptura.ejecutar(UsuarioActual.camaraDelAgente()));
     }
 
     @Operation(
             summary = "Remote configuration (agent)",
             description =
-                    "Published agent version and classification thresholds; an empty umbrales keeps the agent's local values.")
+                    "Published agent version (the Windows version of GET /api/versiones, or the backend's setting while none is published) and classification thresholds; an empty umbrales keeps the agent's local values.")
     @GetMapping(path = "/configuracion", version = ApiVersioning.V1)
     ConfiguracionDelAgenteResponse configuracion() {
-        return new ConfiguracionDelAgenteResponse(propiedades.versionPublicada(), propiedades.umbrales());
+        return new ConfiguracionDelAgenteResponse(
+                versiones.ultimaDeEscritorio().orElse(propiedades.versionPublicada()), propiedades.umbrales());
     }
 
     private static EstadoDeCapturaResponse aRespuesta(EstadoDeCapturaDeCamara estado) {

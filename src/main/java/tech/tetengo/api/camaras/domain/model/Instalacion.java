@@ -25,6 +25,10 @@ public class Instalacion extends AggregateRoot {
     @Column(name = "camara_id")
     private UUID camaraId;
 
+    /** The PC the installation's agent runs on (US-30); set at its first registration or by {@code V24}. */
+    @Column(name = "pc_id")
+    private UUID pcId;
+
     protected Instalacion() {}
 
     public Instalacion(UUID hogarId, String credencialHash) {
@@ -34,6 +38,14 @@ public class Instalacion extends AggregateRoot {
 
     public void asignarCamara(UUID camaraId) {
         this.camaraId = Objects.requireNonNull(camaraId, "camaraId");
+    }
+
+    public void asignarPc(UUID pcId) {
+        this.pcId = Objects.requireNonNull(pcId, "pcId");
+    }
+
+    public UUID getPcId() {
+        return pcId;
     }
 
     public UUID getHogarId() {

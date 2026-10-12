@@ -12,8 +12,14 @@ import tech.tetengo.api.shared.application.port.EliminacionesDeGrabaciones.Elimi
  *
  * @param clips recordings to delete ({@code PROGRAMADA}) or deleted ({@code TERMINADA})
  * @param terminadaEn null while {@code PROGRAMADA}
+ * @param movimientos movement files to delete or deleted with the recordings (US-37, CA-09.1)
  */
-public record EliminacionConsultada(Estado estado, long clips, Instant programadaEn, Instant terminadaEn) {
+public record EliminacionConsultada(
+        Estado estado, long clips, Instant programadaEn, Instant terminadaEn, long movimientos) {
+
+    public EliminacionConsultada(Estado estado, long clips, Instant programadaEn, Instant terminadaEn) {
+        this(estado, clips, programadaEn, terminadaEn, 0);
+    }
 
     public enum Estado {
         PROGRAMADA,
@@ -31,17 +37,36 @@ public record EliminacionConsultada(Estado estado, long clips, Instant programad
      */
     public static Optional<EliminacionConsultada> de(
             Optional<Instant> revocadoEn, Optional<Eliminacion> ultima, LongSupplier clipsGuardados) {
+        return de(revocadoEn, ultima, clipsGuardados, () -> 0);
+    }
+
+    /** The same, also counting the movement files deleted with the recordings. */
+    public static Optional<EliminacionConsultada> de(
+            Optional<Instant> revocadoEn,
+            Optional<Eliminacion> ultima,
+            LongSupplier clipsGuardados,
+            LongSupplier movimientosGuardados) {
         if (revocadoEn.isPresent()
                 && ultima.map(e -> e.programadaEn().isBefore(revocadoEn.get())).orElse(true)) {
-            return Optional.of(
-                    new EliminacionConsultada(Estado.PROGRAMADA, clipsGuardados.getAsLong(), revocadoEn.get(), null));
+            return Optional.of(new EliminacionConsultada(
+                    Estado.PROGRAMADA,
+                    clipsGuardados.getAsLong(),
+                    revocadoEn.get(),
+                    null,
+                    movimientosGuardados.getAsLong()));
         }
         return ultima.map(e -> e.terminadaEn() == null
-                ? new EliminacionConsultada(Estado.PROGRAMADA, clipsGuardados.getAsLong(), e.programadaEn(), null)
+                ? new EliminacionConsultada(
+                        Estado.PROGRAMADA,
+                        clipsGuardados.getAsLong(),
+                        e.programadaEn(),
+                        null,
+                        movimientosGuardados.getAsLong())
                 : new EliminacionConsultada(
                         Estado.TERMINADA,
                         e.clipsEliminados() == null ? 0 : e.clipsEliminados(),
                         e.programadaEn(),
-                        e.terminadaEn()));
+                        e.terminadaEn(),
+                        e.movimientosEliminados() == null ? 0 : e.movimientosEliminados()));
     }
 }

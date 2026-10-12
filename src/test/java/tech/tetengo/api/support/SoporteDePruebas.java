@@ -34,6 +34,12 @@ public class SoporteDePruebas {
 
     @Bean
     @Primary
+    MovimientosDePrueba movimientosDePrueba() {
+        return new MovimientosDePrueba();
+    }
+
+    @Bean
+    @Primary
     TransmisionDePrueba transmisionDePrueba() {
         return new TransmisionDePrueba();
     }

@@ -75,6 +75,11 @@ class AlertaRepositoryAdapter implements AlertaRepository {
     }
 
     @Override
+    public List<Alerta> conPuntos() {
+        return jpa.findByPuntosClaveIsNotNull();
+    }
+
+    @Override
     public long contarConClip() {
         return jpa.countByClipClaveIsNotNullAndClipEliminadoEnIsNull();
     }

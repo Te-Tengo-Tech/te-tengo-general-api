@@ -52,6 +52,17 @@ public class AccesoVistaEnVivo extends EntidadDelHogar {
     @Column(name = "token_hash", nullable = false, updatable = false, length = 64)
     private String tokenHash;
 
+    /**
+     * US-29: a short preview to recognise a webcam before assigning it a room, with the same rules as a
+     * live view and logged with them (US-24).
+     */
+    @Column(name = "vista_previa", nullable = false, updatable = false)
+    private boolean vistaPrevia;
+
+    /** US-41: opened from «Ver todas»; the access log shows the mosaic's sessions as one entry (CA-41.6). */
+    @Column(name = "mosaico_id", updatable = false)
+    private UUID mosaicoId;
+
     protected AccesoVistaEnVivo() {}
 
     public AccesoVistaEnVivo(
@@ -62,6 +73,28 @@ public class AccesoVistaEnVivo extends EntidadDelHogar {
         this.inicio = Objects.requireNonNull(inicio, "inicio");
         this.expiraEn = inicio.plus(duracionMaxima);
         this.tokenHash = Objects.requireNonNull(tokenHash, "tokenHash");
+    }
+
+    /** A preview of a webcam (US-29) rather than a live view. */
+    public static AccesoVistaEnVivo vistaPrevia(
+            UUID camaraId, UUID usuarioId, Instant inicio, Duration duracionMaxima, String tokenHash) {
+        AccesoVistaEnVivo acceso = new AccesoVistaEnVivo(camaraId, usuarioId, null, inicio, duracionMaxima, tokenHash);
+        acceso.vistaPrevia = true;
+        return acceso;
+    }
+
+    public boolean isVistaPrevia() {
+        return vistaPrevia;
+    }
+
+    /** US-41: this session is one of the cameras of a «Ver todas» opening. */
+    public AccesoVistaEnVivo enMosaico(UUID mosaico) {
+        this.mosaicoId = mosaico;
+        return this;
+    }
+
+    public UUID getMosaicoId() {
+        return mosaicoId;
     }
 
     /** Open and within its maximum length: MediaMTX may serve the stream to its viewer. */
