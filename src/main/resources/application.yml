@@ -50,14 +50,38 @@ tetengo:
     # Heartbeat every 30 s; 3 missed heartbeats mean the camera is disconnected (AGENT_CONTRACT.md).
     intervalo-senal: 30s
     senales-perdidas: 3
-    # GET /api/agente/configuracion (AGENT_CONTRACT.md). The agent only logs a different version.
-    # Default: the current release of te-tengo-desktop-pywebview.
+    # GET /api/agente/configuracion (AGENT_CONTRACT.md). The agent only logs a different version. It is
+    # the Windows version of GET /api/versiones (tetengo.versiones below); this value only applies while
+    # no manifest publishes one.
     version-publicada: ${TT_AGENTE_VERSION_PUBLICADA:0.2.0}
     # Classification thresholds by the field names of the agent's `Umbrales`. Empty by default, so
     # every agent keeps the thresholds calibrated at installation; never set values that were not
     # calibrated (docs/BLOCKERS.md). Example:
     # umbrales:
     #   "[velocidad_descenso_min]": 0.5
+  versiones:
+    # GET /api/versiones (US-43, ADR 0012): the latest version of each app. The release workflows of
+    # te-tengo-desktop-pywebview and te-tengo-mobile-flutter write one manifest per channel,
+    # versiones/<windows|mac|apk|play|ios|pwa>.json, to the public downloads bucket when a version
+    # reaches production; the API reads them from TT_VERSIONES_URL_BASE (the bucket's public URL, the
+    # same DESCARGAS_BASE_URL the landing links to) every `vigencia`, keeping the last good read.
+    # Blank: no manifest is read.
+    url-base: ${TT_VERSIONES_URL_BASE:}
+    # «Ir a la descarga» (CA-43.3).
+    pagina-descargas: ${TT_VERSIONES_PAGINA_DESCARGAS:https://tetengo.reqsai.tech/descargas}
+    vigencia: 5m
+    espera: 5s
+    # Te Tengo Captura's version while no manifest publishes one (version only, no download).
+    respaldo-escritorio: ${TT_AGENTE_VERSION_PUBLICADA:}
+    # CA-43.8: the minimum version the backend supports on each channel; an app below it shows
+    # «Actualiza Te Tengo para seguir recibiendo alertas». Blank: every version is supported.
+    minimas:
+      windows: ${TT_VERSION_MINIMA_WINDOWS:}
+      mac: ${TT_VERSION_MINIMA_MAC:}
+      apk: ${TT_VERSION_MINIMA_APK:}
+      play: ${TT_VERSION_MINIMA_PLAY:}
+      ios: ${TT_VERSION_MINIMA_IOS:}
+      pwa: ${TT_VERSION_MINIMA_PWA:}
   pcs:
     # PC link with the OAuth 2.0 device grant (RFC 8628; docs/AGENT_CONTRACT.md, ADR 0009).
     # client_id of Te Tengo Captura, a public client.
