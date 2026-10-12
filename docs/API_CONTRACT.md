@@ -196,6 +196,7 @@ Change request «PCs, cámaras y datos de movimiento» (pending the advisor's ap
 ```
 Pc = {
   id, nombre, sistemaOperativo | null, versionAgente | null,
+  actualizacionAutomatica | null,                // US-43, CA-43.7: «Actualizar automáticamente» of the PC; null: the PC never said (older agent)
   estadoConexion: "EN_LINEA" | "DESCONECTADA",   // a heartbeat of the PC or of one of its cameras in the last 90 s (CA-30.2, CA-30.3)
   ultimaSenal | null,                            // the latest of them: «Sin conexión desde las HH:MM»
   vinculadaEn, vinculadaPor: {id, nombre} | null, // null for installations
@@ -286,6 +287,8 @@ Actividad = {
 | `GUARDADO_LOCAL_CAMBIADO` | «Desde la PC Sala-Rosa: video continuo pasó de No a Sí, 7 días» | PC | as the PC reports it |
 | `DATOS_LOCALES_ELIMINADOS` | «Desde la PC Sala-Rosa: se borraron los datos guardados en la PC» | PC | as the PC reports it, or `Datos guardados en la PC` → «Borrados al desvincular» when it was unlinked with that option (CA-31.6) |
 | `REPETICION_VISTA` | «Desde la PC Sala-Rosa: se vio qué pasó en la Sala (23/09 10:36–10:46, 3 min)» | PC | room · moment replayed as an ISO-8601 interval `desde/hasta` → seconds watched (e.g. `"180"`); `camaraId` is the camera. A replay watched **on the PC**, reported only when it was played or scrubbed (CA-39.3; agent contract, «Activity log»). Replays in the app are in `GET /api/accesos-repeticiones` instead; the access log shows both |
+| `PC_ACTUALIZADA` | «Sala-Rosa se actualizó a 0.5.0» | PC | `Te Tengo Captura` · old version → new version, as the PC reports it after installing an update (US-43, CA-43.2) |
+| `ACTUALIZACION_AUTOMATICA_ACTIVADA` / `ACTUALIZACION_AUTOMATICA_DESACTIVADA` | «Desde la PC Sala-Rosa: se activó la actualización automática» | PC | `Actualizar automáticamente` (CA-43.7), as the PC reports it |
 
 Unknown future values of `tipo` should be shown with a neutral generic sentence. Entries are written right after each change, in the background: one may appear a second later.
 
@@ -355,3 +358,36 @@ The app cannot read Parquet on every platform (ADR 0011 of the backend), so next
 - **Quantization**, the same integers as the Parquet file (`q` stored, `c` MediaPipe's value): `x`, `y`: `c = q / 65535 × 2 − 0.5` (range −0.5 to 1.5, normalized to the image; 0 is the left or top edge); visibility: `c = q / 255`; `z` (int16): `c = q / 8192`. A landmark with visibility below 0.5 should not be drawn.
 - **Names:** the object key is the Parquet file's with `.ttmov` instead of `.parquet` (`movimientos/<hogar>/<camara>/YYYY/MM/DD/HH/mm.ttmov`; a clip's `clips/<alerta>.landmarks.ttmov`).
 - **Sizes** (measured, 5 minutes with a person in the image 86 % of the frames): Parquet 459 KB, light file 257 KB; about 132 MB and 74 MB per camera and day.
+
+## 12. App versions (`versiones`) — US-43
+The latest published version of each app, so that Te Tengo Captura and the mobile app tell the family when there is a new one (CA-43.1 to CA-43.6) and stop an app the backend no longer supports (CA-43.8). The release workflows publish it when a version reaches production; nobody edits it by hand (backend ADR 0012).
+
+| Method and path | Auth | Body → response | Errors |
+|---|---|---|---|
+| `GET /api/versiones` | public | → `200 Versiones`. No personal data: any client may read it, also before signing in or linking a PC. Cache-friendly: `Cache-Control: public, max-age=300` and an `ETag`; `If-None-Match` with the same `ETag` answers `304` | — |
+
+```
+Versiones = {
+  windows: Version | null,     // Te Tengo Captura for Windows: the installer (CA-43.2, CA-43.7)
+  mac: Version | null,         // Te Tengo Captura for macOS: the disk image, only linked (CA-43.3)
+  apk: Version | null,         // the Android app installed from the APK (CA-43.5)
+  play: Version | null,        // the Android app from Google Play (CA-43.5)
+  ios: Version | null,         // the iPhone app, TestFlight or App Store (CA-43.6)
+  pwa: Version | null,         // the installable web app (CA-43.4)
+  paginaDescargas: string | null   // the downloads page, «Ir a la descarga» (CA-43.3), e.g. https://tetengo.reqsai.tech/descargas
+}
+Version = {
+  version,                     // the latest published version, "0.5.0" (MAJOR.MINOR.PATCH)
+  versionMinima | null,        // CA-43.8: an installed version below it is no longer supported; null: every version is
+  url | null,                  // the file (windows, mac, apk), the store page (play, ios) or the app (pwa)
+  sha256 | null,               // SHA-256 of the file at `url` (64 lowercase hex), from SHA256SUMS of that version; null for play, ios and pwa
+  tamanoBytes | null,          // size of the file at `url`; null for play, ios and pwa
+  publicadaEn | null,          // when that version reached production
+  notas: [string]              // «Qué cambió»: short lines in Spanish for the family; [] when there are none
+}
+```
+- A channel is `null` when nothing was published on it (for example `play` and `ios` while the app is not in the stores).
+- **Comparing versions:** numerically by `MAJOR.MINOR.PATCH`, ignoring a build suffix (`0.5.3+12` is `0.5.3`). An installed version below `version` has an update; below `versionMinima` it must update (CA-43.8).
+- **Which channel:** Te Tengo Captura reads `windows` or `mac`; the mobile app reads `pwa` on the web, `play` on Android when Google Play installed it, `apk` on other Android installs, and `ios` on iPhone. The app compares each PC's `versionAgente` (§9) with `windows` or `mac` by its `sistemaOperativo`, to show «Versión anterior (0.4.3)» and whether that PC updates itself (`actualizacionAutomatica`, CA-43.7).
+- **Downloads are checked:** a client that downloads `url` checks its SHA-256 against `sha256` and installs nothing when it differs (CA-43.2). `url` keeps the same address between versions (the landing's download link), so between a new file and the new `sha256` there can be a few minutes where they differ: the check fails safely and the client tries again later.
+- **Never during an alert or a live view** (CA-43.9): the clients wait to show a notice or install until it ends; this endpoint does not know about alerts.
