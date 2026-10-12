@@ -26,6 +26,15 @@ tetengo:
       path-style: true
       access-key: test
       secret-key: test
+  fotos:
+    # Profile photos (API contract §13) on Floci's S3 too, in the same bucket as the clips.
+    s3:
+      bucket: te-tengo-clips
+      region: us-east-1
+      endpoint: http://localhost:${TT_FLOCI_PUERTO:4566}
+      path-style: true
+      access-key: test
+      secret-key: test
   correo:
     # E-mails go to Floci's SES: read them at http://localhost:4566/_aws/ses (TT_CORREO_PROVEEDOR=registro
     # only logs them instead).

@@ -1,11 +1,13 @@
 package tech.tetengo.api.hogares.interfaces.rest;
 
+import tech.tetengo.api.hogares.application.AdultoMayorConFoto;
 import tech.tetengo.api.hogares.application.ConsentimientoConsultado;
 import tech.tetengo.api.hogares.application.EliminacionConsultada;
 import tech.tetengo.api.hogares.application.HogarConsultado;
 import tech.tetengo.api.hogares.application.HogarDelUsuario;
 import tech.tetengo.api.hogares.domain.model.AdultoMayor;
 import tech.tetengo.api.hogares.domain.model.Convivencia;
+import tech.tetengo.api.shared.application.port.AlmacenamientoDeFotos.Foto;
 
 final class HogarMapper {
 
@@ -20,19 +22,24 @@ final class HogarMapper {
                 pedido.telefono());
     }
 
-    static AdultoMayorResponse aRespuesta(AdultoMayor adultoMayor) {
+    static AdultoMayorResponse aRespuesta(AdultoMayor adultoMayor, Foto foto) {
         return new AdultoMayorResponse(
                 adultoMayor.getNombre(),
                 adultoMayor.getEdad(),
                 adultoMayor.getDireccion(),
                 adultoMayor.getConvivencia().name(),
-                adultoMayor.getTelefono());
+                adultoMayor.getTelefono(),
+                foto);
+    }
+
+    static AdultoMayorResponse aRespuesta(AdultoMayorConFoto adultoMayor) {
+        return aRespuesta(adultoMayor.adultoMayor(), adultoMayor.foto());
     }
 
     static HogarResponse aRespuesta(HogarConsultado consultado) {
         return new HogarResponse(
                 consultado.hogar().getId(),
-                aRespuesta(consultado.hogar().getAdultoMayor()),
+                aRespuesta(consultado.hogar().getAdultoMayor(), consultado.fotoAdultoMayor()),
                 consultado.rol().name(),
                 consultado.consentimiento().map(HogarMapper::aRespuesta).orElse(null),
                 consultado.dispositivosActivos(),

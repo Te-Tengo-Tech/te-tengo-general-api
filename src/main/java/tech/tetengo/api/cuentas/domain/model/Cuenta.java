@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import tech.tetengo.api.cuentas.domain.CuentaError;
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 import tech.tetengo.api.shared.domain.model.AggregateRoot;
@@ -39,6 +40,18 @@ public class Cuenta extends AggregateRoot {
 
     @Column(name = "bloqueada_hasta")
     private Instant bloqueadaHasta;
+
+    /** API contract §13: digits and spaces with an optional leading {@code +}; null when not given. */
+    @Column(length = 20)
+    private String telefono;
+
+    /** API contract §13: free text such as «Hija» or «Vecina»; null when not given. */
+    @Column(length = 40)
+    private String parentesco;
+
+    /** Object key of the stored photo (API contract §13); null without a photo. */
+    @Column(name = "foto_clave", length = 200)
+    private String fotoClave;
 
     protected Cuenta() {}
 
@@ -88,6 +101,34 @@ public class Cuenta extends AggregateRoot {
         this.bloqueadaHasta = null;
     }
 
+    /**
+     * API contract §13: replaces the editable profile. A blank phone or relationship clears it; the
+     * e-mail is the sign-in and does not change here.
+     */
+    public void actualizarPerfil(String nombre, String telefono, String parentesco) {
+        this.nombre = Objects.requireNonNull(nombre, "nombre").strip();
+        this.telefono = textoOpcional(telefono);
+        this.parentesco = textoOpcional(parentesco);
+    }
+
+    /** Sets the new photo and returns the key of the one it replaces, to delete it. */
+    public Optional<String> cambiarFoto(String clave) {
+        Optional<String> anterior = Optional.ofNullable(fotoClave);
+        this.fotoClave = Objects.requireNonNull(clave, "clave");
+        return anterior;
+    }
+
+    /** Removes the photo and returns its key, to delete it; empty if there was none. */
+    public Optional<String> quitarFoto() {
+        Optional<String> anterior = Optional.ofNullable(fotoClave);
+        this.fotoClave = null;
+        return anterior;
+    }
+
+    private static String textoOpcional(String texto) {
+        return texto == null || texto.isBlank() ? null : texto.strip();
+    }
+
     private ErrorDeNegocio bloqueada() {
         return new ErrorDeNegocio(CuentaError.CUENTA_BLOQUEADA, Map.of("bloqueadaHasta", bloqueadaHasta));
     }
@@ -110,5 +151,17 @@ public class Cuenta extends AggregateRoot {
 
     public Instant getBloqueadaHasta() {
         return bloqueadaHasta;
+    }
+
+    public String getTelefono() {
+        return telefono;
+    }
+
+    public String getParentesco() {
+        return parentesco;
+    }
+
+    public String getFotoClave() {
+        return fotoClave;
     }
 }

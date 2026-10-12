@@ -12,6 +12,9 @@ public enum CuentaError implements CodigoError {
             HttpStatus.LOCKED,
             "La cuenta está bloqueada por varios intentos fallidos. Vuelve a intentarlo más tarde."),
     SESION_EXPIRADA("SESION_EXPIRADA", HttpStatus.UNAUTHORIZED, "La sesión expiró. Vuelve a iniciar sesión."),
+    /** API contract §13: changing the password needs the current one. */
+    CONTRASENA_ACTUAL_INCORRECTA(
+            "CONTRASENA_ACTUAL_INCORRECTA", HttpStatus.UNPROCESSABLE_CONTENT, "La contraseña actual no es correcta."),
     ENLACE_VENCIDO(
             "ENLACE_VENCIDO",
             HttpStatus.GONE,

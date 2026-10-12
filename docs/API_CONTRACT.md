@@ -51,7 +51,8 @@
 | `GET /api/hogar/consentimiento` | member | → `200 Consentimiento` | `404 SIN_CONSENTIMIENTO` |
 | `DELETE /api/hogar/consentimiento` | owner | → `202 {eliminacionProgramada: true, clips}`. Stops capture and schedules deletion of every recording (CA-09.1); `clips`: how many recordings it deletes, counted at the revocation. A push `DATOS_ELIMINADOS` is sent when done (CA-09.3), and `GET /api/hogar` `eliminacion` tells the progress. An older backend does not send `clips` | `404 SIN_CONSENTIMIENTO`: there is no current consent to revoke |
 
-`adultoMayor = {nombre, edad, direccion, convivencia, telefono | null}`
+`adultoMayor = {nombre, edad, direccion, convivencia, telefono | null, foto: Foto | null}`
+- `foto`: the older adult's photo (§13); null without one. An older backend does not send it.
 - `eliminacion.movimientos` (US-37): movement files to delete or deleted with the recordings; a monitoring consent revocation also deletes the cloud movements and ends the movement consent (§11). An older backend does not send it.
 - `edad`: whole years, required, from 50 to 120. The prototype's profile form asks for «Edad» and rejects other values with «Escribe una edad válida, en años.»; the app shows «Rosa Huamán, 78 años». Households registered before this field existed answer `edad: null` until the owner saves the profile again.
 - `telefono`: optional; the number that «Llamar a Rosa · 987 654 321» dials from the alert (prototype alert screen). Digits and spaces with an optional leading `+`, 6 to 20 characters **[implementation choice]**; a blank value is stored as null.
@@ -68,7 +69,7 @@
 ## 3. Family and alert routing (`hogares`) — US-08, US-10
 | Method and path | Auth | Body → response | Errors |
 |---|---|---|---|
-| `GET /api/familiares` | member | → `200 [{usuarioId, nombre, correo, rol}]` | — |
+| `GET /api/familiares` | member | → `200 [{usuarioId, nombre, correo, rol, telefono \| null, parentesco \| null, foto: Foto \| null}]`: each member's profile and photo (§13) | — |
 | `POST /api/invitaciones` | owner | `{correo}` → `201 {id, correo, expiraEn}`. Emails a link to create access (CA-08.1) | `409 YA_ES_FAMILIAR` |
 | `POST /api/invitaciones/{token}/aceptacion` | public | `{nombre, contrasena}` (new account) **or** a bearer token (existing account) → `201 Sesion` as `INVITADO` of that household (CA-08.2) | `410 INVITACION_VENCIDA` |
 | `DELETE /api/familiares/{usuarioId}` | owner | → `204`. Removes access to alerts (CA-08.3) | `409 NO_SE_PUEDE_RETIRAR_TITULAR` |
@@ -289,6 +290,7 @@ Actividad = {
 | `REPETICION_VISTA` | «Desde la PC Sala-Rosa: se vio qué pasó en la Sala (23/09 10:36–10:46, 3 min)» | PC | room · moment replayed as an ISO-8601 interval `desde/hasta` → seconds watched (e.g. `"180"`); `camaraId` is the camera. A replay watched **on the PC**, reported only when it was played or scrubbed (CA-39.3; agent contract, «Activity log»). Replays in the app are in `GET /api/accesos-repeticiones` instead; the access log shows both |
 | `PC_ACTUALIZADA` | «Sala-Rosa se actualizó a 0.5.0» | PC | `Te Tengo Captura` · old version → new version, as the PC reports it after installing an update (US-43, CA-43.2) |
 | `ACTUALIZACION_AUTOMATICA_ACTIVADA` / `ACTUALIZACION_AUTOMATICA_DESACTIVADA` | «Desde la PC Sala-Rosa: se activó la actualización automática» | PC | `Actualizar automáticamente` (CA-43.7), as the PC reports it |
+| `FOTO_ADULTO_MAYOR_CAMBIADA` / `FOTO_ADULTO_MAYOR_QUITADA` | «Carmen cambió la foto de Rosa» / «Carmen quitó la foto de Rosa» | FAMILIAR | the older adult's first name (§13) |
 
 Unknown future values of `tipo` should be shown with a neutral generic sentence. Entries are written right after each change, in the background: one may appear a second later.
 
@@ -391,3 +393,23 @@ Version = {
 - **Which channel:** Te Tengo Captura reads `windows` or `mac`; the mobile app reads `pwa` on the web, `play` on Android when Google Play installed it, `apk` on other Android installs, and `ios` on iPhone. The app compares each PC's `versionAgente` (§9) with `windows` or `mac` by its `sistemaOperativo`, to show «Versión anterior (0.4.3)» and whether that PC updates itself (`actualizacionAutomatica`, CA-43.7).
 - **Downloads are checked:** a client that downloads `url` checks its SHA-256 against `sha256` and installs nothing when it differs (CA-43.2). `url` keeps the same address between versions (the landing's download link), so between a new file and the new `sha256` there can be a few minutes where they differ: the check fails safely and the client tries again later.
 - **Never during an alert or a live view** (CA-43.9): the clients wait to show a notice or install until it ends; this endpoint does not know about alerts.
+
+## 13. Profiles and photos (`cuentas`, `hogares`) — prototype «Tu perfil», «Persona cuidada», «Cambiar foto»
+A person's photo identifies them across the app (family, access log, settings, a member's detail, the alert); without one, the app shows their initials. Everyone in the household sees the photos («La ve toda la familia.»).
+
+| Method and path | Auth | Body → response | Errors |
+|---|---|---|---|
+| `GET /api/cuenta` | user | → `200 Perfil` | — |
+| `PUT /api/cuenta` | user | `{nombre, telefono?, parentesco?}` → `200 Perfil`. Replaces the editable fields; an omitted or blank `telefono` or `parentesco` clears it. The e-mail is the sign-in and is not editable | `400 VALIDACION` |
+| `PUT /api/cuenta/contrasena` | user | `{actual, nueva}` → `204`. Other sessions stay open | `422 CONTRASENA_ACTUAL_INCORRECTA` · `400 VALIDACION` (`nueva`: 8 characters or more, with a number) |
+| `POST /api/fotos/subidas` | user | `{de: "YO" \| "ADULTO_MAYOR", tipo: "image/jpeg" \| "image/png" \| "image/webp", tamanoBytes}` → `201 {subidaId, url, cabeceras: {"Content-Type": tipo}, expiraEn}`: a pre-signed `PUT` to the object store, valid 10 minutes, for exactly that type and size | `403 SOLO_TITULAR` (`ADULTO_MAYOR` by an `INVITADO`) · `413 FOTO_MUY_GRANDE` (over 5 MB) · `415 FOTO_FORMATO_NO_ADMITIDO` · `400 VALIDACION` |
+| `POST /api/fotos/subidas/{subidaId}/confirmacion` | user (the one who asked for the upload) | → `200 Foto`. The backend reads the upload, checks that it really is a JPEG, PNG or WebP image, crops it to a centered square, scales it down to 512 × 512 at most, removes its metadata (EXIF, location), stores it as JPEG and deletes the upload and the previous photo. It replaces the photo of the caller (`YO`) or of the older adult (`ADULTO_MAYOR`) | `404 SUBIDA_NO_ENCONTRADA` (no upload, someone else's, or the file never arrived) · `410 SUBIDA_VENCIDA` (confirmed more than 1 hour after it was asked for) · `413 FOTO_MUY_GRANDE` (over 5 MB, or over 40 megapixels once decoded) · `415 FOTO_FORMATO_NO_ADMITIDO` (not a decodable image) · `403 SOLO_TITULAR` |
+| `DELETE /api/fotos/{de}` | user; `ADULTO_MAYOR` owner | `de` = `yo` \| `adulto-mayor` → `204`. «Quitar la foto»: the initials come back. Deleting a missing photo also answers `204` | `403 SOLO_TITULAR` |
+
+- `Perfil = {id, nombre, correo, telefono | null, parentesco | null, foto: Foto | null}`. `nombre`: 1–80 characters. `telefono`: as the older adult's (digits and spaces with an optional leading `+`, 6 to 20 characters). `parentesco`: free text up to 40 characters («Hija», «Sobrino», «Vecina»).
+- `Foto = {url, expiraEn}`: a pre-signed `GET` of the stored JPEG, valid 1 hour; the object key changes with every new photo, so the app can cache by URL path. The app asks again (any endpoint that returns it) after `expiraEn`.
+- `foto: Foto | null` is also returned in `adultoMayor` (`GET /api/hogar`, `PUT /api/hogar/adulto-mayor`) and in each item of `GET /api/familiares` (`[{usuarioId, nombre, correo, rol, telefono | null, parentesco | null, foto: Foto | null}]`). An older backend does not send these fields; the app then shows initials.
+- **Who changes what:** each person changes their own photo and profile; only the owner changes the older adult's photo (an invited member sees it, read-only).
+- **Storage and deletion [implementation choice]:** photos live in the same object store as the clips, under `fotos/usuarios/<usuarioId>/<id>.jpg` and `fotos/hogares/<hogarId>/adulto-mayor/<id>.jpg`; uploads under `fotos/subidas/<subidaId>`, deleted after confirmation and, if never confirmed, after 24 hours. The older adult's photo is deleted with the household's data; a user's photo is deleted with the account.
+- **Web (PWA):** the pre-signed `PUT` goes from the browser to the object store, so the bucket must allow `PUT` with `Content-Type` from the app's origins (CORS).
+- Push and activity: no push. The activity log (§10) records «Carmen cambió la foto de Rosa» / «… quitó la foto de Rosa» (`FOTO_ADULTO_MAYOR_CAMBIADA`, `FOTO_ADULTO_MAYOR_QUITADA`, actor FAMILIAR); a member's own photo is not logged.

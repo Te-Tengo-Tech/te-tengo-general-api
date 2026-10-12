@@ -42,6 +42,12 @@ public class ConsultaDeUsuarios implements DirectorioDeUsuarios {
     }
 
     private static Usuario aUsuario(Cuenta cuenta) {
-        return new Usuario(cuenta.getId(), cuenta.getNombre(), cuenta.getCorreo());
+        return new Usuario(
+                cuenta.getId(),
+                cuenta.getNombre(),
+                cuenta.getCorreo(),
+                cuenta.getTelefono(),
+                cuenta.getParentesco(),
+                cuenta.getFotoClave());
     }
 }

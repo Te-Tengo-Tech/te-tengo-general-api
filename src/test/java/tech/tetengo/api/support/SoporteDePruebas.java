@@ -40,6 +40,12 @@ public class SoporteDePruebas {
 
     @Bean
     @Primary
+    FotosDePrueba fotosDePrueba() {
+        return new FotosDePrueba();
+    }
+
+    @Bean
+    @Primary
     TransmisionDePrueba transmisionDePrueba() {
         return new TransmisionDePrueba();
     }

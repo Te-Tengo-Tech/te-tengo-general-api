@@ -4,9 +4,13 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import tech.tetengo.api.hogares.FotoDelAdultoMayorCambiada;
+import tech.tetengo.api.hogares.FotoDelAdultoMayorQuitada;
 import tech.tetengo.api.hogares.domain.HogarError;
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 import tech.tetengo.api.shared.domain.model.AggregateRoot;
@@ -34,6 +38,10 @@ public class Hogar extends AggregateRoot {
     @Column(name = "aviso_espera_minutos")
     private Integer avisoEsperaMinutos;
 
+    /** Object key of the older adult's photo (API contract §13); null without one. */
+    @Column(name = "adulto_mayor_foto_clave", length = 200)
+    private String fotoDelAdultoMayor;
+
     /** CA-10.2: the owner can wait 3, 5 or 10 minutes before the secondary contact is told. */
     public static final Set<Integer> ESPERAS_PERMITIDAS = Set.of(3, 5, 10);
 
@@ -49,6 +57,30 @@ public class Hogar extends AggregateRoot {
 
     public void actualizarAdultoMayor(AdultoMayor datos) {
         this.adultoMayor = Objects.requireNonNull(datos, "adultoMayor");
+    }
+
+    /**
+     * API contract §13: the owner sets the older adult's photo (logged in the activity, US-33). Returns
+     * the key of the photo it replaces, to delete it.
+     */
+    public Optional<String> cambiarFotoDelAdultoMayor(String clave, UUID usuarioId, Instant ahora) {
+        Optional<String> anterior = Optional.ofNullable(fotoDelAdultoMayor);
+        this.fotoDelAdultoMayor = Objects.requireNonNull(clave, "clave");
+        registrarEvento(new FotoDelAdultoMayorCambiada(getId(), usuarioId, adultoMayor.nombreDePila(), ahora));
+        return anterior;
+    }
+
+    /**
+     * API contract §13: «Quitar la foto». Returns the removed key, to delete it; removing a missing photo
+     * changes nothing and logs nothing.
+     */
+    public Optional<String> quitarFotoDelAdultoMayor(UUID usuarioId, Instant ahora) {
+        Optional<String> anterior = Optional.ofNullable(fotoDelAdultoMayor);
+        if (anterior.isPresent()) {
+            this.fotoDelAdultoMayor = null;
+            registrarEvento(new FotoDelAdultoMayorQuitada(getId(), usuarioId, adultoMayor.nombreDePila(), ahora));
+        }
+        return anterior;
     }
 
     /**
@@ -86,5 +118,9 @@ public class Hogar extends AggregateRoot {
 
     public AdultoMayor getAdultoMayor() {
         return adultoMayor;
+    }
+
+    public String getFotoDelAdultoMayor() {
+        return fotoDelAdultoMayor;
     }
 }
