@@ -24,7 +24,7 @@ import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
 class VinculacionController {
 
     private static final String ERRORES =
-            " Errors: 400 VALIDACION (campos.codigo), 404 CODIGO_INCORRECTO {intentosRestantes} (CA-28.6 counts it), 410 CODIGO_VENCIDO (expired or used, CA-28.3), 423 VINCULACION_BLOQUEADA {bloqueadaHasta} (5 wrong codes in a row, 15 min, CA-28.6), 403 SOLO_TITULAR (CA-28.5).";
+            " Errors: 400 VALIDACION (campos.codigo), 404 CODIGO_INCORRECTO {intentosRestantes} (CA-28.6 counts it), 410 CODIGO_VENCIDO (expired or used, CA-28.3), 423 VINCULACION_BLOQUEADA {bloqueadaHasta} (5 wrong codes in a row, 15 min, CA-28.6), 409 PC_YA_VINCULADA {mismoHogar, pcId only when mismoHogar} (the PC showing the code is already linked; consulta and aprobacion), 403 SOLO_TITULAR (CA-28.5).";
 
     private final ResolverVinculacion resolver;
 

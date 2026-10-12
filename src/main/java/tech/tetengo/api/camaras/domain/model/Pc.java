@@ -46,6 +46,10 @@ public class Pc extends EntidadDelHogar {
     @Column(name = "actualizacion_automatica")
     private Boolean actualizacionAutomatica;
 
+    /** The installation id its agent sent when it asked to be linked; null for older agents. */
+    @Column(name = "id_instalacion", updatable = false)
+    private UUID idInstalacion;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, updatable = false, length = 20)
     private OrigenPc origen;
@@ -100,7 +104,13 @@ public class Pc extends EntidadDelHogar {
 
     /** US-28 / CA-28.1: the owner approved the PC's code in the app. */
     public static Pc vincular(
-            UUID hogarId, String nombre, String sistemaOperativo, String versionAgente, UUID titularId, Instant ahora) {
+            UUID hogarId,
+            String nombre,
+            String sistemaOperativo,
+            String versionAgente,
+            UUID idInstalacion,
+            UUID titularId,
+            Instant ahora) {
         Pc pc = new Pc(
                 nombre,
                 sistemaOperativo,
@@ -108,6 +118,7 @@ public class Pc extends EntidadDelHogar {
                 OrigenPc.VINCULACION,
                 Objects.requireNonNull(titularId),
                 ahora);
+        pc.idInstalacion = idInstalacion;
         pc.registrarEvento(new PcVinculada(hogarId, pc.getId(), pc.nombre, titularId, ahora));
         return pc;
     }

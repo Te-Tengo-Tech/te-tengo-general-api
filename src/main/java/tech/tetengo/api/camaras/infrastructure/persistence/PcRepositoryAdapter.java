@@ -49,6 +49,13 @@ class PcRepositoryAdapter implements PcRepository {
     }
 
     @Override
+    public Optional<PcDeUnHogar> vinculadaConInstalacion(UUID idInstalacion) {
+        return jpa.vinculadaConInstalacion(idInstalacion).stream()
+                .findFirst()
+                .map(fila -> new PcDeUnHogar((UUID) fila[0], (UUID) fila[1]));
+    }
+
+    @Override
     public List<PcDeUnHogar> sinUsoDesde(Instant limite) {
         return jpa.sinUsoDesde(limite).stream()
                 .map(fila -> new PcDeUnHogar((UUID) fila[0], (UUID) fila[1]))

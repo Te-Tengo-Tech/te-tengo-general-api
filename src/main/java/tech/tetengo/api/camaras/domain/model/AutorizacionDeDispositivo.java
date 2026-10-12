@@ -45,6 +45,10 @@ public class AutorizacionDeDispositivo extends AggregateRoot {
     @Column(name = "version_agente", updatable = false, length = 40)
     private String versionAgente;
 
+    /** The PC's installation id, if its agent sends one (older agents do not). */
+    @Column(name = "id_instalacion", updatable = false)
+    private UUID idInstalacion;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private EstadoAutorizacion estado;
@@ -82,6 +86,7 @@ public class AutorizacionDeDispositivo extends AggregateRoot {
             String nombrePc,
             String sistemaOperativo,
             String versionAgente,
+            UUID idInstalacion,
             Instant ahora,
             Duration vigencia,
             Duration intervalo) {
@@ -91,6 +96,7 @@ public class AutorizacionDeDispositivo extends AggregateRoot {
         this.nombrePc = Pc.nombreValido(nombrePc);
         this.sistemaOperativo = Pc.recortar(sistemaOperativo, Pc.LARGO_MAXIMO_SISTEMA);
         this.versionAgente = Pc.recortar(versionAgente, Pc.LARGO_MAXIMO_VERSION);
+        this.idInstalacion = idInstalacion;
         this.estado = EstadoAutorizacion.PENDIENTE;
         this.expiraEn = ahora.plus(vigencia);
         this.intervaloSegundos = (int) intervalo.toSeconds();
@@ -187,6 +193,10 @@ public class AutorizacionDeDispositivo extends AggregateRoot {
 
     public String getVersionAgente() {
         return versionAgente;
+    }
+
+    public UUID getIdInstalacion() {
+        return idInstalacion;
     }
 
     public EstadoAutorizacion getEstado() {

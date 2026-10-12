@@ -2,11 +2,14 @@ package tech.tetengo.api.camaras.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tech.tetengo.api.camaras.application.port.AutorizacionDeDispositivoRepository;
 import tech.tetengo.api.camaras.application.port.PcRepository;
+import tech.tetengo.api.camaras.domain.CamaraError;
 import tech.tetengo.api.camaras.domain.model.AutorizacionDeDispositivo;
 import tech.tetengo.api.camaras.domain.model.CodigoDeUsuario;
 import tech.tetengo.api.camaras.domain.model.Pc;
@@ -47,6 +50,7 @@ public class ResolverVinculacion {
     @Transactional(noRollbackFor = ErrorDeNegocio.class)
     public VinculacionConsultada consultar(UUID titularId, String codigo) {
         AutorizacionDeDispositivo autorizacion = codigos.resoluble(titularId, codigo);
+        exigirPcSinVincular(autorizacion);
         return new VinculacionConsultada(
                 CodigoDeUsuario.leer(codigo).orElseThrow().legible(),
                 autorizacion.getNombrePc(),
@@ -60,17 +64,41 @@ public class ResolverVinculacion {
     public PcConsultada aprobar(UUID titularId, String codigo) {
         UUID hogarId = HogarActual.obtener().orElseThrow(() -> new ErrorDeNegocio(ErrorComun.SOLO_TITULAR));
         AutorizacionDeDispositivo autorizacion = codigos.resoluble(titularId, codigo);
+        exigirPcSinVincular(autorizacion);
         Instant ahora = reloj.instant();
         Pc pc = pcs.guardar(Pc.vincular(
                 hogarId,
                 autorizacion.getNombrePc(),
                 autorizacion.getSistemaOperativo(),
                 autorizacion.getVersionAgente(),
+                autorizacion.getIdInstalacion(),
                 titularId,
                 ahora));
         autorizacion.aprobar(hogarId, pc.getId(), titularId, ahora);
         autorizaciones.guardar(autorizacion);
         return listarPcs.consultada(pc);
+    }
+
+    /**
+     * «Esta PC ya está vinculada»: the PC showing the code (same installation id) is already linked.
+     * The PC's id goes back only when it is in the owner's own household; for another household the
+     * answer says just that, so nothing of it leaks. The code stays pending and simply expires.
+     */
+    private void exigirPcSinVincular(AutorizacionDeDispositivo autorizacion) {
+        UUID instalacion = autorizacion.getIdInstalacion();
+        if (instalacion == null) {
+            return;
+        }
+        pcs.vinculadaConInstalacion(instalacion).ifPresent(vinculada -> {
+            boolean mismoHogar =
+                    HogarActual.obtener().map(vinculada.hogarId()::equals).orElse(false);
+            Map<String, Object> propiedades = new LinkedHashMap<>();
+            propiedades.put("mismoHogar", mismoHogar);
+            if (mismoHogar) {
+                propiedades.put("pcId", vinculada.pcId());
+            }
+            throw new ErrorDeNegocio(CamaraError.PC_YA_VINCULADA, propiedades);
+        });
     }
 
     /** CA-28.4: «No reconozco esta PC»; the PC is not linked. */

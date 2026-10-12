@@ -15,7 +15,7 @@ class PcTest {
     private static final Instant T0 = Instant.parse("2026-10-10T15:00:00Z");
 
     private static Pc vinculada() {
-        return Pc.vincular(UUID.randomUUID(), " Sala-Rosa ", "Windows 11 Home", "0.5.0", UUID.randomUUID(), T0);
+        return Pc.vincular(UUID.randomUUID(), " Sala-Rosa ", "Windows 11 Home", "0.5.0", null, UUID.randomUUID(), T0);
     }
 
     @Test
