@@ -29,14 +29,22 @@ public enum TipoDeActividad {
      * Reported by the PC: someone replayed a camera's movements on the PC itself, only when it was
      * played or scrubbed (US-39, CA-39.3). Replays in the app are in the access log instead.
      */
-    REPETICION_VISTA;
+    REPETICION_VISTA,
+    /** Reported by the PC: it installed an update, from the old version to the new one (US-43, CA-43.2). */
+    PC_ACTUALIZADA,
+    /** Reported by the PC: «Actualizar automáticamente» was turned on or off (US-43, CA-43.7). */
+    ACTUALIZACION_AUTOMATICA_ACTIVADA,
+    ACTUALIZACION_AUTOMATICA_DESACTIVADA;
 
     private static final Set<TipoDeActividad> DE_LA_PC = EnumSet.of(
             MODO_AVANZADO_ACTIVADO,
             MODO_AVANZADO_DESACTIVADO,
             GUARDADO_LOCAL_CAMBIADO,
             DATOS_LOCALES_ELIMINADOS,
-            REPETICION_VISTA);
+            REPETICION_VISTA,
+            PC_ACTUALIZADA,
+            ACTUALIZACION_AUTOMATICA_ACTIVADA,
+            ACTUALIZACION_AUTOMATICA_DESACTIVADA);
 
     /** The changes only the PC knows about, which it reports itself. */
     public boolean reportadoPorLaPc() {

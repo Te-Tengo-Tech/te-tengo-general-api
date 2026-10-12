@@ -173,6 +173,34 @@ class ActividadIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void ca43_2_laPcInformaQueSeActualizoYQueCambioLaActualizacionAutomatica() throws Exception {
+        String cuerpo = """
+                {"cambios":[{"id":"%s","tipo":"PC_ACTUALIZADA","ocurridoEn":"%s","objeto":"Te Tengo Captura","valorAnterior":"0.4.3","valorNuevo":"0.5.0"},
+                 {"id":"%s","tipo":"ACTUALIZACION_AUTOMATICA_DESACTIVADA","ocurridoEn":"%s","objeto":"Actualizar automáticamente"}]}
+                """.formatted(
+                        UUID.randomUUID(),
+                        reloj.instant().minus(Duration.ofMinutes(5)),
+                        UUID.randomUUID(),
+                        reloj.instant().minus(Duration.ofMinutes(1)));
+        mvc.perform(post("/api/agente/pc/actividad")
+                        .header("Authorization", bearer(tokenPc))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpo))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.registrados").value(2));
+
+        // «Sala-Rosa se actualizó a 0.5.0».
+        String actualizada = actividad(titular, "?tipo=PC_ACTUALIZADA");
+        assertThat(campo(actualizada, "$.elementos[0].actor.tipo")).isEqualTo("PC");
+        assertThat(campo(actualizada, "$.elementos[0].pc.nombre")).isEqualTo("Sala-Rosa");
+        assertThat(campo(actualizada, "$.elementos[0].objeto")).isEqualTo("Te Tengo Captura");
+        assertThat(campo(actualizada, "$.elementos[0].valorAnterior")).isEqualTo("0.4.3");
+        assertThat(campo(actualizada, "$.elementos[0].valorNuevo")).isEqualTo("0.5.0");
+        assertThat(campo(actividad(titular, "?tipo=ACTUALIZACION_AUTOMATICA_DESACTIVADA"), "$.total"))
+                .isEqualTo("1");
+    }
+
+    @Test
     void ca39_3_unaRepeticionVistaEnLaPcQuedaConLaCamaraElMomentoYCuantoSeVio() throws Exception {
         String camara = campo(
                 VinculacionDePrueba.usarCamara(mvc, tokenPc, "usb#1", "Logitech C920", "Sala")
