@@ -18,6 +18,9 @@ public enum TipoDeActividad {
     CONSENTIMIENTO_MOVIMIENTOS_OTORGADO,
     CONSENTIMIENTO_MOVIMIENTOS_REVOCADO,
     RETENCION_MOVIMIENTOS_CAMBIADA,
+    /** The owner changed or removed the older adult's photo (API contract §13). */
+    FOTO_ADULTO_MAYOR_CAMBIADA,
+    FOTO_ADULTO_MAYOR_QUITADA,
     /** Reported by the PC (US-32, CA-32.1). */
     MODO_AVANZADO_ACTIVADO,
     MODO_AVANZADO_DESACTIVADO,

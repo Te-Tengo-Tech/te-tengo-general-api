@@ -24,7 +24,15 @@ public enum HogarError implements CodigoError {
     CONTACTO_NO_ES_FAMILIAR(
             "CONTACTO_NO_ES_FAMILIAR",
             HttpStatus.UNPROCESSABLE_CONTENT,
-            "Los contactos deben ser familiares distintos vinculados a este hogar.");
+            "Los contactos deben ser familiares distintos vinculados a este hogar."),
+    /** API contract §13: no upload with that id for the caller, or its file never arrived. */
+    SUBIDA_NO_ENCONTRADA("SUBIDA_NO_ENCONTRADA", HttpStatus.NOT_FOUND, "No encontramos la foto. Vuelve a elegirla."),
+    SUBIDA_VENCIDA("SUBIDA_VENCIDA", HttpStatus.GONE, "Pasó demasiado tiempo. Vuelve a elegir la foto."),
+    FOTO_MUY_GRANDE("FOTO_MUY_GRANDE", HttpStatus.CONTENT_TOO_LARGE, "La foto es muy grande. Elige una de hasta 5 MB."),
+    FOTO_FORMATO_NO_ADMITIDO(
+            "FOTO_FORMATO_NO_ADMITIDO",
+            HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+            "No pudimos leer esa imagen. Elige una foto JPG, PNG o WebP.");
 
     private final String codigo;
     private final HttpStatus estado;

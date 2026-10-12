@@ -92,12 +92,14 @@ class FamiliaController {
         return ResponseEntity.status(HttpStatus.CREATED).body(sesion);
     }
 
-    @Operation(summary = "List the family members (US-08)", description = "Members of the household, owner first.")
+    @Operation(
+            summary = "List the family members (US-08)",
+            description = "Members of the household, owner first, with their profiles and photos.")
     @GetMapping(path = API + "/familiares", version = ApiVersioning.V1)
     List<FamiliarResponse> listar() {
         return listarFamiliares.ejecutar(UsuarioActual.id()).stream()
                 .map(f -> new FamiliarResponse(
-                        f.usuarioId(), f.nombre(), f.correo(), f.rol().name()))
+                        f.usuarioId(), f.nombre(), f.correo(), f.rol().name(), f.telefono(), f.parentesco(), f.foto()))
                 .toList();
     }
 

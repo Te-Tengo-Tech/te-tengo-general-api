@@ -17,14 +17,16 @@ public class ActualizarAdultoMayor {
 
     private final HogarRepository hogares;
     private final MiembroActual miembroActual;
+    private final FotosDelHogar fotos;
 
-    public ActualizarAdultoMayor(HogarRepository hogares, MiembroActual miembroActual) {
+    public ActualizarAdultoMayor(HogarRepository hogares, MiembroActual miembroActual, FotosDelHogar fotos) {
         this.hogares = hogares;
         this.miembroActual = miembroActual;
+        this.fotos = fotos;
     }
 
     @Transactional
-    public AdultoMayor ejecutar(UUID usuarioId, AdultoMayor datos) {
+    public AdultoMayorConFoto ejecutar(UUID usuarioId, AdultoMayor datos) {
         Membresia membresia = miembroActual.de(usuarioId);
         if (!membresia.esTitular()) {
             throw new ErrorDeNegocio(ErrorComun.SOLO_TITULAR);
@@ -32,6 +34,7 @@ public class ActualizarAdultoMayor {
         Hogar hogar =
                 hogares.buscar(membresia.getHogarId()).orElseThrow(() -> new ErrorDeNegocio(HogarError.SIN_MEMBRESIA));
         hogar.actualizarAdultoMayor(datos);
-        return hogares.guardar(hogar).getAdultoMayor();
+        Hogar guardado = hogares.guardar(hogar);
+        return new AdultoMayorConFoto(guardado.getAdultoMayor(), fotos.delAdultoMayor(guardado));
     }
 }

@@ -20,6 +20,8 @@ import tech.tetengo.api.camaras.PcRenombrada;
 import tech.tetengo.api.camaras.PcVinculada;
 import tech.tetengo.api.hogares.ConsentimientoOtorgado;
 import tech.tetengo.api.hogares.ConsentimientoRevocado;
+import tech.tetengo.api.hogares.FotoDelAdultoMayorCambiada;
+import tech.tetengo.api.hogares.FotoDelAdultoMayorQuitada;
 import tech.tetengo.api.monitoreo.CamaraPausada;
 import tech.tetengo.api.monitoreo.CamaraReanudada;
 import tech.tetengo.api.monitoreo.PausaFinalizada;
@@ -299,6 +301,36 @@ public class ActividadDeLosModulos {
                                 familiarOSistema(e.usuarioId()))
                         .porUsuario(e.usuarioId())
                         .sobre("Movimientos en la nube", dias(e.diasAnteriores()), dias(e.diasNuevos())));
+    }
+
+    /** «Carmen cambió la foto de Rosa» (API contract §13). */
+    @Async
+    @TransactionalEventListener
+    public void fotoDelAdultoMayorCambiada(FotoDelAdultoMayorCambiada e) {
+        registrar(
+                e.hogarId(),
+                () -> Actividad.de(
+                                clave("FOTO_ADULTO_MAYOR_CAMBIADA", e.ocurridaEn()),
+                                e.ocurridaEn(),
+                                TipoDeActividad.FOTO_ADULTO_MAYOR_CAMBIADA,
+                                OrigenDeActividad.FAMILIAR)
+                        .porUsuario(e.usuarioId())
+                        .sobre(e.nombreAdultoMayor(), null, null));
+    }
+
+    /** «Carmen quitó la foto de Rosa». */
+    @Async
+    @TransactionalEventListener
+    public void fotoDelAdultoMayorQuitada(FotoDelAdultoMayorQuitada e) {
+        registrar(
+                e.hogarId(),
+                () -> Actividad.de(
+                                clave("FOTO_ADULTO_MAYOR_QUITADA", e.ocurridaEn()),
+                                e.ocurridaEn(),
+                                TipoDeActividad.FOTO_ADULTO_MAYOR_QUITADA,
+                                OrigenDeActividad.FAMILIAR)
+                        .porUsuario(e.usuarioId())
+                        .sobre(e.nombreAdultoMayor(), null, null));
     }
 
     private Actividad conPcDeCamara(Actividad entrada, UUID camaraId) {

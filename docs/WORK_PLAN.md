@@ -39,6 +39,8 @@ The backend is built task by task from this checklist, in backlog-sprint order. 
 
 - [x] **T30 `versiones` — US-43 app updates.** `GET /api/versiones` (public, cached, ETag) from the manifests the release workflows write next to the downloads, with each channel's file, SHA-256, notes and minimum version (ADR 0012); `Pc.actualizacionAutomatica` from the PC's heartbeat (V30); activity types `PC_ACTUALIZADA` and `ACTUALIZACION_AUTOMATICA_*` reported by the PC. — *published app versions and PC updates (US-43)*
 
+- [x] **T31 `cuentas`, `hogares` — profiles and photos (API contract §13).** Own profile and password, pre-signed photo uploads confirmed and normalized by the backend (square JPEG ≤ 512 px, no metadata), the older adult's photo owner-only, photos in `adultoMayor` and `GET /api/familiares`, activity entries, cleanup of unconfirmed uploads (V31). — *profiles and photos of the members and the older adult*
+
 ### Sprint 3
 - [x] **T01 `cuentas` — US-01 register.** `POST /api/cuentas`; BCrypt passwords; unique email (`409 CORREO_EN_USO`); `400 VALIDACION` with `campos`. — *register accounts (US-01)*
 - [x] **T02 `cuentas` — US-02 sessions.** — *sign in, refresh and sign out with JWTs and lockout (US-02)*
