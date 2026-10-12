@@ -21,7 +21,8 @@ class AccesosController {
 
     @Operation(
             summary = "Live view access log (US-24)",
-            description = "Newest first (CA-24.2); empty when nobody watched (CA-24.3).")
+            description =
+                    "Newest first (CA-24.2); empty when nobody watched (CA-24.3). The sessions of one «Ver todas» opening are one entry with mosaico true and the cameras seen in camaraIds (CA-41.6).")
     @GetMapping(path = ApiVersioning.BASE + "/accesos-vista-en-vivo", version = ApiVersioning.V1)
     List<AccesoResponse> listar() {
         return consultarAccesos.ejecutar().stream()
@@ -31,7 +32,9 @@ class AccesosController {
                         a.duracionSegundos(),
                         a.desdeAlerta(),
                         a.camaraId(),
-                        a.vistaPrevia()))
+                        a.vistaPrevia(),
+                        a.camaraIds(),
+                        a.mosaico()))
                 .toList();
     }
 }

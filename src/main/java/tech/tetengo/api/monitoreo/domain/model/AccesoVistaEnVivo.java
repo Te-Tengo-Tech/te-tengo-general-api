@@ -59,6 +59,10 @@ public class AccesoVistaEnVivo extends EntidadDelHogar {
     @Column(name = "vista_previa", nullable = false, updatable = false)
     private boolean vistaPrevia;
 
+    /** US-41: opened from «Ver todas»; the access log shows the mosaic's sessions as one entry (CA-41.6). */
+    @Column(name = "mosaico_id", updatable = false)
+    private UUID mosaicoId;
+
     protected AccesoVistaEnVivo() {}
 
     public AccesoVistaEnVivo(
@@ -81,6 +85,16 @@ public class AccesoVistaEnVivo extends EntidadDelHogar {
 
     public boolean isVistaPrevia() {
         return vistaPrevia;
+    }
+
+    /** US-41: this session is one of the cameras of a «Ver todas» opening. */
+    public AccesoVistaEnVivo enMosaico(UUID mosaico) {
+        this.mosaicoId = mosaico;
+        return this;
+    }
+
+    public UUID getMosaicoId() {
+        return mosaicoId;
     }
 
     /** Open and within its maximum length: MediaMTX may serve the stream to its viewer. */
