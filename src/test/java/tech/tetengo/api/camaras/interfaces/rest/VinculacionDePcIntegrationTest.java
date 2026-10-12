@@ -1,6 +1,7 @@
 package tech.tetengo.api.camaras.interfaces.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -310,5 +311,64 @@ class VinculacionDePcIntegrationTest extends AbstractIntegrationTest {
         assertThat(campo(tokens, "$.hogar_id")).isEqualTo(campo(otra, "$.hogarId"));
         mvc.perform(get("/api/pcs").header("Authorization", bearer(titular)))
                 .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void unaPcYaVinculadaAEsteHogarDiceQueYaEstaVinculadaConSuId() throws Exception {
+        String instalacion = UUID.randomUUID().toString();
+        String tokens = VinculacionDePrueba.vincular(mvc, titular, "Sala-Rosa", instalacion);
+        String codigo = campo(solicitar(mvc, "Sala-Rosa", instalacion), "$.user_code");
+
+        for (String accion : new String[] {"consulta", "aprobacion"}) {
+            resolver(mvc, titular, accion, codigo)
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.codigo").value("PC_YA_VINCULADA"))
+                    .andExpect(jsonPath("$.mismoHogar").value(true))
+                    .andExpect(jsonPath("$.pcId").value(campo(tokens, "$.pc_id")));
+        }
+        mvc.perform(get("/api/pcs").header("Authorization", bearer(titular)))
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    void unaPcVinculadaAOtroHogarDiceQueYaEstaVinculadaSinDatosDeEseHogar() throws Exception {
+        String otra = ApiDePrueba.titularConHogar(mvc, "luis@correo.pe", "Luis");
+        String instalacion = UUID.randomUUID().toString();
+        VinculacionDePrueba.vincular(mvc, campo(otra, "$.tokenAcceso"), "PC de Luis", instalacion);
+        String codigo = campo(solicitar(mvc, "PC de Luis", instalacion), "$.user_code");
+
+        for (String accion : new String[] {"consulta", "aprobacion"}) {
+            resolver(mvc, titular, accion, codigo)
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.codigo").value("PC_YA_VINCULADA"))
+                    .andExpect(jsonPath("$.mismoHogar").value(false))
+                    .andExpect(jsonPath("$.pcId").doesNotExist())
+                    .andExpect(jsonPath("$.nombrePc").doesNotExist());
+        }
+        mvc.perform(get("/api/pcs").header("Authorization", bearer(titular)))
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void unaPcQuitadaDeLaAppSePuedeVincularDeNuevo() throws Exception {
+        String instalacion = UUID.randomUUID().toString();
+        String tokens = VinculacionDePrueba.vincular(mvc, titular, "Sala-Rosa", instalacion);
+        mvc.perform(delete("/api/pcs/" + campo(tokens, "$.pc_id")).header("Authorization", bearer(titular)))
+                .andExpect(status().isNoContent());
+
+        String otraVez = VinculacionDePrueba.vincular(mvc, titular, "Sala-Rosa", instalacion);
+
+        assertThat(campo(otraVez, "$.pc_id")).isNotEqualTo(campo(tokens, "$.pc_id"));
+    }
+
+    @Test
+    void unIdDeInstalacionQueNoEsUuidEsUnaSolicitudInvalida() throws Exception {
+        mvc.perform(post("/api/agente/vinculacion")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("client_id", VinculacionDePrueba.CLIENTE)
+                        .param("nombre_pc", "Sala-Rosa")
+                        .param("id_instalacion", "no-es-un-uuid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_request"));
     }
 }

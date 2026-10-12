@@ -2,6 +2,7 @@ package tech.tetengo.api.camaras.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tech.tetengo.api.camaras.application.port.AutorizacionDeDispositivoRepository;
@@ -34,11 +35,12 @@ public class SolicitarVinculacion {
 
     @Transactional
     public SolicitudDeVinculacion ejecutar(
-            String cliente, String nombrePc, String sistemaOperativo, String versionAgente) {
+            String cliente, String nombrePc, String sistemaOperativo, String versionAgente, String idInstalacion) {
         exigirCliente(cliente, propiedades);
         if (nombrePc == null || nombrePc.isBlank()) {
             throw new ErrorOAuth(ErrorOAuth.SOLICITUD_INVALIDA, "Falta nombre_pc, el nombre de la PC.");
         }
+        UUID instalacion = idInstalacion(idInstalacion);
         Instant ahora = reloj.instant();
         CodigoDeUsuario codigo = codigoLibre(ahora);
         String codigoDispositivo = Secretos.generar();
@@ -51,6 +53,7 @@ public class SolicitarVinculacion {
                     nombrePc,
                     sistemaOperativo,
                     versionAgente,
+                    instalacion,
                     ahora,
                     propiedades.vigenciaCodigo(),
                     propiedades.intervalo());
@@ -76,6 +79,18 @@ public class SolicitarVinculacion {
             }
         }
         throw new IllegalStateException("No se encontró un código de vinculación libre");
+    }
+
+    /** Optional {@code id_instalacion}: a UUID, or nothing for older agents. */
+    private static UUID idInstalacion(String valor) {
+        if (valor == null || valor.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(valor.strip());
+        } catch (IllegalArgumentException e) {
+            throw new ErrorOAuth(ErrorOAuth.SOLICITUD_INVALIDA, "id_instalacion debe ser un UUID.");
+        }
     }
 
     static void exigirCliente(String cliente, PropiedadesDeVinculacion propiedades) {

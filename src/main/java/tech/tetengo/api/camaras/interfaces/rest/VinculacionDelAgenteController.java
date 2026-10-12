@@ -58,7 +58,7 @@ class VinculacionDelAgenteController {
     @Operation(
             summary = "Ask to link this PC (agent, RFC 8628 device authorization, US-28)",
             description =
-                    "Form fields client_id (te-tengo-captura), nombre_pc (1-60), sistema_operativo and version_agente (optional). Answers device_code (secret), user_code (XXXX-XXXX, 10 min), verification_uri, verification_uri_complete (the QR), expires_in and interval (5 s). Errors (RFC 6749 §5.2): 400 invalid_request, 401 invalid_client.")
+                    "Form fields client_id (te-tengo-captura), nombre_pc (1-60), sistema_operativo, version_agente and id_instalacion (optional; a UUID the PC generates once). Answers device_code (secret), user_code (XXXX-XXXX, 10 min), verification_uri, verification_uri_complete (the QR), expires_in and interval (5 s). Errors (RFC 6749 §5.2): 400 invalid_request, 401 invalid_client.")
     @SecurityRequirements
     @PostMapping(path = "/vinculacion", consumes = FORMULARIO, version = ApiVersioning.V1)
     ResponseEntity<AutorizacionDeDispositivoResponse> solicitar(
@@ -67,7 +67,8 @@ class VinculacionDelAgenteController {
                 formulario.getFirst("client_id"),
                 formulario.getFirst("nombre_pc"),
                 formulario.getFirst("sistema_operativo"),
-                formulario.getFirst("version_agente"));
+                formulario.getFirst("version_agente"),
+                formulario.getFirst("id_instalacion"));
         return sinCache(new AutorizacionDeDispositivoResponse(
                 solicitud.codigoDispositivo(),
                 solicitud.codigoUsuario(),

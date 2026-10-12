@@ -249,6 +249,7 @@ Pc = {
 - `404 CODIGO_INCORRECTO {intentosRestantes}`: no such code; it counts as a wrong attempt («Ese código no existe. Revísalo letra por letra.»).
 - `423 VINCULACION_BLOQUEADA {bloqueadaHasta}`: 5 wrong codes in a row from the same account block code entry for 15 minutes; the fifth wrong code already answers it (CA-28.6, «Podrás volver a intentarlo a las 10:57»). A code that exists resets the count.
 - `410 CODIGO_VENCIDO`: expired or already used (approved or rejected) (CA-28.3); it does not count as wrong.
+- `409 PC_YA_VINCULADA {mismoHogar, pcId}` (`consulta` and `aprobacion`): the PC showing the code is already linked, to this household (`mismoHogar: true`, with its `pcId`) or to another one (`mismoHogar: false`, and nothing else: no `pcId`, name or household). The app shows «Esta PC ya está vinculada» / «La encuentras en Cámaras y PCs.» and goes back to «Cámaras y PCs». It needs a PC that sends its installation id (AGENT_CONTRACT.md "PC link"); it does not count as wrong, and the code stays pending until it expires. To link it again, first remove it with «Quitar esta PC».
 - `400 VALIDACION` · `403 SOLO_TITULAR`.
 
 **Status and notices.** A PC with no heartbeat for 90 s shows as `DESCONECTADA` with its cameras (CA-30.3); each camera still sends `CAMARA_DESCONECTADA` (§7), and the app shows what to check (the PC on, internet, Te Tengo Captura open). A PC that went 90 days without connecting is removed and must be linked again (CA-28.7). Push `PC_DESVINCULADA` (§7) tells the family when a PC left without the app (CA-31.3).
