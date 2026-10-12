@@ -61,6 +61,17 @@ TT_CLIPS_SECRET_KEY=<R2 API token secret access key>
 - **Locally nothing changes:** the `local` profile keeps Floci's S3 on port 4566.
 - **Movement files (US-37, ADR 0010)** use the same bucket and keys by default; `TT_MOVIMIENTOS_BUCKET`, `TT_MOVIMIENTOS_REGION`, `TT_MOVIMIENTOS_ENDPOINT`, `TT_MOVIMIENTOS_PATH_STYLE`, `TT_MOVIMIENTOS_ACCESS_KEY` and `TT_MOVIMIENTOS_SECRET_KEY` override them (e.g. a bucket of its own). The API also deletes them in batches (`DeleteObjects`), and the app reads them from the PWA's origin like clips (`GET`). Keep the cloud retention off until the legal review in docs/BLOCKERS.md is done.
 
+## Published app versions (US-43)
+`GET /api/versiones` tells Te Tengo Captura and the mobile app the latest version of each channel ([ADR 0012](adr/0012-published-versions-manifests.md)). Nobody sets it by hand: when a desktop or mobile version reaches production, that repository's `produccion.yml` writes each published channel's manifest (`versiones/windows.json`, `mac`, `apk`, `play`, `ios`, `pwa`) to the public downloads bucket (`te-tengo-descargas`), next to the binaries; `rollback.yml` rewrites it with the older version. The API only needs the bucket's public URL, once per environment:
+
+```bash
+TT_VERSIONES_URL_BASE=https://pub-<id>.r2.dev   # the Actions variable DESCARGAS_BASE_URL of the app repositories
+```
+
+- It reads the manifests every 5 minutes (5-second timeouts) and keeps the last good read when the bucket does not answer; with the variable unset it reads nothing and only `TT_AGENTE_VERSION_PUBLICADA` (version alone) is published for Te Tengo Captura.
+- **Minimum versions (CA-43.8)** are the API's decision: `TT_VERSION_MINIMA_WINDOWS=0.4.0` (and `_MAC`, `_APK`, `_PLAY`, `_IOS`, `_PWA`) makes older apps show «Actualiza Te Tengo para seguir recibiendo alertas». Set one only once the version that replaces it is published on that channel; a minimum above the published version is capped at it.
+- Check: `curl -s https://<api>/api/versiones | jq` shows each channel with `version`, `url`, `sha256` and `notas`.
+
 ## Release flow (build once, deploy many)
 Releases follow git flow with **release candidates** ("Model C, tag at the end"): the image is built **once** on the release branch as a candidate `x.y.z-rc.N`, that same image (by digest) is verified, and after the release pull request is merged, **`main` deploys exactly that digest** to production. The tag `vX.Y.Z` and the GitHub Release come **last**, only after production succeeded. `develop` deploys nothing. The API has **no staging target** (there is no second VM): the candidate's verification is automatic, and production has the only approval, on `te-tengo-infra`'s `produccion` environment.
 
