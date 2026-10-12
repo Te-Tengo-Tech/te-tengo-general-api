@@ -352,6 +352,34 @@ class ActividadIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void restablecerLaPcQuedaComoRestablecidaPorLaPcConSusDatosBorrados() throws Exception {
+        mvc.perform(delete("/api/agente/pc?datosLocalesBorrados=true&motivo=restablecida")
+                        .header("Authorization", bearer(tokenPc)))
+                .andExpect(status().isNoContent());
+
+        await().atMost(Duration.ofSeconds(5))
+                .until(() -> tipos(titular).containsAll(List.of("PC_DESVINCULADA", "DATOS_LOCALES_ELIMINADOS")));
+        String desvinculada = actividad(titular, "?tipo=PC_DESVINCULADA");
+        assertThat(campo(desvinculada, "$.elementos[0].actor.tipo")).isEqualTo("PC");
+        assertThat(campo(desvinculada, "$.elementos[0].valorNuevo")).isEqualTo("RESTABLECIDA");
+    }
+
+    @Test
+    void desinstalarLaPcQuedaComoDesinstaladaYUnMotivoDesconocidoEsInvalido() throws Exception {
+        mvc.perform(delete("/api/agente/pc?motivo=robada").header("Authorization", bearer(tokenPc)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("VALIDACION"));
+        mvc.perform(delete("/api/agente/pc?datosLocalesBorrados=true&motivo=desinstalada")
+                        .header("Authorization", bearer(tokenPc)))
+                .andExpect(status().isNoContent());
+
+        await().atMost(Duration.ofSeconds(5)).until(() -> tipos(titular).contains("PC_DESVINCULADA"));
+        String desvinculada = actividad(titular, "?tipo=PC_DESVINCULADA");
+        assertThat(campo(desvinculada, "$.elementos[0].actor.tipo")).isEqualTo("PC");
+        assertThat(campo(desvinculada, "$.elementos[0].valorNuevo")).isEqualTo("DESINSTALADA");
+    }
+
+    @Test
     void ca29_8_cuandoLaAppYLaPcCambianUnaCamaraGanaElUltimoYSeRegistraDeDondeVinoCadaUno() throws Exception {
         String camara = campo(
                 VinculacionDePrueba.reportarWebcams(mvc, tokenPc, "usb#1:Webcam USB HD")

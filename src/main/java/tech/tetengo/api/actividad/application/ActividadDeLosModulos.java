@@ -93,7 +93,7 @@ public class ActividadDeLosModulos {
         OrigenDeActividad origen =
                 switch (e.motivo()) {
                     case "DESDE_LA_APP" -> OrigenDeActividad.FAMILIAR;
-                    case "DESDE_LA_PC" -> OrigenDeActividad.PC;
+                    case "DESDE_LA_PC", "RESTABLECIDA", "DESINSTALADA" -> OrigenDeActividad.PC;
                     default -> OrigenDeActividad.SISTEMA;
                 };
         registrar(

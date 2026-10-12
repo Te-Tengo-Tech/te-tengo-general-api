@@ -276,7 +276,7 @@ Actividad = {
 |---|---|---|---|
 | `PC_VINCULADA` | «Carmen vinculó la PC Sala-Rosa» | FAMILIAR | PC name |
 | `PC_RENOMBRADA` | «Carmen renombró la PC Cocina-Rosa a Cocina» | FAMILIAR | `PC` · old → new name |
-| `PC_DESVINCULADA` | «Carmen quitó la PC Sala-Rosa» / «Desde la PC Sala-Rosa: se desvinculó» | FAMILIAR (from the app), PC (from the PC) or SISTEMA (stolen token, 90 days) | PC name · rooms that lost detection → `DESDE_LA_APP` \| `DESDE_LA_PC` \| `REUSO_DE_TOKEN` \| `VENCIDA` |
+| `PC_DESVINCULADA` | «Carmen quitó la PC Sala-Rosa» / «Desde la PC Sala-Rosa: se desvinculó» / «La PC Sala-Rosa se restableció» / «La PC Sala-Rosa se desinstaló» | FAMILIAR (from the app), PC (from the PC, also `RESTABLECIDA` and `DESINSTALADA`) or SISTEMA (stolen token, 90 days) | PC name · rooms that lost detection → `DESDE_LA_APP` \| `DESDE_LA_PC` \| `RESTABLECIDA` (the PC was reset: «Restablecer esta PC») \| `DESINSTALADA` (the program was uninstalled) \| `REUSO_DE_TOKEN` \| `VENCIDA` |
 | `CAMARA_ASIGNADA` | «Carmen puso la cámara Logitech C920 en el Dormitorio» / «Desde la PC Sala-Rosa: la cámara Logitech C920 pasó a Dormitorio» | FAMILIAR (from the app, CA-29.2) or PC («Elegir aquí», CA-29.8). When both change a camera the last change wins; both entries stay | webcam name · old room (null: it started being used) → new room |
 | `CAMARA_RETIRADA` | «Carmen dejó de usar la cámara Logitech C920» / «Desde la PC Sala-Rosa: …» | FAMILIAR (from the app) or PC («Elegir aquí», CA-29.8) | webcam name · room → null |
 | `AMBIENTE_RENOMBRADO` | «Carmen cambió el nombre de Sala a Sala comedor» | FAMILIAR | `Ambiente` · old → new name |
