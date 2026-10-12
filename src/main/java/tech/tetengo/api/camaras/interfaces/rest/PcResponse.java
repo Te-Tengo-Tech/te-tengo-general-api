@@ -10,6 +10,7 @@ record PcResponse(
         String nombre,
         String sistemaOperativo,
         String versionAgente,
+        Boolean actualizacionAutomatica,
         String estadoConexion,
         Instant ultimaSenal,
         Instant vinculadaEn,
