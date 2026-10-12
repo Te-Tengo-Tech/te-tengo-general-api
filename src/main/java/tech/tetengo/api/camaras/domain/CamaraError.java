@@ -11,6 +11,8 @@ public enum CamaraError implements CodigoError {
             HttpStatus.UNPROCESSABLE_CONTENT,
             "El nombre de la habitación es demasiado largo."),
     CREDENCIAL_INVALIDA("CREDENCIAL_INVALIDA", HttpStatus.UNAUTHORIZED, "La credencial de instalación no es válida."),
+    /** {@code DELETE /api/agente/pc?motivo=}: only {@code restablecida} or {@code desinstalada}. */
+    MOTIVO_INVALIDO("VALIDACION", HttpStatus.BAD_REQUEST, "El motivo debe ser restablecida o desinstalada."),
     PC_NO_ENCONTRADA("PC_NO_ENCONTRADA", HttpStatus.NOT_FOUND, "La PC no está vinculada a este hogar."),
     PC_NOMBRE_VACIO("PC_NOMBRE_VACIO", HttpStatus.UNPROCESSABLE_CONTENT, "El nombre de la PC es obligatorio."),
     PC_NOMBRE_MUY_LARGO(
