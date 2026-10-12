@@ -4,6 +4,8 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-11
+
 ### Added
 - App updates (US-43; ADR 0012), new module `versiones`: `GET /api/versiones`, public, returns the latest version of Te Tengo Captura (`windows`, `mac`) and of the mobile app (`apk`, `play`, `ios`, `pwa`) with its download, SHA-256, size, date, «Qué cambió» notes and minimum supported version (CA-43.1 to CA-43.8), plus `paginaDescargas`. It reads one manifest per channel (`versiones/<canal>.json`), which the release workflows write to the downloads bucket, from `TT_VERSIONES_URL_BASE` every 5 minutes, keeping the last good read; `Cache-Control: public, max-age=300` and an `ETag` (`304` on `If-None-Match`). Minimum versions: `TT_VERSION_MINIMA_<CANAL>`.
 - `GET /api/agente/configuracion` returns the Windows version of `GET /api/versiones`; `TT_AGENTE_VERSION_PUBLICADA` is only the fallback while none is published.
