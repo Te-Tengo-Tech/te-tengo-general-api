@@ -11,6 +11,8 @@ public enum CamaraError implements CodigoError {
             HttpStatus.UNPROCESSABLE_CONTENT,
             "El nombre de la habitación es demasiado largo."),
     CREDENCIAL_INVALIDA("CREDENCIAL_INVALIDA", HttpStatus.UNAUTHORIZED, "La credencial de instalación no es válida."),
+    /** {@code DELETE /api/agente/pc?motivo=}: only {@code restablecida} or {@code desinstalada}. */
+    MOTIVO_INVALIDO("VALIDACION", HttpStatus.BAD_REQUEST, "El motivo debe ser restablecida o desinstalada."),
     PC_NO_ENCONTRADA("PC_NO_ENCONTRADA", HttpStatus.NOT_FOUND, "La PC no está vinculada a este hogar."),
     PC_NOMBRE_VACIO("PC_NOMBRE_VACIO", HttpStatus.UNPROCESSABLE_CONTENT, "El nombre de la PC es obligatorio."),
     PC_NOMBRE_MUY_LARGO(
@@ -43,6 +45,11 @@ public enum CamaraError implements CodigoError {
             "CODIGO_VENCIDO",
             HttpStatus.GONE,
             "Este código ya venció o ya se usó. La PC ya muestra uno nuevo: escríbelo o escanéalo."),
+    /**
+     * US-28: the PC that shows this code is already linked, to this household or another
+     * («Esta PC ya está vinculada»). Carries {@code mismoHogar}, and {@code pcId} only for this household.
+     */
+    PC_YA_VINCULADA("PC_YA_VINCULADA", HttpStatus.CONFLICT, "Esta PC ya está vinculada."),
     /** CA-28.6: 5 wrong codes in a row block code entry for 15 minutes. */
     VINCULACION_BLOQUEADA(
             "VINCULACION_BLOQUEADA", HttpStatus.LOCKED, "Demasiados intentos. Vuelve a intentarlo más tarde.");

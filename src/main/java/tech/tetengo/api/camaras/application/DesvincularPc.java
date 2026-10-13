@@ -71,9 +71,18 @@ public class DesvincularPc {
      */
     @Transactional
     public void desdeLaPc(UUID pcId, boolean datosBorrados) {
+        desdeLaPc(pcId, datosBorrados, MotivoDesvinculacion.DESDE_LA_PC);
+    }
+
+    /**
+     * The same, saying why: {@link MotivoDesvinculacion#RESTABLECIDA} («Restablecer esta PC») or
+     * {@link MotivoDesvinculacion#DESINSTALADA} (the uninstaller), for the activity log.
+     */
+    @Transactional
+    public void desdeLaPc(UUID pcId, boolean datosBorrados, MotivoDesvinculacion motivo) {
         var pc = pcs.buscarParaActualizar(pcId).orElseThrow(() -> new ErrorDeNegocio(CamaraError.PC_NO_ENCONTRADA));
         var ahora = reloj.instant();
-        if (desvinculacion.desvincular(pc, MotivoDesvinculacion.DESDE_LA_PC, null, ahora) && datosBorrados) {
+        if (desvinculacion.desvincular(pc, motivo, null, ahora) && datosBorrados) {
             eventos.publishEvent(new DatosDeLaPcBorrados(pc.getHogarId(), pc.getId(), pc.getNombre(), ahora));
         }
     }
@@ -89,6 +98,16 @@ public class DesvincularPc {
     /** The same; {@code datosBorrados}: CA-31.6. */
     public void revocandoToken(
             String cliente, String token, PropiedadesDeVinculacion propiedades, boolean datosBorrados) {
+        revocandoToken(cliente, token, propiedades, datosBorrados, MotivoDesvinculacion.DESDE_LA_PC);
+    }
+
+    /** The same, saying why ({@link #desdeLaPc(UUID, boolean, MotivoDesvinculacion)}). */
+    public void revocandoToken(
+            String cliente,
+            String token,
+            PropiedadesDeVinculacion propiedades,
+            boolean datosBorrados,
+            MotivoDesvinculacion motivo) {
         SolicitarVinculacion.exigirCliente(cliente, propiedades);
         if (token == null || token.isBlank()) {
             throw new ErrorOAuth(ErrorOAuth.SOLICITUD_INVALIDA, "Falta token.");
@@ -100,7 +119,7 @@ public class DesvincularPc {
             var ahora = reloj.instant();
             tokens.revocarTodosDe(t.getPcId(), ahora);
             pcs.buscarParaActualizar(t.getPcId()).ifPresent(pc -> {
-                if (desvinculacion.desvincular(pc, MotivoDesvinculacion.DESDE_LA_PC, null, ahora) && datosBorrados) {
+                if (desvinculacion.desvincular(pc, motivo, null, ahora) && datosBorrados) {
                     eventos.publishEvent(new DatosDeLaPcBorrados(pc.getHogarId(), pc.getId(), pc.getNombre(), ahora));
                 }
             });

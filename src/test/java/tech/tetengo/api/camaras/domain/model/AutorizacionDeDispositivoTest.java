@@ -22,6 +22,7 @@ class AutorizacionDeDispositivoTest {
                 "Sala-Rosa",
                 "Windows 11",
                 "0.5.0",
+                null,
                 T0,
                 Duration.ofMinutes(10),
                 Duration.ofSeconds(5));

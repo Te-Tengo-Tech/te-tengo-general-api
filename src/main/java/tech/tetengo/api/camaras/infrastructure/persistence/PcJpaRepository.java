@@ -27,6 +27,13 @@ interface PcJpaRepository extends JpaRepository<Pc, UUID> {
             nativeQuery = true)
     boolean vinculada(UUID hogarId, UUID pcId);
 
+    /** Native, across households: whether a link code belongs to an already linked PC (US-28). */
+    @Query(
+            value = "select id, hogar_id from pcs where estado = 'VINCULADA' and id_instalacion = :idInstalacion"
+                    + " order by vinculada_en limit 1",
+            nativeQuery = true)
+    List<Object[]> vinculadaConInstalacion(UUID idInstalacion);
+
     /** Native, across households: only for the expiry job. */
     @Query(
             value = "select id, hogar_id from pcs where estado = 'VINCULADA' and origen = 'VINCULACION'"

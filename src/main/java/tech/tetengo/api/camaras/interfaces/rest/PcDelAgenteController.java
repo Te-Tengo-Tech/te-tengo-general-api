@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import tech.tetengo.api.camaras.application.ConsultarPcDelAgente;
 import tech.tetengo.api.camaras.application.DesvincularPc;
+import tech.tetengo.api.camaras.domain.CamaraError;
+import tech.tetengo.api.camaras.domain.model.MotivoDesvinculacion;
+import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 import tech.tetengo.api.shared.infrastructure.security.UsuarioActual;
 import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
 
@@ -55,10 +58,20 @@ class PcDelAgenteController {
     @Operation(
             summary = "Unlink this PC: «Desvincular esta PC» (agent, US-31)",
             description =
-                    "Revokes the PC's tokens, retires its cameras and notifies the family with push PC_DESVINCULADA (CA-31.3). The PC then deletes its credentials and shows the link code. Query datosLocalesBorrados=true when the person also chose «Borrar también los datos guardados en esta PC» (CA-31.6): the PC deletes its data folder and the activity log records it.")
+                    "Revokes the PC's tokens, retires its cameras and notifies the family with push PC_DESVINCULADA (CA-31.3). The PC then deletes its credentials and shows the link code. Query datosLocalesBorrados=true when the person also chose «Borrar también los datos guardados en esta PC» (CA-31.6): the PC deletes its data folder and the activity log records it. Query motivo=restablecida («Restablecer esta PC») or motivo=desinstalada (the uninstaller) says why, for the activity log (valorNuevo RESTABLECIDA or DESINSTALADA). Errors: 400 VALIDACION for another motivo.")
     @DeleteMapping(version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void desvincular(@RequestParam(defaultValue = "false") boolean datosLocalesBorrados) {
-        desvincular.desdeLaPc(UsuarioActual.pcDelAgente(), datosLocalesBorrados);
+    void desvincular(
+            @RequestParam(defaultValue = "false") boolean datosLocalesBorrados,
+            @RequestParam(required = false) String motivo) {
+        desvincular.desdeLaPc(UsuarioActual.pcDelAgente(), datosLocalesBorrados, motivo(motivo));
+    }
+
+    static MotivoDesvinculacion motivo(String motivo) {
+        try {
+            return MotivoDesvinculacion.desdeLaPc(motivo);
+        } catch (IllegalArgumentException e) {
+            throw new ErrorDeNegocio(CamaraError.MOTIVO_INVALIDO);
+        }
     }
 }

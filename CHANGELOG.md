@@ -4,6 +4,11 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-12
+
+### Added
+- The PC says why it unlinks itself: `DELETE /api/agente/pc?motivo=restablecida|desinstalada` (and `motivo` in `POST /api/agente/token/revocacion`) for «Restablecer esta PC» and the uninstaller of Te Tengo Captura. The activity log records `PC_DESVINCULADA` with actor `PC` and `valorNuevo` `RESTABLECIDA` or `DESINSTALADA`; the family gets the same push `PC_DESVINCULADA`. Another `motivo` → `400 VALIDACION` (the revocation, which always answers `200`, ignores it). No migration: `pcs.motivo_desvinculacion` is a `varchar(30)`.
+
 ## [0.4.1] - 2026-10-11
 
 ### Added

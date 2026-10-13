@@ -20,12 +20,21 @@ public final class VinculacionDePrueba {
 
     /** The PC asks to be linked; returns the device authorization response JSON. */
     public static String solicitar(MockMvc mvc, String nombrePc) throws Exception {
-        return mvc.perform(post("/api/agente/vinculacion")
-                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .param("client_id", CLIENTE)
-                        .param("nombre_pc", nombrePc)
-                        .param("sistema_operativo", "Windows 11 Home")
-                        .param("version_agente", "0.5.0"))
+        return solicitar(mvc, nombrePc, null);
+    }
+
+    /** The same, from an agent that sends its installation id ({@code id_instalacion}). */
+    public static String solicitar(MockMvc mvc, String nombrePc, String idInstalacion) throws Exception {
+        var pedido = post("/api/agente/vinculacion")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .param("client_id", CLIENTE)
+                .param("nombre_pc", nombrePc)
+                .param("sistema_operativo", "Windows 11 Home")
+                .param("version_agente", "0.5.0");
+        if (idInstalacion != null) {
+            pedido.param("id_instalacion", idInstalacion);
+        }
+        return mvc.perform(pedido)
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
@@ -101,7 +110,13 @@ public final class VinculacionDePrueba {
      * JSON ({@code access_token}, {@code refresh_token}, {@code pc_id}, {@code hogar_id}).
      */
     public static String vincular(MockMvc mvc, String tokenTitular, String nombrePc) throws Exception {
-        String solicitud = solicitar(mvc, nombrePc);
+        return vincular(mvc, tokenTitular, nombrePc, null);
+    }
+
+    /** The same, from an agent that sends its installation id. */
+    public static String vincular(MockMvc mvc, String tokenTitular, String nombrePc, String idInstalacion)
+            throws Exception {
+        String solicitud = solicitar(mvc, nombrePc, idInstalacion);
         resolver(mvc, tokenTitular, "aprobacion", campo(solicitud, "$.user_code"))
                 .andExpect(status().isCreated());
         return consultar(mvc, campo(solicitud, "$.device_code"))

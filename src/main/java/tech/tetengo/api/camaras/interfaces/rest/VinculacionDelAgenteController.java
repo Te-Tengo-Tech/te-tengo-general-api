@@ -24,6 +24,7 @@ import tech.tetengo.api.camaras.application.PropiedadesDeVinculacion;
 import tech.tetengo.api.camaras.application.SolicitarVinculacion;
 import tech.tetengo.api.camaras.application.SolicitudDeVinculacion;
 import tech.tetengo.api.camaras.application.TokensDePc;
+import tech.tetengo.api.camaras.domain.model.MotivoDesvinculacion;
 import tech.tetengo.api.shared.infrastructure.web.ApiVersioning;
 
 /**
@@ -58,7 +59,7 @@ class VinculacionDelAgenteController {
     @Operation(
             summary = "Ask to link this PC (agent, RFC 8628 device authorization, US-28)",
             description =
-                    "Form fields client_id (te-tengo-captura), nombre_pc (1-60), sistema_operativo and version_agente (optional). Answers device_code (secret), user_code (XXXX-XXXX, 10 min), verification_uri, verification_uri_complete (the QR), expires_in and interval (5 s). Errors (RFC 6749 §5.2): 400 invalid_request, 401 invalid_client.")
+                    "Form fields client_id (te-tengo-captura), nombre_pc (1-60), sistema_operativo, version_agente and id_instalacion (optional; a UUID the PC generates once). Answers device_code (secret), user_code (XXXX-XXXX, 10 min), verification_uri, verification_uri_complete (the QR), expires_in and interval (5 s). Errors (RFC 6749 §5.2): 400 invalid_request, 401 invalid_client.")
     @SecurityRequirements
     @PostMapping(path = "/vinculacion", consumes = FORMULARIO, version = ApiVersioning.V1)
     ResponseEntity<AutorizacionDeDispositivoResponse> solicitar(
@@ -67,7 +68,8 @@ class VinculacionDelAgenteController {
                 formulario.getFirst("client_id"),
                 formulario.getFirst("nombre_pc"),
                 formulario.getFirst("sistema_operativo"),
-                formulario.getFirst("version_agente"));
+                formulario.getFirst("version_agente"),
+                formulario.getFirst("id_instalacion"));
         return sinCache(new AutorizacionDeDispositivoResponse(
                 solicitud.codigoDispositivo(),
                 solicitud.codigoUsuario(),
@@ -105,7 +107,7 @@ class VinculacionDelAgenteController {
     @Operation(
             summary = "Revoke the PC's refresh token, unlinking it (agent, RFC 7009, US-31)",
             description =
-                    "Form fields token (the refresh token), token_type_hint (optional) and client_id. Revoking it unlinks the PC and notifies the family (CA-31.3). Always 200, also for unknown tokens (RFC 7009 §2.2). Errors: 400 invalid_request, 401 invalid_client.")
+                    "Form fields token (the refresh token), token_type_hint (optional) and client_id. Revoking it unlinks the PC and notifies the family (CA-31.3). Optional datos_locales_borrados=true (CA-31.6) and motivo=restablecida|desinstalada, as in DELETE /api/agente/pc. Always 200, also for unknown tokens (RFC 7009 §2.2). Errors: 400 invalid_request, 401 invalid_client.")
     @SecurityRequirements
     @PostMapping(path = "/token/revocacion", consumes = FORMULARIO, version = ApiVersioning.V1)
     ResponseEntity<Void> revocar(@RequestParam MultiValueMap<String, String> formulario) {
@@ -113,8 +115,18 @@ class VinculacionDelAgenteController {
                 formulario.getFirst("client_id"),
                 formulario.getFirst("token"),
                 propiedades,
-                "true".equalsIgnoreCase(formulario.getFirst("datos_locales_borrados")));
+                "true".equalsIgnoreCase(formulario.getFirst("datos_locales_borrados")),
+                motivoDeRevocacion(formulario.getFirst("motivo")));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).build();
+    }
+
+    /** RFC 7009 answers 200 whatever it gets: an unknown motivo counts as a plain unlink. */
+    private static MotivoDesvinculacion motivoDeRevocacion(String motivo) {
+        try {
+            return MotivoDesvinculacion.desdeLaPc(motivo);
+        } catch (IllegalArgumentException e) {
+            return MotivoDesvinculacion.DESDE_LA_PC;
+        }
     }
 
     @ExceptionHandler(ErrorOAuth.class)
