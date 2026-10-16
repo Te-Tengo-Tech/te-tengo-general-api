@@ -2,7 +2,7 @@ plugins {
   java
   id("org.springframework.boot") version "4.1.1"
   id("io.spring.dependency-management") version "1.1.7"
-  id("com.diffplug.spotless") version "8.10.3"
+  id("com.diffplug.spotless") version "8.10.4"
   id("org.owasp.dependencycheck") version "13.0.0"
   jacoco
 }
@@ -68,7 +68,7 @@ dependencies {
   // Clips in Amazon S3 (or an S3-compatible store): pre-signed URLs with the AWS SDK v2
   implementation("software.amazon.awssdk:s3")
   // Profile photos: WebP decoding for ImageIO (JPEG and PNG come with the JDK)
-  implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
+  implementation("com.twelvemonkeys.imageio:imageio-webp:3.15.3")
   // E-mail through Amazon SES (API v2)
   implementation("software.amazon.awssdk:sesv2")
   // Or through any SMTP relay (JavaMailSender, spring.mail.*)
