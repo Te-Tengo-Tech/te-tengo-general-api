@@ -74,7 +74,7 @@ jobs:
           ref: ${{ env.ESCRITORIO_REF }}
           path: te-tengo-desktop-pywebview
           persist-credentials: false
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         if: env.IMAGEN == ''
         with:
           distribution: temurin
@@ -91,7 +91,7 @@ jobs:
       - name: Pull the API image
         if: env.IMAGEN != ''
         run: docker pull "$IMAGEN"
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
           cache-dependency-glob: te-tengo-desktop-pywebview/uv.lock
