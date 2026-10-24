@@ -100,7 +100,7 @@ dependencies {
   testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
   testImplementation("org.springframework.boot:spring-boot-starter-security-test")
   testImplementation(
-      "org.springframework.boot:spring-boot-starter-security-oauth2-resource-server-test"
+      "org.springframework.boot:spring-boot-starter-security-oauth2-resource-server-test",
   )
   testImplementation("org.springframework.boot:spring-boot-testcontainers")
   testImplementation("org.springframework.modulith:spring-modulith-starter-test")
@@ -114,7 +114,7 @@ dependencies {
 dependencyManagement {
   imports {
     mavenBom(
-        "org.springframework.modulith:spring-modulith-bom:${property("springModulithVersion")}"
+        "org.springframework.modulith:spring-modulith-bom:${property("springModulithVersion")}",
     )
     mavenBom("software.amazon.awssdk:bom:${property("awsSdkVersion")}")
   }
@@ -191,7 +191,7 @@ tasks.jacocoTestCoverageVerification {
   classDirectories.setFrom(
       sourceSets.main.get().output.classesDirs.map {
         fileTree(it) { include("**/domain/**", "**/application/**") }
-      }
+      },
   )
   violationRules {
     rule {

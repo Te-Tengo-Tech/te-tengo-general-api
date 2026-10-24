@@ -68,12 +68,11 @@ public class AutorizarMediaMtx {
         if (camara.isEmpty()) {
             return false;
         }
-        boolean permitido =
-                switch (peticion.tipo()) {
-                    case PUBLICAR -> publicar(camara.get(), peticion);
-                    case LEER -> leer(camara.get(), peticion);
-                    case OTRA -> false;
-                };
+        boolean permitido = switch (peticion.tipo()) {
+            case PUBLICAR -> publicar(camara.get(), peticion);
+            case LEER -> leer(camara.get(), peticion);
+            case OTRA -> false;
+        };
         if (!permitido) {
             log.info("MediaMTX: {} ({}) denegado en {}", peticion.accion(), peticion.protocolo(), peticion.ruta());
         }

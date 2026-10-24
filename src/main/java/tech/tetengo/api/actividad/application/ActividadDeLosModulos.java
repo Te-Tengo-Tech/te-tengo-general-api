@@ -90,12 +90,11 @@ public class ActividadDeLosModulos {
     @Async
     @TransactionalEventListener
     public void pcDesvinculada(PcDesvinculada e) {
-        OrigenDeActividad origen =
-                switch (e.motivo()) {
-                    case "DESDE_LA_APP" -> OrigenDeActividad.FAMILIAR;
-                    case "DESDE_LA_PC", "RESTABLECIDA", "DESINSTALADA" -> OrigenDeActividad.PC;
-                    default -> OrigenDeActividad.SISTEMA;
-                };
+        OrigenDeActividad origen = switch (e.motivo()) {
+            case "DESDE_LA_APP" -> OrigenDeActividad.FAMILIAR;
+            case "DESDE_LA_PC", "RESTABLECIDA", "DESINSTALADA" -> OrigenDeActividad.PC;
+            default -> OrigenDeActividad.SISTEMA;
+        };
         registrar(
                 e.hogarId(),
                 () -> Actividad.de(
