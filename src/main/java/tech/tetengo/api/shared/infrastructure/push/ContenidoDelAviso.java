@@ -58,101 +58,93 @@ public record ContenidoDelAviso(String titulo, String cuerpo, String etiqueta, M
         String de = de(aviso.habitacion());
         String nombre = texto(detalle.adultoMayor());
         String deNombre = nombre == null ? "" : " de " + nombre;
-        String[] texto =
-                switch (aviso.tipo()) {
-                    case ALERTA_CAIDA ->
-                        new String[] {
-                            "Posible caída" + deNombre + en,
-                            conHora(hora, "Toca para ver qué hacer y llamarla."),
-                            URGENTE
-                        };
-                    case ALERTA_MOVIMIENTO_INESTABLE ->
-                        new String[] {
-                            nombre == null
-                                    ? "Movimiento inestable" + en
-                                    : nombre + " tuvo un movimiento inestable" + en,
-                            conHora(hora, "No es una caída. Revisa cómo está."),
-                            SEVERIDAD_MEDIA
-                        };
-                    case ALERTA_ACTUALIZADA_A_CAIDA ->
-                        new String[] {
-                            "Ahora: posible caída" + deNombre + en,
-                            conHora(hora, "Empezó como movimiento inestable" + aLas(hora(detalle.desde())) + "."),
-                            URGENTE
-                        };
-                    case CAIDA_CONFIRMADA ->
-                        new String[] {
-                            nombre == null ? "Sigue en el suelo" : nombre + " sigue en el suelo",
-                            "Caída confirmada" + aLas(hora) + ". La alerta sigue activa.",
-                            null
-                        };
-                    case SE_LEVANTO ->
-                        new String[] {
-                            nombre == null ? "Se levantó" : nombre + " se levantó",
-                            conHora(hora, "Se puso de pie" + en + ". Confirma cómo está."),
-                            SEGUIMIENTO
-                        };
-                    case ALERTA_ATENDIDA -> atendida(detalle, hora, en);
-                    case ALERTA_ESCALADA ->
-                        new String[] {
-                            "Nadie atendió la alerta: te toca",
-                            detalle.esperaMinutos() == null
-                                    ? "Nadie respondió a tiempo. Eres el contacto secundario."
-                                    : "Pasaron " + detalle.esperaMinutos()
-                                            + " min sin respuesta. Eres el contacto secundario.",
-                            etiqueta(detalle.tipoDeAlerta())
-                        };
-                    case SIN_CONTACTO_SECUNDARIO ->
-                        new String[] {
-                            "No hay a quién escalar",
-                            detalle.esperaMinutos() == null
-                                    ? "No hay contacto secundario."
-                                    : "Pasaron " + detalle.esperaMinutos() + " min y no hay contacto secundario.",
-                            etiqueta(detalle.tipoDeAlerta())
-                        };
-                    case CAMARA_DESCONECTADA ->
-                        new String[] {
-                            "La cámara" + de + " se desconectó",
-                            "Revisa el cable de la cámara, que la PC esté encendida y el internet de la casa.",
-                            null
-                        };
-                    case CAMARA_RECONECTADA ->
-                        new String[] {
-                            "La cámara" + de + " volvió a estar en línea",
-                            "El monitoreo se restableció" + aLas(hora) + ".",
-                            null
-                        };
-                    case DETECCION_NO_CONFIABLE ->
-                        new String[] {
-                            "La detección no es confiable" + en,
-                            "Hace más de 5 minutos que la cámara no ve bien"
-                                    + (nombre == null ? "" : " a " + nombre)
-                                    + ". Revisa la luz y el encuadre.",
-                            null
-                        };
-                    case PAUSA_FINALIZADA ->
-                        new String[] {"La cámara" + de + " se reactivó", "Terminó la pausa" + aLas(hora) + ".", null};
-                    case DATOS_ELIMINADOS ->
-                        new String[] {
-                            "Se eliminaron las grabaciones",
-                            "Se borraron las grabaciones al revocar el consentimiento.",
-                            null
-                        };
-                    case MOVIMIENTOS_ELIMINADOS ->
-                        new String[] {
-                            "Se borraron los movimientos",
-                            nombre == null
-                                    ? "Listo. Ya no guardamos los movimientos."
-                                    : "Listo. Ya no guardamos los movimientos de " + nombre + ".",
-                            null
-                        };
-                    case PC_DESVINCULADA ->
-                        new String[] {
-                            "Una PC se desvinculó de la casa",
-                            "Sus cámaras ya no detectan caídas. Revisa PCs y cámaras en la app.",
-                            null
-                        };
+        String[] texto = switch (aviso.tipo()) {
+            case ALERTA_CAIDA ->
+                new String[] {
+                    "Posible caída" + deNombre + en, conHora(hora, "Toca para ver qué hacer y llamarla."), URGENTE
                 };
+            case ALERTA_MOVIMIENTO_INESTABLE ->
+                new String[] {
+                    nombre == null ? "Movimiento inestable" + en : nombre + " tuvo un movimiento inestable" + en,
+                    conHora(hora, "No es una caída. Revisa cómo está."),
+                    SEVERIDAD_MEDIA
+                };
+            case ALERTA_ACTUALIZADA_A_CAIDA ->
+                new String[] {
+                    "Ahora: posible caída" + deNombre + en,
+                    conHora(hora, "Empezó como movimiento inestable" + aLas(hora(detalle.desde())) + "."),
+                    URGENTE
+                };
+            case CAIDA_CONFIRMADA ->
+                new String[] {
+                    nombre == null ? "Sigue en el suelo" : nombre + " sigue en el suelo",
+                    "Caída confirmada" + aLas(hora) + ". La alerta sigue activa.",
+                    null
+                };
+            case SE_LEVANTO ->
+                new String[] {
+                    nombre == null ? "Se levantó" : nombre + " se levantó",
+                    conHora(hora, "Se puso de pie" + en + ". Confirma cómo está."),
+                    SEGUIMIENTO
+                };
+            case ALERTA_ATENDIDA -> atendida(detalle, hora, en);
+            case ALERTA_ESCALADA ->
+                new String[] {
+                    "Nadie atendió la alerta: te toca",
+                    detalle.esperaMinutos() == null
+                            ? "Nadie respondió a tiempo. Eres el contacto secundario."
+                            : "Pasaron " + detalle.esperaMinutos() + " min sin respuesta. Eres el contacto secundario.",
+                    etiqueta(detalle.tipoDeAlerta())
+                };
+            case SIN_CONTACTO_SECUNDARIO ->
+                new String[] {
+                    "No hay a quién escalar",
+                    detalle.esperaMinutos() == null
+                            ? "No hay contacto secundario."
+                            : "Pasaron " + detalle.esperaMinutos() + " min y no hay contacto secundario.",
+                    etiqueta(detalle.tipoDeAlerta())
+                };
+            case CAMARA_DESCONECTADA ->
+                new String[] {
+                    "La cámara" + de + " se desconectó",
+                    "Revisa el cable de la cámara, que la PC esté encendida y el internet de la casa.",
+                    null
+                };
+            case CAMARA_RECONECTADA ->
+                new String[] {
+                    "La cámara" + de + " volvió a estar en línea",
+                    "El monitoreo se restableció" + aLas(hora) + ".",
+                    null
+                };
+            case DETECCION_NO_CONFIABLE ->
+                new String[] {
+                    "La detección no es confiable" + en,
+                    "Hace más de 5 minutos que la cámara no ve bien"
+                            + (nombre == null ? "" : " a " + nombre)
+                            + ". Revisa la luz y el encuadre.",
+                    null
+                };
+            case PAUSA_FINALIZADA ->
+                new String[] {"La cámara" + de + " se reactivó", "Terminó la pausa" + aLas(hora) + ".", null};
+            case DATOS_ELIMINADOS ->
+                new String[] {
+                    "Se eliminaron las grabaciones", "Se borraron las grabaciones al revocar el consentimiento.", null
+                };
+            case MOVIMIENTOS_ELIMINADOS ->
+                new String[] {
+                    "Se borraron los movimientos",
+                    nombre == null
+                            ? "Listo. Ya no guardamos los movimientos."
+                            : "Listo. Ya no guardamos los movimientos de " + nombre + ".",
+                    null
+                };
+            case PC_DESVINCULADA ->
+                new String[] {
+                    "Una PC se desvinculó de la casa",
+                    "Sus cámaras ya no detectan caídas. Revisa PCs y cámaras en la app.",
+                    null
+                };
+        };
         return new ContenidoDelAviso(texto[0], texto[1], texto[2], datos(aviso, texto[2]));
     }
 
