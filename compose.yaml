@@ -57,7 +57,7 @@ services:
   mediamtx:
     image: bluenviron/mediamtx:1.21.1
     environment:
-      MTX_AUTHHTTPADDRESS: "http://host.docker.internal:${TT_API_PUERTO:-8080}/api/interno/mediamtx/autorizar?secreto=${TT_VIVO_SECRETO_AUTORIZACION:-secreto-local-de-vista-en-vivo}"
+      MTX_AUTHHTTPADDRESS: "http://mediamtx:${TT_VIVO_SECRETO_AUTORIZACION:-secreto-local-de-vista-en-vivo}@host.docker.internal:${TT_API_PUERTO:-8080}/api/interno/mediamtx/autorizar"
       MTX_HLSALLOWORIGINS: "${TT_MEDIAMTX_HLS_ORIGENES:-*}"
       MTX_WEBRTCALLOWORIGINS: "${TT_MEDIAMTX_HLS_ORIGENES:-*}"
       MTX_WEBRTCADDITIONALHOSTS: "${TT_MEDIAMTX_WEBRTC_HOSTS:-127.0.0.1}"
