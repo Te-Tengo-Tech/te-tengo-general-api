@@ -50,6 +50,7 @@ import tech.tetengo.api.support.AbstractIntegrationTest;
 import tech.tetengo.api.support.ApiDePrueba;
 import tech.tetengo.api.support.JwtDePrueba;
 import tech.tetengo.api.support.TestcontainersConfiguration;
+import tech.tetengo.api.support.VinculacionDePrueba;
 
 /**
  * Live view end to end with a real MediaMTX, configured by the repository's {@code mediamtx.yml}: its
@@ -90,10 +91,7 @@ class MediaMtxIntegrationTest {
         Testcontainers.exposeHostPorts(PUERTO_API);
         GenericContainer<?> contenedor = new GenericContainer<>(MEDIAMTX)
                 .withCopyFileToContainer(MountableFile.forHostPath("mediamtx.yml"), "/mediamtx.yml")
-                .withEnv(
-                        "MTX_AUTHHTTPADDRESS",
-                        "http://host.testcontainers.internal:%d/api/interno/mediamtx/autorizar?secreto=%s"
-                                .formatted(PUERTO_API, SECRETO))
+                .withEnv("MTX_AUTHHTTPADDRESS", direccionDelGancho(PUERTO_API))
                 .withNetwork(RED)
                 .withNetworkAliases("mediamtx")
                 .withExposedPorts(8888, 8889, 9997)
@@ -101,6 +99,16 @@ class MediaMtxIntegrationTest {
                 .withStartupTimeout(Duration.ofMinutes(2));
         contenedor.start();
         return contenedor;
+    }
+
+    /**
+     * As in production (te-tengo-infra): the secret is the password of the URL's user info, which Go's
+     * HTTP client sends as {@code Authorization: Basic} and writes as {@code ***} in the errors MediaMTX
+     * logs.
+     */
+    private static String direccionDelGancho(int puerto) {
+        return "http://mediamtx:%s@host.testcontainers.internal:%d/api/interno/mediamtx/autorizar"
+                .formatted(SECRETO, puerto);
     }
 
     private static int puertoLibre() {
@@ -420,5 +428,70 @@ class MediaMtxIntegrationTest {
         await().atMost(Duration.ofSeconds(10)).until(() -> delAgente.textos.contains("{\"transmitir\":false}"));
         await().atMost(Duration.ofSeconds(15)).until(() -> !enLinea());
         await().atMost(Duration.ofSeconds(15)).until(() -> !publicador.isRunning());
+    }
+
+    @Test
+    void ca29_7_laPcPublicaLaVistaPreviaDeUnaWebcamSinUsarYLaAplicacionLaVePorWebRtc() throws Exception {
+        String tokensPc = VinculacionDePrueba.vincular(mvc, token, "Sala-Rosa");
+        Receptor pc = new Receptor();
+        var cabeceras = new WebSocketHttpHeaders();
+        cabeceras.add("Authorization", bearer(campo(tokensPc, "$.access_token")));
+        WebSocketSession canalPc = new StandardWebSocketClient()
+                .execute(pc, cabeceras, URI.create("ws://localhost:" + PUERTO_API + "/api/agente/transmision"))
+                .get();
+        try {
+            camara = campo(
+                    VinculacionDePrueba.reportarWebcams(
+                                    mvc, campo(tokensPc, "$.access_token"), "usb#1:MacBook Pro Camera")
+                            .andReturn()
+                            .getResponse()
+                            .getContentAsString(),
+                    "$[0].camaraId");
+            await().atMost(Duration.ofSeconds(5))
+                    .until(() -> jdbc.queryForObject(
+                                    "select count(*) from event_publication where completion_date is null",
+                                    Integer.class)
+                            == 0);
+            pc.textos.clear();
+            String sesion = mvc.perform(
+                            post("/api/camaras/" + camara + "/vista-previa").header("Authorization", bearer(token)))
+                    .andExpect(status().isCreated())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+            await().atMost(Duration.ofSeconds(10)).until(() -> !pc.textos.isEmpty());
+            String orden = pc.textos.getLast();
+            assertThat(campo(orden, "$.camaraId")).isEqualTo(camara);
+
+            // ffmpeg, like the PC, announces without credentials first and then with the PC's token.
+            publicar(orden);
+            HttpResponse<String> respuesta = whep(campo(sesion, "$.urlWebrtc"));
+            assertThat(respuesta.statusCode()).isEqualTo(201);
+            assertThat(whep(sinToken(campo(sesion, "$.urlWebrtc")) + "?token=otro")
+                            .statusCode())
+                    .isEqualTo(401);
+        } finally {
+            canalPc.close();
+        }
+    }
+
+    @Test
+    @SuppressWarnings("resource")
+    void mediaMtxNoEscribeElSecretoDelGanchoEnSuRegistroCuandoLaApiNoResponde() throws Exception {
+        // Production, 2026-10-24: MediaMTX logged the hook's whole URL, ?secreto=… included, on timeouts.
+        GenericContainer<?> sinApi = new GenericContainer<>(MEDIAMTX)
+                .withCopyFileToContainer(MountableFile.forHostPath("mediamtx.yml"), "/mediamtx.yml")
+                .withEnv("MTX_AUTHHTTPADDRESS", direccionDelGancho(puertoLibre()))
+                .withExposedPorts(8889)
+                .waitingFor(Wait.forLogMessage(".*\\[API\\] started.*", 1))
+                .withStartupTimeout(Duration.ofMinutes(2));
+        try (sinApi) {
+            sinApi.start();
+            HttpResponse<String> respuesta = whep("http://%s:%d/camaras/%s/whep?token=x"
+                    .formatted(sinApi.getHost(), sinApi.getMappedPort(8889), UUID.randomUUID()));
+            assertThat(respuesta.statusCode()).isGreaterThanOrEqualTo(400);
+            await().atMost(Duration.ofSeconds(15)).until(() -> sinApi.getLogs().contains("HTTP request failed"));
+            assertThat(sinApi.getLogs()).contains("mediamtx:***@").doesNotContain(SECRETO);
+        }
     }
 }

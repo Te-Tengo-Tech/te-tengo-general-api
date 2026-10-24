@@ -79,4 +79,15 @@ class PeticionDeMediaMtxTest {
         assertThat(peticion("read", null, null, null, "").tokenDeEspectador()).isEmpty();
         assertThat(peticion("read", null, null, null, null).tokenDeEspectador()).isEmpty();
     }
+
+    @Test
+    void laPrimeraPeticionRtspNoTraeCredenciales() {
+        assertThat(peticion("publish", "", "", null, null).sinCredenciales()).isTrue();
+        assertThat(peticion("publish", null, null, null, null).sinCredenciales())
+                .isTrue();
+        assertThat(peticion("publish", "agente", "", null, null).sinCredenciales())
+                .isFalse();
+        assertThat(peticion("publish", "", "clave", null, null).sinCredenciales())
+                .isFalse();
+    }
 }

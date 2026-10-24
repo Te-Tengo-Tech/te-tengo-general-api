@@ -63,6 +63,14 @@ public record PeticionDeMediaMtx(
         return m.matches() ? Optional.of(UUID.fromString(m.group(1))) : Optional.empty();
     }
 
+    /**
+     * No user and no password: an RTSP client's first request, before MediaMTX answers 401 and the
+     * client sends its credentials (RFC 2617 Basic).
+     */
+    public boolean sinCredenciales() {
+        return (usuario == null || usuario.isEmpty()) && (clave == null || clave.isEmpty());
+    }
+
     /** The publish token, when the agent's user name is used. */
     public Optional<String> claveDelAgente() {
         return USUARIO_AGENTE.equals(usuario) && clave != null && !clave.isBlank()

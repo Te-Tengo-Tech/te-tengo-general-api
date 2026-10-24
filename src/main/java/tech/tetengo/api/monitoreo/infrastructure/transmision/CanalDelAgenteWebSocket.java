@@ -35,6 +35,9 @@ class CanalDelAgenteWebSocket implements CanalDelAgente {
         WebSocketSession anterior = agentes.put(
                 camaraId, new ConcurrentWebSocketSessionDecorator(sesion, ESPERA_DE_ENVIO_MS, BUFER_MAXIMO));
         if (anterior != null && anterior.isOpen()) {
+            // Two agents with the same token (e.g. two agents of one camera on a PC) replace each other
+            // here on every reconnection: logged so the loop shows in the API's log.
+            log.info("Canal del agente {} reemplazado por una conexión nueva", camaraId);
             try {
                 anterior.close();
             } catch (IOException e) {
