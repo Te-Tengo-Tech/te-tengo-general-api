@@ -1,6 +1,6 @@
 plugins {
   java
-  id("org.springframework.boot") version "4.1.1"
+  id("org.springframework.boot") version "4.1.2"
   id("io.spring.dependency-management") version "1.1.7"
   id("com.diffplug.spotless") version "8.10.4"
   id("org.owasp.dependencycheck") version "13.0.0"
@@ -41,7 +41,7 @@ dependencies {
   // Web, WebSocket (vista en vivo) y documentación OpenAPI
   implementation("org.springframework.boot:spring-boot-starter-webmvc")
   implementation("org.springframework.boot:spring-boot-starter-websocket")
-  implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1")
+  implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
 
   // Seguridad: JWT (resource server)
   implementation("org.springframework.boot:spring-boot-starter-security")
