@@ -4,6 +4,8 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-31
+
 ### Added
 - **Azure Blob Storage** for clips (and their landmarks), movement files and profile photos (ADR 0013), with `TT_ALMACENAMIENTO_PROVEEDOR=azure`, the production default from now on; `s3` (the default value) keeps Amazon S3, Cloudflare R2 and the in-memory fakes as they were. Settings: `TT_AZURE_STORAGE_ENDPOINT`, `TT_CLIPS_CONTENEDOR` (`clips`), `TT_MOVIMIENTOS_CONTENEDOR` (`movements`), `TT_FOTOS_CONTENEDOR` (the clips'), and only for Azurite or tests `TT_AZURE_STORAGE_CUENTA`, `TT_AZURE_STORAGE_CLAVE` and `TT_AZURE_STORAGE_CREAR_CONTENEDORES`. Without a key the API uses Microsoft Entra ID (the VM's managed identity) and signs user delegation SAS, so production keeps no storage secret. SAS URLs keep the S3 lifetimes (never more than 7 days); downloads still ask for `Content-Disposition: attachment`; many deletions run 16 at a time. Adapter tests run against Azurite.
 
