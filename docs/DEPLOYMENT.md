@@ -1,6 +1,6 @@
 # Deployment: container image
 
-The API ships as one container image, built by the [`Dockerfile`](../Dockerfile) and published to the GitHub Container Registry as `ghcr.io/te-tengo-tech/te-tengo-general-api`. The server setup (one Azure VM with Docker Compose: Caddy with TLS, PostgreSQL, MediaMTX; clips in Cloudflare R2) lives in `te-tengo-infra`; this document covers the image and how a release reaches that server.
+The API ships as one container image, built by the [`Dockerfile`](../Dockerfile) and published to the GitHub Container Registry as `ghcr.io/te-tengo-tech/te-tengo-general-api`. The server setup (one Azure VM with Docker Compose: Caddy with TLS, PostgreSQL, MediaMTX; clips, movement files and photos in Azure Blob Storage) lives in `te-tengo-infra`; this document covers the image and how a release reaches that server.
 
 ## The image
 - **Two stages.** A Temurin 25 JDK stage runs `./gradlew bootJar` and splits the jar into Spring Boot layers. The runtime stage is Temurin 25 **JRE** with one image layer per Spring Boot layer (dependencies, loader, snapshots, application), so a new release usually only pulls the small application layer.
@@ -25,12 +25,31 @@ curl localhost:8080/actuator/health
 ```
 
 - **Key permissions.** The container user (uid 10001) must be able to read the mounted keys: `chmod 644`, or `chown 10001` with `chmod 600`.
-- **Without storage, e-mail or push variables,** clips use the in-memory fake and e-mail and push only log. Set `TT_CLIPS_*` (Amazon S3 or [Cloudflare R2](#clips-on-cloudflare-r2)), the e-mail provider (`TT_CORREO_PROVEEDOR=ses` with `TT_SES_*`, or `smtp` with `TT_SMTP_REMITENTE` and `SPRING_MAIL_*`, see [NOTIFICATIONS.md](NOTIFICATIONS.md#e-mail)), `TT_PUSH_PROVEEDOR` and its variables for the real services. On EC2, leave the AWS access keys blank: the AWS SDK picks up the instance role.
+- **Without storage, e-mail or push variables,** clips use the in-memory fake and e-mail and push only log. Set the storage ([Azure Blob Storage](#object-storage-on-azure-blob-storage), production; or `TT_CLIPS_*` for Amazon S3 or [Cloudflare R2](#clips-on-cloudflare-r2-previous-production-setup)), the e-mail provider (`TT_CORREO_PROVEEDOR=ses` with `TT_SES_*`, or `smtp` with `TT_SMTP_REMITENTE` and `SPRING_MAIL_*`, see [NOTIFICATIONS.md](NOTIFICATIONS.md#e-mail)), `TT_PUSH_PROVEEDOR` and its variables for the real services. On EC2, leave the AWS access keys blank: the AWS SDK picks up the instance role.
 - **For the PWA** (the app's web build, e.g. on Cloudflare Pages or a custom domain): `TT_CORS_ORIGENES=https://te-tengo.pages.dev` (an origin, without the path), `TT_ENLACE_BASE=https://te-tengo.pages.dev/app/#`, `TT_PWA_URL=https://te-tengo.pages.dev/app/` and, with `sns`, `TT_SNS_ARN_WEB`. Outside this image, MediaMTX needs `MTX_HLSALLOWORIGINS=https://te-tengo.pages.dev` and `MTX_WEBRTCALLOWORIGINS` with the same origin (WebRTC playback, `TT_VIVO_URL_WEBRTC`; ADR 0008), and the clips bucket a CORS rule for the same origin (`clips_cors_allowed_origins` in `te-tengo-infra`), since the browser reads both from another origin.
 - **Behind the reverse proxy.** The public endpoints are limited per client address (`tetengo.limites` in `application.yml`; `TT_LIMITES_HABILITADO=false` turns it off). The address is the `X-Forwarded-For` the proxy sets (Caddy replaces the client's own), trusted only on connections from `server.tomcat.remoteip.internal-proxies` (by default private, loopback and link-local addresses, where the Docker network is). Never publish the API's port on a public address next to the proxy; if the proxy is elsewhere, set `SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES` to a regular expression of its address. The limits live in memory, per API instance.
 - **Against a local stack** (PostgreSQL and Floci on a Docker network), point the endpoints at the Floci container: `TT_CLIPS_ENDPOINT=http://floci:4566`, `TT_CLIPS_PATH_STYLE=true`, `TT_CLIPS_ACCESS_KEY=test`, `TT_CLIPS_SECRET_KEY=test`, `TETENGO_CLIPS_S3_CREARBUCKET=true`. Pre-signed URLs then use the `floci` host name, which only containers on that network resolve.
 
-## Clips on Cloudflare R2
+## Object storage on Azure Blob Storage
+**Production default** (ADR 0013): `TT_ALMACENAMIENTO_PROVEEDOR=azure` puts the clips (and their landmarks), the movement files and the profile photos in private containers of one Azure Storage account, the cloud of the VM. te-tengo-infra creates the account, the containers, the CORS rule and the role assignment, and writes these settings into `api.env`. The API still never handles the bytes: it hands out SAS URLs (upload PUT 10 minutes, clip GET 5 minutes, movement GET 10 minutes, photo GET 1 hour, as with S3; never more than 7 days).
+
+```
+TT_ALMACENAMIENTO_PROVEEDOR=azure
+TT_AZURE_STORAGE_ENDPOINT=https://<account>.blob.core.windows.net
+TT_CLIPS_CONTENEDOR=clips               # clips, landmarks and (by default, TT_FOTOS_CONTENEDOR) photos
+TT_MOVIMIENTOS_CONTENEDOR=movements
+# TT_AZURE_STORAGE_CUENTA / TT_AZURE_STORAGE_CLAVE: only with an account key (Azurite, tests)
+```
+
+- **No storage secret in production.** With `TT_AZURE_STORAGE_CLAVE` blank the API authenticates with Microsoft Entra ID through the Azure SDK's default credential chain: on the VM, its system-assigned managed identity (IMDS, reachable from the container). The identity needs **Storage Blob Data Contributor** on the containers (it includes `generateUserDelegationKey`); the URLs are *user delegation SAS* signed with a key the API asks for once a day. `AZURE_CLIENT_ID` selects a user-assigned identity instead.
+- **Account key** (`TT_AZURE_STORAGE_CUENTA` + `TT_AZURE_STORAGE_CLAVE`): service SAS signed locally. For Azurite (`TT_AZURE_STORAGE_ENDPOINT=http://<host>:10000/devstoreaccount1`, `TT_AZURE_STORAGE_CREAR_CONTENEDORES=true`) and tests; avoid it in production.
+- **Upload headers.** Azure's Put Blob needs `x-ms-blob-type: BlockBlob`, so the upload answers return `cabeceras: {"Content-Type": ..., "x-ms-blob-type": "BlockBlob"}` and every client must send exactly the returned headers ([AGENT_CONTRACT.md](AGENT_CONTRACT.md), [API_CONTRACT.md](API_CONTRACT.md) §13). A SAS cannot pin `Content-Type` or the size the way an S3 signature does: the API checks the uploaded object (size of photos and movement files at confirmation).
+- **CORS for the PWA.** The blob service needs a CORS rule for the PWA's origins: `GET`, `HEAD`, `PUT` (and `OPTIONS`), allowed headers `content-type` and `x-ms-blob-type` (te-tengo-infra `storage_cors_allowed_origins`).
+- **The URLs' host** is the blob endpoint, reached directly by the agent and the app; the VM's NSG needs nothing.
+- **Locally nothing changes:** the `local` profile keeps Floci's S3; the adapter tests run against Azurite (Testcontainers).
+- **S3 and R2 still work:** leave `TT_ALMACENAMIENTO_PROVEEDOR` unset (or `s3`) and use the `TT_CLIPS_*` settings below.
+
+## Clips on Cloudflare R2 (previous production setup)
 The S3 adapter works with [Cloudflare R2](https://developers.cloudflare.com/r2/) through R2's S3 API, configured as Cloudflare's [AWS SDK for Java example](https://developers.cloudflare.com/r2/examples/aws/aws-sdk-java/) does: region `auto` and the account's S3 endpoint. Clips still never pass through the API: the agent uploads with a pre-signed PUT URL (10 minutes) and the app reads with a pre-signed GET URL (5 minutes). R2 accepts pre-signed URLs that last from 1 second to 7 days ([Presigned URLs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/)).
 
 ```bash

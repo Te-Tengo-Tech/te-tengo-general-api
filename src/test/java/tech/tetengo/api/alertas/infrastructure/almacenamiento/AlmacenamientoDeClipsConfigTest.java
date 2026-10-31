@@ -12,20 +12,34 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.io.ClassPathResource;
 import tech.tetengo.api.alertas.application.port.AlmacenamientoDeClips;
+import tech.tetengo.api.shared.infrastructure.almacenamiento.ProveedorDeAlmacenamiento;
+import tech.tetengo.api.shared.infrastructure.almacenamiento.azure.CuentaDeAzureBlob;
+import tech.tetengo.api.shared.infrastructure.almacenamiento.azure.PropiedadesDeAzureBlob;
+import tech.tetengo.api.support.Azurite;
 
-/** The S3 adapter is used only when a bucket is configured; otherwise the in-memory fake stays. */
+/**
+ * Azure Blob with {@code tetengo.almacenamiento.proveedor=azure}; otherwise the S3 adapter when a
+ * bucket is configured, or the in-memory fake.
+ */
 class AlmacenamientoDeClipsConfigTest {
 
     @Configuration(proxyBeanMethods = false)
-    @EnableConfigurationProperties(PropiedadesDeS3.class)
+    @EnableConfigurationProperties({PropiedadesDeS3.class, PropiedadesDeAzureBlob.class})
     static class Soporte {
         @Bean
         Clock reloj() {
             return Clock.systemUTC();
+        }
+
+        @Bean
+        @Conditional(ProveedorDeAlmacenamiento.ConAzure.class)
+        CuentaDeAzureBlob cuentaDeAzureBlob(PropiedadesDeAzureBlob propiedades, Clock reloj) {
+            return CuentaDeAzureBlob.crear(propiedades, reloj);
         }
     }
 
@@ -37,6 +51,53 @@ class AlmacenamientoDeClipsConfigTest {
         contexto.withPropertyValues("tetengo.clips.s3.bucket=")
                 .run(ctx -> assertThat(ctx.getBean(AlmacenamientoDeClips.class))
                         .isInstanceOf(AlmacenamientoDeClipsEnMemoria.class));
+    }
+
+    /**
+     * Azure wins over a configured bucket. With the account key the URLs are service SAS of the
+     * container, signed locally (no request), and the upload instructions carry {@code x-ms-blob-type}.
+     */
+    @Test
+    void conProveedorAzureYClaveSeUsaAzureBlobConSas() {
+        contexto.withPropertyValues(
+                        "tetengo.almacenamiento.proveedor=azure",
+                        "tetengo.almacenamiento.azure.cuenta=tetengoproddata",
+                        "tetengo.almacenamiento.azure.clave=" + Azurite.CLAVE,
+                        "tetengo.clips.azure.contenedor=clips",
+                        "tetengo.clips.s3.bucket=te-tengo-clips")
+                .run(ctx -> {
+                    var almacenamiento = ctx.getBean(AlmacenamientoDeClips.class);
+                    assertThat(almacenamiento).isInstanceOf(AlmacenamientoDeClipsEnAzure.class);
+                    var subida = almacenamiento.urlDeSubida(
+                            "hogares/h/alertas/a/e", "video/mp4", Instant.now().plusSeconds(600));
+                    assertThat(subida.url().toString())
+                            .startsWith("https://tetengoproddata.blob.core.windows.net/clips/hogares/h/alertas/a/e?")
+                            .contains("sp=cw", "spr=https&", "sr=b", "sig=");
+                    assertThat(subida.cabeceras())
+                            .containsOnly(
+                                    Map.entry("Content-Type", "video/mp4"), Map.entry("x-ms-blob-type", "BlockBlob"));
+
+                    var descarga = almacenamiento
+                            .urlDeLectura("hogares/h/alertas/a/e", Instant.now().plusSeconds(300), true, "clip")
+                            .toString();
+                    assertThat(descarga).contains("sp=r", "rscd=attachment");
+                });
+    }
+
+    /** Production: no key, so Microsoft Entra ID (managed identity); nothing is requested at startup. */
+    @Test
+    void conProveedorAzureSinClaveSeUsaLaIdentidadAdministrada() {
+        contexto.withPropertyValues(
+                        "tetengo.almacenamiento.proveedor=azure",
+                        "tetengo.almacenamiento.azure.endpoint=https://tetengoproddata.blob.core.windows.net")
+                .run(ctx -> assertThat(ctx.getBean(AlmacenamientoDeClips.class))
+                        .isInstanceOf(AlmacenamientoDeClipsEnAzure.class));
+    }
+
+    @Test
+    void conProveedorAzureSinCuentaNiEndpointNoArranca() {
+        contexto.withPropertyValues("tetengo.almacenamiento.proveedor=azure")
+                .run(ctx -> assertThat(ctx).hasFailed());
     }
 
     @Test
