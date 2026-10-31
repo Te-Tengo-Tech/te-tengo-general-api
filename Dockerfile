@@ -11,7 +11,7 @@
 # (docker ecosystem) proposes the new digests. Keep the JDK and the JRE on the same Java version.
 
 # 1) Build the executable jar and split it into Spring Boot layers.
-FROM --platform=$BUILDPLATFORM eclipse-temurin:25-jdk@sha256:8c0a84ea11c8f6ed52600fc19f1040121f2a162998e9f50a5faebbbad9172dcc AS build
+FROM --platform=$BUILDPLATFORM eclipse-temurin:25-jdk@sha256:2d5d5e9b533342a565907c84f47a2ec298c40cde7b13a3ca85d4950fa456a641 AS build
 WORKDIR /workspace
 # Gradle wrapper and build scripts first: this layer is reused while only the sources change.
 COPY gradlew settings.gradle.kts build.gradle.kts gradle.properties ./
@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/root/.gradle \
 
 # 2) Runtime: Temurin JRE, non-root user, one image layer per Spring Boot layer (dependencies change
 #    far less often than the application, so pulls on the server are small).
-FROM eclipse-temurin:25-jre@sha256:fcd7fd7b387f94bb2ac461478a7436ad8e349924c374ea8313919624dceae636
+FROM eclipse-temurin:25-jre@sha256:dbb43d81099eec91e0800226ed2296d03146ee7857165b95112372ad0d67e87f
 LABEL org.opencontainers.image.title="te-tengo-general-api" \
       org.opencontainers.image.description="Backend API of Te Tengo: fall detection alerts for older adults at home" \
       org.opencontainers.image.source="https://github.com/Te-Tengo-Tech/te-tengo-general-api" \

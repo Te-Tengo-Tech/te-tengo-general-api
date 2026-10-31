@@ -1,6 +1,7 @@
 package tech.tetengo.api.alertas.infrastructure.almacenamiento;
 
 import java.time.Clock;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Condition;
 import org.springframework.context.annotation.ConditionContext;
@@ -9,15 +10,25 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.util.StringUtils;
 import tech.tetengo.api.alertas.application.port.AlmacenamientoDeClips;
+import tech.tetengo.api.shared.infrastructure.almacenamiento.ProveedorDeAlmacenamiento;
+import tech.tetengo.api.shared.infrastructure.almacenamiento.azure.CuentaDeAzureBlob;
 
 /**
- * Chooses the clip storage: Amazon S3 (or an S3-compatible store) when {@code tetengo.clips.s3.bucket}
- * is set, otherwise the in-memory fake.
+ * Chooses the clip storage (ADR 0013): Azure Blob Storage with {@code
+ * tetengo.almacenamiento.proveedor=azure}; otherwise Amazon S3 (or an S3-compatible store such as R2)
+ * when {@code tetengo.clips.s3.bucket} is set, or the in-memory fake.
  */
 @Configuration(proxyBeanMethods = false)
 class AlmacenamientoDeClipsConfig {
 
     private static final String BUCKET = "tetengo.clips.s3.bucket";
+
+    @Bean
+    @Conditional(ProveedorDeAlmacenamiento.ConAzure.class)
+    AlmacenamientoDeClips almacenamientoDeClipsEnAzure(
+            CuentaDeAzureBlob cuenta, @Value("${tetengo.clips.azure.contenedor:clips}") String contenedor) {
+        return new AlmacenamientoDeClipsEnAzure(cuenta.contenedor(contenedor));
+    }
 
     @Bean
     @Conditional(ConS3.class)
@@ -34,14 +45,16 @@ class AlmacenamientoDeClipsConfig {
     static class ConS3 implements Condition {
         @Override
         public boolean matches(ConditionContext contexto, AnnotatedTypeMetadata metadatos) {
-            return StringUtils.hasText(contexto.getEnvironment().getProperty(BUCKET));
+            return !ProveedorDeAlmacenamiento.esAzure(contexto.getEnvironment())
+                    && StringUtils.hasText(contexto.getEnvironment().getProperty(BUCKET));
         }
     }
 
     static class SinS3 implements Condition {
         @Override
         public boolean matches(ConditionContext contexto, AnnotatedTypeMetadata metadatos) {
-            return !StringUtils.hasText(contexto.getEnvironment().getProperty(BUCKET));
+            return !ProveedorDeAlmacenamiento.esAzure(contexto.getEnvironment())
+                    && !StringUtils.hasText(contexto.getEnvironment().getProperty(BUCKET));
         }
     }
 }

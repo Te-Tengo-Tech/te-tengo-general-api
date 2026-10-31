@@ -67,12 +67,11 @@ class FotoController {
     @DeleteMapping(path = "/{de}", version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void quitar(@PathVariable String de) {
-        DestinoDeFoto destino =
-                switch (de) {
-                    case "yo" -> DestinoDeFoto.YO;
-                    case "adulto-mayor" -> DestinoDeFoto.ADULTO_MAYOR;
-                    default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-                };
+        DestinoDeFoto destino = switch (de) {
+            case "yo" -> DestinoDeFoto.YO;
+            case "adulto-mayor" -> DestinoDeFoto.ADULTO_MAYOR;
+            default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        };
         quitarFoto.ejecutar(UsuarioActual.id(), destino);
     }
 }

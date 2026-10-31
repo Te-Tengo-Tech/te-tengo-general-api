@@ -15,10 +15,12 @@
 
 logLevel: info
 
-# Authentication: the API decides (POST /api/interno/mediamtx/autorizar). Requests without the shared
-# secret are rejected by the API.
+# Authentication: the API decides (POST /api/interno/mediamtx/autorizar). The shared secret is the
+# password of the URL's user info: Go's HTTP client sends it as an `Authorization: Basic` header and
+# writes it as *** in the errors MediaMTX logs (a ?secreto= query would be logged in full). Requests
+# without the secret, or from outside the private networks, are rejected by the API.
 authMethod: http
-authHTTPAddress: http://host.docker.internal:8080/api/interno/mediamtx/autorizar?secreto=secreto-local-de-vista-en-vivo
+authHTTPAddress: http://mediamtx:secreto-local-de-vista-en-vivo@host.docker.internal:8080/api/interno/mediamtx/autorizar
 # The control API is reachable only from the server (127.0.0.1 or the internal network), so the API's
 # own calls are not sent back to it. Metrics and pprof stay disabled.
 authHTTPExclude:

@@ -14,8 +14,11 @@
   - The agent publishes H.264 over RTSP (TCP locally, RTSPS in production).
   - The app plays LL-HLS: `<HLS base>/camaras/<camaraId>/index.m3u8?token=<viewer token>`.
   - Config: `mediamtx.yml` (committed); local service in `compose.yaml`.
-- **The API authorizes MediaMTX** (`authMethod: http`): `POST /api/interno/mediamtx/autorizar?secreto=<TT_VIVO_SECRETO_AUTORIZACION>`.
-  - Publish: only the camera's path, user `agente`, and the publish token of the camera's current transmission.
+- **The API authorizes MediaMTX** (`authMethod: http`): `POST /api/interno/mediamtx/autorizar`, with `TT_VIVO_SECRETO_AUTORIZACION` as the password of HTTP Basic credentials.
+  - Update 2026-10-24: the secret was a `?secreto=` query parameter, and MediaMTX logs the whole hook URL when a call fails (`HTTP request failed: Post "…?secreto=…"`). `authHTTPAddress` now carries it as the URL's user info (`http://mediamtx:<secret>@api:8080/…`): Go's HTTP client sends it as an `Authorization: Basic` header and writes the password as `***` in its errors. The query parameter is still accepted during the rollout. The hook also answers only requests from loopback, link-local or private addresses (the Docker network); one the reverse proxy forwarded carries the Internet client's address.
+  - MediaMTX 1.21 asks one authorization at a time, inside its path manager, and waits up to `readTimeout` (10 s) for each: a slow answer delays every other publish and read on the server. The API logs answers slower than 1 s.
+  - Publish: only the camera's path, user `agente`, and the publish token of the camera's current transmission. A webcam «sin usar» publishes only while a preview of it is open (US-29, CA-29.7), and is read only with its preview's token.
+  - An RTSP client first announces without credentials and sends them after MediaMTX's 401, so each publish starts with a credential-less request; it is denied without being logged as a denial.
   - Read and playback: only with the viewer token of an open session of that camera.
   - Neither while capture is not allowed (pause, no consent).
   - Anything else gets `401`, and so does a request without the secret.

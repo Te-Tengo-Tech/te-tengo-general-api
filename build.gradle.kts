@@ -1,15 +1,15 @@
 plugins {
   java
-  id("org.springframework.boot") version "4.1.1"
+  id("org.springframework.boot") version "4.1.2"
   id("io.spring.dependency-management") version "1.1.7"
-  id("com.diffplug.spotless") version "8.10.3"
+  id("com.diffplug.spotless") version "8.10.4"
   id("org.owasp.dependencycheck") version "13.0.0"
   jacoco
 }
 
 group = "tech.tetengo"
 
-version = "0.5.0"
+version = "0.6.0"
 
 description = "Backend API del sistema Te Tengo"
 
@@ -19,11 +19,18 @@ val mockitoAgent by configurations.creating
 
 configurations { compileOnly { extendsFrom(configurations.annotationProcessor.get()) } }
 
+// The Azure SDK talks HTTP through the JDK's client (azure-core-http-jdk-httpclient), so its
+// default
+// Netty transport, and the Netty versions it would pull next to Spring Boot's, stay out.
+configurations.all { exclude(group = "com.azure", module = "azure-core-http-netty") }
+
 repositories { mavenCentral() }
 
 extra["springModulithVersion"] = "2.1.1"
 
 extra["awsSdkVersion"] = "2.55.12"
+
+extra["azureSdkVersion"] = "1.3.9"
 
 // Overrides of versions managed by Spring Boot 4.1.1 (the latest 4.1.x patch) that have known
 // vulnerabilities. Remove each one once a Boot release manages the fixed version or a newer one.
@@ -41,7 +48,7 @@ dependencies {
   // Web, WebSocket (vista en vivo) y documentación OpenAPI
   implementation("org.springframework.boot:spring-boot-starter-webmvc")
   implementation("org.springframework.boot:spring-boot-starter-websocket")
-  implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1")
+  implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
 
   // Seguridad: JWT (resource server)
   implementation("org.springframework.boot:spring-boot-starter-security")
@@ -67,8 +74,13 @@ dependencies {
 
   // Clips in Amazon S3 (or an S3-compatible store): pre-signed URLs with the AWS SDK v2
   implementation("software.amazon.awssdk:s3")
+  // Or in Azure Blob Storage (ADR 0013): SAS URLs and Microsoft Entra ID (managed
+  // identity). The JDK HTTP client replaces the default Netty transport (see the exclusion below).
+  implementation("com.azure:azure-storage-blob")
+  implementation("com.azure:azure-identity")
+  implementation("com.azure:azure-core-http-jdk-httpclient")
   // Profile photos: WebP decoding for ImageIO (JPEG and PNG come with the JDK)
-  implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
+  implementation("com.twelvemonkeys.imageio:imageio-webp:3.15.3")
   // E-mail through Amazon SES (API v2)
   implementation("software.amazon.awssdk:sesv2")
   // Or through any SMTP relay (JavaMailSender, spring.mail.*)
@@ -100,7 +112,7 @@ dependencies {
   testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
   testImplementation("org.springframework.boot:spring-boot-starter-security-test")
   testImplementation(
-      "org.springframework.boot:spring-boot-starter-security-oauth2-resource-server-test"
+      "org.springframework.boot:spring-boot-starter-security-oauth2-resource-server-test",
   )
   testImplementation("org.springframework.boot:spring-boot-testcontainers")
   testImplementation("org.springframework.modulith:spring-modulith-starter-test")
@@ -114,9 +126,10 @@ dependencies {
 dependencyManagement {
   imports {
     mavenBom(
-        "org.springframework.modulith:spring-modulith-bom:${property("springModulithVersion")}"
+        "org.springframework.modulith:spring-modulith-bom:${property("springModulithVersion")}",
     )
     mavenBom("software.amazon.awssdk:bom:${property("awsSdkVersion")}")
+    mavenBom("com.azure:azure-sdk-bom:${property("azureSdkVersion")}")
   }
 }
 
@@ -191,7 +204,7 @@ tasks.jacocoTestCoverageVerification {
   classDirectories.setFrom(
       sourceSets.main.get().output.classesDirs.map {
         fileTree(it) { include("**/domain/**", "**/application/**") }
-      }
+      },
   )
   violationRules {
     rule {

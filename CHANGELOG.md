@@ -4,6 +4,19 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-31
+
+### Added
+- **Azure Blob Storage** for clips (and their landmarks), movement files and profile photos (ADR 0013), with `TT_ALMACENAMIENTO_PROVEEDOR=azure`, the production default from now on; `s3` (the default value) keeps Amazon S3, Cloudflare R2 and the in-memory fakes as they were. Settings: `TT_AZURE_STORAGE_ENDPOINT`, `TT_CLIPS_CONTENEDOR` (`clips`), `TT_MOVIMIENTOS_CONTENEDOR` (`movements`), `TT_FOTOS_CONTENEDOR` (the clips'), and only for Azurite or tests `TT_AZURE_STORAGE_CUENTA`, `TT_AZURE_STORAGE_CLAVE` and `TT_AZURE_STORAGE_CREAR_CONTENEDORES`. Without a key the API uses Microsoft Entra ID (the VM's managed identity) and signs user delegation SAS, so production keeps no storage secret. SAS URLs keep the S3 lifetimes (never more than 7 days); downloads still ask for `Content-Disposition: attachment`; many deletions run 16 at a time. Adapter tests run against Azurite.
+
+### Changed
+- With Azure, upload answers (`POST /api/agente/eventos/{id}/clip`, `/clip/puntos`, `/clip/puntos/ligero`, `POST /api/agente/movimientos`, `/ligero`, `POST /api/fotos/subidas`) return `cabeceras` `{"Content-Type": …, "x-ms-blob-type": "BlockBlob"}`; clients must send exactly the returned headers (AGENT_CONTRACT.md, API_CONTRACT.md §13). With S3 or R2 nothing changes.
+
+### Fixed
+- MediaMTX logged the authorization hook's whole URL, shared secret included, whenever a call failed (`HTTP request failed: Post "http://api:8080/api/interno/mediamtx/autorizar?secreto=…"`). The hook now takes the secret as the password of HTTP Basic credentials, which MediaMTX sends from the user info of its `authHTTPAddress` (`http://mediamtx:<secret>@api:8080/…`; Go writes it as `***` in errors); `?secreto=` is still accepted while MediaMTX is updated. The hook also answers only requests from loopback, link-local or private addresses. `compose.yaml` and `mediamtx.yml` use the new form; te-tengo-infra does the same in production.
+- Each preview publish logged «MediaMTX: publish (rtsp) denegado», which looked like the reason the preview of a webcam «sin usar» never loaded: it was the RTSP client's first request, which carries no credentials until MediaMTX answers 401, and the publish that followed was allowed. That request is no longer logged as a denial. A webcam «sin usar» now publishes only while a preview of it is open and is read only with its preview's token (CA-29.7). Answers slower than 1 s are logged with their duration, because MediaMTX holds every other publish and read while it waits (up to 10 s) for one: on 2026-10-24 the hook timed out while the production host was swapping the API's memory, and the preview never started.
+- The weekly branch cleanup listed each branch's pull requests with `gh api -f`, which sends a POST to the create-pull-request endpoint, so every lookup failed with 422 and the open-PR and `do-not-delete` protections were never checked. It now lists with `--method GET`, and a branch whose PRs cannot be read is left alone.
+
 ## [0.5.0] - 2026-10-12
 
 ### Added
