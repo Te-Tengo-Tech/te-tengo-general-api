@@ -4,8 +4,16 @@ Usage: python3 analizar.py <work directory>
 
 Reads, for every run in <work>/corridas/<video>/: the agent log (with the marks of
 agente_con_marcas.py), alerta.json; and the API log (<work>/api.log) and, when present, the iOS
-simulator log (<work>/simulador.log). All timestamps come from this machine's clock. Writes
-<work>/mediciones.csv and prints a Markdown summary (median, IQR, min–max, n per stage).
+simulator log (<work>/simulador.log) or the Android device's log (<work>/android.log, `adb logcat -v
+epoch,usec`). All timestamps are on this machine's clock: the Android device's are moved onto it
+with the clock offset measured before and after the series (android-desfase-antes/despues.csv,
+desfase_adb.py), interpolated linearly in time. Writes <work>/mediciones.csv and prints a Markdown
+summary (median, IQR, min–max, n per stage).
+
+On Android, t4 is the push reaching the app's process (Firebase SDK: «FirebaseMessaging: Starting
+service», the intent Google Play services hands to the app), and t4n the system notification posted
+for the alert (event log `notification_enqueue`, whose tag is the alert id; only when the app is not
+in the foreground, as FCM shows the notification block itself then).
 """
 
 import csv
@@ -52,6 +60,31 @@ def epoch_sim(linea: str) -> float | None:
     return datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S.%f").astimezone().timestamp()
 
 
+ANDROID_TS = re.compile(r"^\s*(\d{9,}\.\d+)\s")
+ANDROID_RECEPCION = re.compile(r"FirebaseMessaging: Starting service")
+ANDROID_NOTIFICACION = re.compile(r"notification_enqueue: \[\d+,\d+,\S+?,\d+,([0-9a-f-]+),")
+
+
+def desfase_android(work: Path):  # type: ignore[no-untyped-def]
+    """t_device - t_host as a function of the host time: the shortest round trip of each
+    measurement (before/after the series), interpolated linearly; None without a measurement."""
+    puntos = []
+    for nombre in ("android-desfase-antes.csv", "android-desfase-despues.csv"):
+        ruta = work / nombre
+        if not ruta.exists():
+            continue
+        with ruta.open() as archivo:
+            filas = list(csv.DictReader(archivo))
+        mejor = min(filas, key=lambda f: float(f["rtt_s"]))
+        puntos.append(((float(mejor["host_antes"]) + float(mejor["host_despues"])) / 2, float(mejor["desfase_s"])))
+    if not puntos:
+        return None
+    if len(puntos) == 1 or puntos[1][0] == puntos[0][0]:
+        return lambda t: puntos[0][1]
+    (h0, d0), (h1, d1) = puntos[0], puntos[1]
+    return lambda t: d0 + (d1 - d0) * (t - h0) / (h1 - h0)
+
+
 def primera(lineas: list[str], patron: str, a_epoch) -> tuple[float | None, re.Match[str] | None]:  # type: ignore[no-untyped-def]
     expresion = re.compile(patron)
     for linea in lineas:
@@ -85,6 +118,21 @@ def main() -> int:
     recepciones = sorted(
         t for t in (epoch_sim(linea) for linea in sim if SIM_RECEPCION.search(linea)) if t
     )
+    android_ruta = work / "android.log"
+    desfase = desfase_android(work)
+    notificaciones: dict[str, float] = {}
+    if android_ruta.exists() and desfase is not None:
+        for linea in android_ruta.read_text(errors="replace").splitlines():
+            m = ANDROID_TS.match(linea)
+            if not m:
+                continue
+            t_disp = float(m.group(1))
+            t_host = t_disp - desfase(t_disp)
+            if ANDROID_RECEPCION.search(linea):
+                recepciones.append(t_host)
+            elif (mn := ANDROID_NOTIFICACION.search(linea)) and mn.group(1) not in notificaciones:
+                notificaciones[mn.group(1)] = t_host
+        recepciones.sort()
     filas = []
     for corrida in sorted((work / "corridas").iterdir()):
         agente = (corrida / "agente.log").read_text(errors="replace").splitlines()
@@ -94,7 +142,7 @@ def main() -> int:
         t0 = float(m0.group(1)) if m0 else None
         t1, m1 = primera(agente, r"Evento detectado: caida ([0-9a-f-]+)", epoch_agente)
         evento = m1.group(1) if m1 else None
-        t2 = tc = t3 = t4 = None
+        t2 = tc = t3 = t4 = t4n = None
         alerta = id_mensaje = None
         if evento:
             t2, _ = primera(agente, rf"Evento {evento} enviado", epoch_agente)
@@ -110,10 +158,7 @@ def main() -> int:
             )
             if m3 and m3.group(2):
                 id_mensaje = m3.group(2)
-            if t3 is not None and recepciones:
-                t4 = next((t for t in recepciones if t >= t3 - 0.05), None)
-                if t4 is not None and t4 - t3 > 30:
-                    t4 = None
+            t4n = notificaciones.get(alerta)
         # With TT_LAT_DEBUG=1 the Google HTTP client logs every FCM request and response: the first
         # request after t2 is the API's dispatch (t3a) and its response is FCM's first answer (t3b).
         # t3 above is the API's own result line, after the Admin SDK's retries if FCM refused.
@@ -124,9 +169,16 @@ def main() -> int:
                 t3b = next((t for t in respuestas_fcm if t >= t3a), None)
             if t3a is not None and t3a - t2 > 10:
                 t3a = t3b = None
+        # The device can get the push before the API has FCM's answer: the first receipt after the
+        # FCM request left (t3a), or after the API's result line (t3) when there is no t3a.
+        desde = t3a if t3a is not None else (t3 - 0.05 if t3 is not None else None)
+        if desde is not None and recepciones:
+            t4 = next((t for t in recepciones if t >= desde), None)
+            if t4 is not None and t4 - desde > 30:
+                t4 = None
         fila.update(evento=evento, alerta=alerta, fcm_mensaje=id_mensaje)
         for nombre, t in (("t0", t0), ("t1", t1), ("t2", t2), ("tclip", tc), ("t3a", t3a),
-                          ("t3b", t3b), ("t3", t3), ("t4", t4)):
+                          ("t3b", t3b), ("t3", t3), ("t4", t4), ("t4n", t4n)):
             fila[nombre] = f"{t:.3f}" if t else ""
 
         def d(a: float | None, b: float | None) -> float | None:
@@ -139,6 +191,10 @@ def main() -> int:
         fila["d23_api_a_fcm"] = d(t2, t3)
         fila["d03b_caida_a_respuesta_fcm"] = d(t0, t3b)
         fila["d34_fcm_a_dispositivo"] = d(t3, t4)
+        fila["d3a4_peticion_fcm_a_dispositivo"] = d(t3a, t4)
+        fila["d3b4_fcm_acepta_a_dispositivo"] = d(t3b, t4)
+        fila["d44n_recepcion_a_notificacion"] = d(t4, t4n)
+        fila["d04n_caida_a_notificacion"] = d(t0, t4n)
         fila["d03_caida_a_push_enviado"] = d(t0, t3)
         fila["d04_total"] = d(t0, t4)
         fila["d13_deteccion_a_push_enviado"] = d(t1, t3)
@@ -158,11 +214,15 @@ def main() -> int:
         ("t2→t3a API: commit, async dispatch, FCM request out", "d23a_api_interno"),
         ("t3a→t3b FCM HTTP v1 round trip (first answer)", "d3a3b_fcm_rtt"),
         ("t2→t3 API → FCM result logged by the API", "d23_api_a_fcm"),
-        ("t3→t4 FCM → device", "d34_fcm_a_dispositivo"),
+        ("t3→t4 API logs FCM result → device", "d34_fcm_a_dispositivo"),
+        ("t3a→t4 FCM request out → push in the app's process", "d3a4_peticion_fcm_a_dispositivo"),
+        ("**t3b→t4 FCM accepted → push in the app's process**", "d3b4_fcm_acepta_a_dispositivo"),
+        ("t4→t4n push in the app → system notification posted", "d44n_recepcion_a_notificacion"),
         ("t1→t3 detection → push sent", "d13_deteccion_a_push_enviado"),
         ("**t0→t3b fall → FCM answers the API**", "d03b_caida_a_respuesta_fcm"),
         ("t0→t3 fall → API logs the FCM result", "d03_caida_a_push_enviado"),
         ("**t0→t4 fall → push on device**", "d04_total"),
+        ("**t0→t4n fall → notification shown on device**", "d04n_caida_a_notificacion"),
         ("t1→tclip detection → clip uploaded", "d1c_deteccion_a_clip_subido"),
     ]
     detectadas = sum(1 for f in filas if f["evento"])
@@ -174,7 +234,9 @@ def main() -> int:
         print(f"| {titulo} " + resumen(valores))
     antes = [f["evento_antes_que_clip"] for f in filas if f["evento_antes_que_clip"]]
     print(f"\nEvent accepted before its clip was uploaded: {antes.count('True')} of {len(antes)}.")
-    total = [v for f in filas if isinstance(v := f["d04_total"], float)]
+    total = [v for f in filas if isinstance(v := f["d04n_caida_a_notificacion"], float)]
+    if not total:
+        total = [v for f in filas if isinstance(v := f["d04_total"], float)]
     if not total:
         total = [v for f in filas if isinstance(v := f["d03b_caida_a_respuesta_fcm"], float)]
     if not total:

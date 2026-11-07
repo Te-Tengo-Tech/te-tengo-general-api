@@ -17,7 +17,10 @@
 #       first answer arrives (Google HTTP client log). If FCM refuses (e.g. THIRD_PARTY_AUTH_ERROR
 #       when the Firebase project has no APNs key), the Admin SDK retries and t3 grows; t3b does not
 #   t4  the push reached the device: with TT_LAT_SIMULADOR=1, the booted iOS simulator's
-#       notification log (only meaningful with fcm and the app's real token registered)
+#       notification log; with TT_LAT_ANDROID=1, the Android device's log (`adb logcat -v epoch`),
+#       moved onto this machine's clock with the offset measured by
+#       scripts/latencia-e2e/desfase_adb.py before and after the series (only meaningful with fcm
+#       and the app's real token registered)
 #
 # After each fall the alert is attended through the API, so no escalation push follows. Results:
 # $WORK/mediciones.csv (one row per video) and $WORK/resumen.md (median, IQR, min–max per stage).
@@ -37,6 +40,8 @@
 #   TT_LAT_ESPERAR_APP=1    instead, wait up to 15 min for the mobile app to sign in as the demo
 #                           account (DEMO_CORREO / DEMO_CONTRASENA) and register its own token
 #   TT_LAT_SIMULADOR=1      record the booted iOS simulator's notification log (t4)
+#   TT_LAT_ANDROID=1        record the log of the device adb is connected to (an emulator or a test
+#                           phone with the app signed in as the demo account) and its clock offset (t4)
 #   TT_E2E_SIN_BUILD=1      reuse build/libs/*.jar instead of running `./gradlew bootJar`
 #   TT_E2E_PUERTO_API (18080), TT_POSTGRES_PUERTO (15433), TT_FLOCI_PUERTO (14567),
 #   TT_MEDIAMTX_PUERTO_RTSP/_HLS/_WEBRTC/_ICE/_API (18555/18898/18899/18199/19998)
@@ -68,7 +73,7 @@ AQUI="$API_REPO/scripts/latencia-e2e"
 export DEMO_CORREO="${DEMO_CORREO:-carmen@tetengo.test}"
 export DEMO_CONTRASENA="${DEMO_CONTRASENA:-TeTengo-demo-2026}"
 
-API_PID="" AGENTE_PID="" SIM_PID=""
+API_PID="" AGENTE_PID="" SIM_PID="" ADB_PID=""
 INICIO=$SECONDS
 log() { printf '[latencia %4ds] %s\n' $((SECONDS - INICIO)) "$*"; }
 falla() {
@@ -89,6 +94,7 @@ limpiar() {
   trap - EXIT INT TERM
   detener "$AGENTE_PID" 10
   detener "$SIM_PID" 5
+  detener "$ADB_PID" 5
   detener "$API_PID" 15
   docker compose down -v --remove-orphans >"$WORK/compose-down.log" 2>&1 || true
   log "stack stopped; logs and results in $WORK (exit $codigo)"
@@ -246,6 +252,16 @@ if [ "${TT_LAT_SIMULADOR:-}" = 1 ]; then
   SIM_PID=$!
   log "recording the iOS simulator's notification log"
 fi
+if [ "${TT_LAT_ANDROID:-}" = 1 ]; then
+  command -v adb >/dev/null || falla "TT_LAT_ANDROID=1 needs adb"
+  python3 "$AQUI/desfase_adb.py" "$WORK/android-desfase-antes.csv" | tee "$WORK/android-desfase-antes.txt"
+  # The Firebase SDK's own lines (receipt in the app's process) and the system's notification lines.
+  adb shell setprop log.tag.FirebaseMessaging VERBOSE >/dev/null 2>&1 || true
+  # stdin from /dev/null: with the script started from a detached shell, adb logcat stopped early.
+  adb logcat -v epoch,usec -b main,system,events >"$WORK/android.log" 2>&1 </dev/null &
+  ADB_PID=$!
+  log "recording the Android device's log"
+fi
 
 # ---------------------------------------------------------------- 4. one fall per agent run
 atender_activas() {
@@ -295,4 +311,9 @@ done <"$WORK/clips.tsv"
 sleep 5
 detener "$SIM_PID" 5
 SIM_PID=""
+if [ -n "$ADB_PID" ]; then
+  detener "$ADB_PID" 5
+  ADB_PID=""
+  python3 "$AQUI/desfase_adb.py" "$WORK/android-desfase-despues.csv" | tee "$WORK/android-desfase-despues.txt"
+fi
 python3 "$AQUI/analizar.py" "$WORK" | tee "$WORK/resumen.md"
