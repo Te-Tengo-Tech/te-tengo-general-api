@@ -19,6 +19,8 @@
 #                                                               waits for the approval and the camera)
 #   scripts/latencia-e2e/medir_produccion.sh serie [video ...]  the series (default fall-01 … fall-30);
 #                                                               links first if needed
+#   scripts/latencia-e2e/medir_produccion.sh corte [video ...]  Case A: the household link fails while
+#                                                               falls are detected (default 10 falls from fall-10 on)
 #
 # Isolation: the agent's data, logs, configuration and credentials (a 0600 JSON file instead of the
 # macOS Keychain) live in TT_LAT_AGENTE (default ~/.tetengo-latencia-produccion), never in the real
@@ -40,6 +42,25 @@
 #   TT_LAT_SOSTENER        seconds the last frame is held (default 25; < 30 s: no `caida_confirmada`)
 #   TT_LAT_PERMITIR_WIFI=1 do not require mobile data with Wi-Fi off
 #   ANDROID_SERIAL         the phone, when adb sees more than one device
+#   TT_LAT_SIN_TELEFONO=1  «comprobar» and «corte» without the phone (no adb, no t4/t4n): dry runs
+#
+# «corte» (Case A, reliability): one agent process plays all the falls from one concatenated clip
+# (preparar_clip_corte.py) with HTTPS_PROXY/HTTP_PROXY pointing to proxy_corte.py, a local CONNECT
+# proxy that the script switches to «corte» (outage: new connections blackholed, open tunnels reset)
+# for TT_CORTE_DURACION s, starting TT_CORTE_ADELANTO s before the onset of fall TT_CORTE_DESDE, then
+# back to «paso». No macOS setting changes. Analysis: analizar_corte.py (corte.csv, resumen.md).
+#   TT_CORTE_DURACION      outage seconds (default 90; ≥ ~90 s the API may also push «Cámara
+#                          desconectada»: 3 missed 30 s heartbeats)
+#   TT_CORTE_DESDE         first fall inside the outage (default 3)
+#   TT_CORTE_ADELANTO      the outage starts this many seconds before that fall's onset (default 5)
+#   TT_CORTE_PREVIA        seconds standing before each fall (default 15)
+#   TT_CORTE_SOSTENER      seconds the lying frame is held after each fall (default 15, < 30)
+#   TT_CORTE_COLA          seconds standing after the last fall, for the queue to drain (default 150)
+#   TT_CORTE_NUEVAS        agujero (default: no answer) | rechazar (reset at once): new connections
+#   TT_CORTE_EXISTENTES    cortar (default: reset) | congelar (stop relaying): open tunnels
+#   TT_CORTE_N             falls when no videos are given (default 10, from fall-10 on; a fall the
+#                          offline replay of the clip, simular_clip_corte.py, misses is replaced)
+#   TT_CORTE_SIN_SIMULAR=1 skip that offline replay
 set -euo pipefail
 ESTE="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 cd "$(dirname "$0")/../.."
@@ -60,8 +81,8 @@ export PATH="$PATH:${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools"
 
 MODO="${1:-}"
 [ $# -gt 0 ] && shift
-case "$MODO" in comprobar | vincular | serie) ;; *)
-  sed -n '16,21p' "$ESTE"
+case "$MODO" in comprobar | vincular | serie | corte) ;; *)
+  sed -n '16,23p' "$ESTE"
   exit 2
   ;;
 esac
@@ -69,7 +90,8 @@ esac
 WORK="${TT_LAT_DIR:-$(mktemp -d -t tt-latencia-prod.XXXXXX)}"
 mkdir -p "$WORK/corridas"
 WORK="$(cd "$WORK" && pwd)"
-AGENTE_PID="" ADB_PID=""
+AGENTE_PID="" ADB_PID="" PROXY_PID="" LSOF_PID=""
+SIN_TELEFONO="${TT_LAT_SIN_TELEFONO:-}"
 INICIO=$SECONDS
 log() { printf '[latencia-prod %4ds] %s\n' $((SECONDS - INICIO)) "$*"; }
 falla() {
@@ -88,6 +110,9 @@ limpiar() {
   trap - EXIT INT TERM
   detener "$AGENTE_PID" 15
   detener "$ADB_PID" 5
+  detener "${PROXY_PID:-}" 5
+  detener "${RED_PID:-}" 2
+  detener "${LSOF_PID:-}" 2
   log "results and logs in $WORK (exit $codigo)"
   exit "$codigo"
 }
@@ -123,7 +148,7 @@ esperar() { # seconds command...
 }
 
 # ---------------------------------------------------------------- 0. requirements and context
-for herramienta in adb jq curl python3; do
+for herramienta in $([ "$SIN_TELEFONO" = 1 ] || echo adb) jq curl python3; do
   command -v "$herramienta" >/dev/null || falla "requirement: $herramienta is not installed"
 done
 [ -x "$PY" ] || falla "the desktop agent has no .venv (cd $ESCRITORIO && uv sync)"
@@ -181,8 +206,12 @@ comprobar_telefono() {
 
 # ---------------------------------------------------------------- comprobar
 if [ "$MODO" = comprobar ]; then
-  comprobar_telefono
-  python3 "$AQUI/desfase_adb.py" "$WORK/android-desfase.csv" 10
+  if [ "$SIN_TELEFONO" = 1 ]; then
+    log "TT_LAT_SIN_TELEFONO=1: phone checks skipped"
+  else
+    comprobar_telefono
+    python3 "$AQUI/desfase_adb.py" "$WORK/android-desfase.csv" 10
+  fi
   if vinculada; then log "this isolated PC is linked (credentials in $TT_LAT_LLAVERO)"; else log "this isolated PC is NOT linked yet: run «vincular»"; fi
   exit 0
 fi
@@ -230,6 +259,13 @@ if [ "$MODO" = vincular ]; then
   vincular_pc
   log "ready. Start the series within a minute or so (or the app will say «Cámara desconectada» once):"
   log "  $0 serie"
+  exit 0
+fi
+
+# ---------------------------------------------------------------- corte
+if [ "$MODO" = corte ]; then
+  # shellcheck source=corte.sh
+  source "$AQUI/corte.sh"
   exit 0
 fi
 
