@@ -4,6 +4,9 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Alerts sent while an Android phone was offline were lost**: every Android push was an FCM notification message, and FCM keeps only the latest one per app while the phone is offline (it ignores `collapse_key` for them). Measured on 2026-11-15 in production: after each reconnection only the latest notice arrived, and 3 of 5 fall alerts reached the phone only through escalation 5 min later. `POST /api/dispositivos` now takes an optional `avisoEnLaApp: boolean` (absent = `false`, stored as sent on every registration; `Dispositivo` returns it; migration V33). Android devices registered with `true` get **data-only** FCM messages (no `notification` blocks, high priority, 1 h TTL) whose `data` adds `titulo`, `cuerpo`, `grupo` and, for alert notices, `canal` = `alertas_caida`, so the app draws the notification itself; FCM and SNS alike. Every other device gets the same message as before (ADR 0014, API contract §7)
+
 ## [0.6.0] - 2026-10-31
 
 ### Added

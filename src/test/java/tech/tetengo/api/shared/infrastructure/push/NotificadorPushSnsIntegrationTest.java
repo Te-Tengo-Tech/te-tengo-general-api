@@ -153,6 +153,36 @@ class NotificadorPushSnsIntegrationTest {
     }
 
     @Test
+    void unAndroidQueDibujaElAvisoRecibeSoloDatosYLosDemasElMensajeCompleto() throws Exception {
+        Resultado resultado = notificador.enviar(
+                List.of(
+                        new Destino("fcm-datos", Plataforma.ANDROID, null, true),
+                        new Destino("fcm-clasico", Plataforma.ANDROID)),
+                CAIDA);
+
+        assertThat(resultado.aceptados()).isEqualTo(2);
+        JsonNode datos = JSON.readTree(capturaDe("fcm-datos").path("Payload").asString())
+                .path("fcmV1Message")
+                .path("message");
+        assertThat(datos.has("notification")).isFalse();
+        assertThat(datos.has("apns")).isFalse();
+        assertThat(datos.path("android").has("notification")).isFalse();
+        assertThat(datos.path("android").path("priority").asString()).isEqualTo("high");
+        assertThat(datos.path("android").path("ttl").asString()).isEqualTo("3600s");
+        assertThat(datos.path("data").path("titulo").asString()).isEqualTo("Posible caída de Rosa en la Sala");
+        assertThat(datos.path("data").path("grupo").asString()).isEqualTo(ALERTA.toString());
+        assertThat(datos.path("data").path("canal").asString()).isEqualTo("alertas_caida");
+        assertThat(datos.path("data").path("tipo").asString()).isEqualTo("ALERTA_CAIDA");
+
+        JsonNode clasico = JSON.readTree(
+                        capturaDe("fcm-clasico").path("Payload").asString())
+                .path("fcmV1Message")
+                .path("message");
+        assertThat(clasico.path("notification").path("title").asString()).isEqualTo("Posible caída de Rosa en la Sala");
+        assertThat(clasico.path("data").has("titulo")).isFalse();
+    }
+
+    @Test
     void sinAplicacionWebLosDispositivosWebSeOmitenSinContarComoEntregados() throws Exception {
         Resultado resultado = notificador.enviar(
                 List.of(new Destino("fcm-ivan", Plataforma.ANDROID), new Destino("web-ivan", Plataforma.WEB)), CAIDA);
