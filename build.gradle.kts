@@ -2,14 +2,14 @@ plugins {
   java
   id("org.springframework.boot") version "4.1.2"
   id("io.spring.dependency-management") version "1.1.7"
-  id("com.diffplug.spotless") version "8.10.4"
+  id("com.diffplug.spotless") version "8.11.0"
   id("org.owasp.dependencycheck") version "13.0.0"
   jacoco
 }
 
 group = "tech.tetengo"
 
-version = "0.6.0"
+version = "0.8.0"
 
 description = "Backend API del sistema Te Tengo"
 

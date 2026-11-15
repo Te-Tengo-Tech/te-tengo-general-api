@@ -30,5 +30,13 @@ public interface AccesoVistaEnVivoRepository {
     /** Households with sessions that have not ended: a native query, only for the session end job. */
     List<UUID> hogaresConSesionesAbiertas();
 
+    /**
+     * Who opened a session and on which camera, whatever its household: a native query, only for the
+     * denied access log (ADR 0015), when a member names a session that is not theirs.
+     */
+    Optional<SesionDeCualquierHogar> deCualquierHogar(UUID sesionId);
+
     record SesionDeToken(UUID sesionId, UUID hogarId) {}
+
+    record SesionDeCualquierHogar(UUID camaraId, UUID usuarioId) {}
 }

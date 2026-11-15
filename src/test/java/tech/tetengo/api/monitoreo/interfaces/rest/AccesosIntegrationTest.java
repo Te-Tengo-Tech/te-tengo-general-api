@@ -1,6 +1,8 @@
 package tech.tetengo.api.monitoreo.interfaces.rest;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -24,7 +26,7 @@ import tech.tetengo.api.support.ApiDePrueba;
 import tech.tetengo.api.support.DatosDePrueba;
 import tech.tetengo.api.support.JwtDePrueba;
 
-/** US-24: live view access log. */
+/** US-24: live view access log, and the denied attempts (ADR 0015). */
 class AccesosIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
@@ -105,6 +107,84 @@ class AccesosIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$[1].inicio").value(primero.toString()))
                 .andExpect(jsonPath("$[1].duracionSegundos").value(90))
                 .andExpect(jsonPath("$[1].desdeAlerta").value(false));
+    }
+
+    @Test
+    void sinIntentosDenegadosLaListaEstaVacia() throws Exception {
+        mvc.perform(get("/api/accesos-vista-en-vivo/denegados").header("Authorization", bearer(tokenBeto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
+    void losIntentosDenegadosSobreLasCamarasDelHogarDelMasRecienteAlMasAntiguo() throws Exception {
+        String carla = ApiDePrueba.titularConHogar(mvc, "carla@correo.pe", "Carla");
+        String tokenCarla = campo(carla, "$.tokenAcceso");
+
+        Instant primero = reloj.instant();
+        jdbc.update("update estados_de_captura set consentimiento_vigente = false");
+        mvc.perform(post("/api/camaras/" + camara + "/vista-en-vivo")
+                        .header("Authorization", bearer(tokenBeto))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isConflict());
+        jdbc.update("update estados_de_captura set consentimiento_vigente = true");
+
+        reloj.avanzar(Duration.ofMinutes(1));
+        Instant segundo = reloj.instant();
+        mvc.perform(post("/api/camaras/" + camara + "/vista-en-vivo")
+                        .header("Authorization", bearer(tokenCarla))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isNotFound());
+
+        reloj.avanzar(Duration.ofMinutes(1));
+        Instant tercero = reloj.instant();
+        mvc.perform(post("/api/interno/mediamtx/autorizar?secreto=secreto-de-prueba")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"read\",\"path\":\"camaras/%s\",\"protocol\":\"webrtc\",\"query\":\"\"}"
+                                .formatted(camara)))
+                .andExpect(status().isUnauthorized());
+        // A camera that exists nowhere is counted, but no household lists it.
+        mvc.perform(post("/api/camaras/" + UUID.randomUUID() + "/vista-en-vivo")
+                        .header("Authorization", bearer(tokenCarla))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isNotFound());
+        assertThat(DatosDePrueba.motivosDenegados(jdbc))
+                .containsExactly("SIN_CONSENTIMIENTO", "CAMARA_NO_ENCONTRADA", "SIN_TOKEN", "CAMARA_NO_ENCONTRADA");
+
+        mvc.perform(get("/api/accesos-vista-en-vivo/denegados").header("Authorization", bearer(tokenAna)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$[0].momento").value(tercero.toString()))
+                .andExpect(jsonPath("$[0].canal").value("MEDIAMTX"))
+                .andExpect(jsonPath("$[0].motivo").value("SIN_TOKEN"))
+                .andExpect(jsonPath("$[0].accion").value("read"))
+                .andExpect(jsonPath("$[0].protocolo").value("webrtc"))
+                .andExpect(jsonPath("$[0].camaraId").value(camara))
+                .andExpect(jsonPath("$[0].nombreHabitacion").value("Sala"))
+                .andExpect(jsonPath("$[0].miembroDelHogar").value(false))
+                .andExpect(jsonPath("$[0].usuario").value(nullValue()))
+                // Carla, of another household: never identified.
+                .andExpect(jsonPath("$[1].momento").value(segundo.toString()))
+                .andExpect(jsonPath("$[1].canal").value("API"))
+                .andExpect(jsonPath("$[1].motivo").value("CAMARA_NO_ENCONTRADA"))
+                .andExpect(jsonPath("$[1].accion").value(nullValue()))
+                .andExpect(jsonPath("$[1].camaraId").value(camara))
+                .andExpect(jsonPath("$[1].miembroDelHogar").value(false))
+                .andExpect(jsonPath("$[1].usuario").value(nullValue()))
+                // Beto, a member: named.
+                .andExpect(jsonPath("$[2].momento").value(primero.toString()))
+                .andExpect(jsonPath("$[2].motivo").value("SIN_CONSENTIMIENTO"))
+                .andExpect(jsonPath("$[2].miembroDelHogar").value(true))
+                .andExpect(jsonPath("$[2].usuario.id").value(beto.toString()))
+                .andExpect(jsonPath("$[2].usuario.nombre").value("Beto"));
+
+        // Carla's household has no denials on its own cameras.
+        mvc.perform(get("/api/accesos-vista-en-vivo/denegados").header("Authorization", bearer(tokenCarla)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
     }
 
     @Test

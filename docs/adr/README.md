@@ -18,5 +18,6 @@ Michael Nygard's format: context, decision, status and consequences (Nygard, 201
 | [0012](0012-published-versions-manifests.md) | Published app versions as JSON manifests the release workflows write next to the downloads; `GET /api/versiones` reads them with a cache | Proposed (change request pending) |
 | [0013](0013-azure-blob-storage.md) | Object storage on Azure Blob Storage (SAS URLs, managed identity), chosen by configuration next to S3 / R2 | Accepted |
 | [0014](0014-android-data-only-pushes.md) | Android pushes as data-only FCM messages, opt-in per device (`avisoEnLaApp`), so notices sent while the phone is offline do not collapse | Accepted |
+| [0015](0015-denied-live-view-attempts-log.md) | Denied live view attempts recorded in an independent transaction (`REQUIRES_NEW`), filed under the camera's household | Accepted |
 
 Nygard, M. (2011, November 15). *Documenting architecture decisions*. Cognitect. https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions

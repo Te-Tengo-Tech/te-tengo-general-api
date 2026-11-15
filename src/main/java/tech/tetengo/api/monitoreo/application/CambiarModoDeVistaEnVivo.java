@@ -21,15 +21,24 @@ public class CambiarModoDeVistaEnVivo {
 
     private final AccesoVistaEnVivoRepository accesos;
     private final Transmisiones transmisiones;
+    private final RegistroDeAccesosDenegados denegados;
     private final Clock reloj;
 
-    public CambiarModoDeVistaEnVivo(AccesoVistaEnVivoRepository accesos, Transmisiones transmisiones, Clock reloj) {
+    public CambiarModoDeVistaEnVivo(
+            AccesoVistaEnVivoRepository accesos,
+            Transmisiones transmisiones,
+            RegistroDeAccesosDenegados denegados,
+            Clock reloj) {
         this.accesos = accesos;
         this.transmisiones = transmisiones;
+        this.denegados = denegados;
         this.reloj = reloj;
     }
 
-    /** Only the session's viewer, while it is open; returns the stream's mode. */
+    /**
+     * Only the session's viewer, while it is open; returns the stream's mode. Another member's or another
+     * household's session is recorded as a denial (ADR 0015).
+     */
     @Transactional
     public ModoDeVista ejecutar(UUID sesionId, UUID usuarioId, String modo) {
         ModoDeVista pedido = modo(modo);
@@ -37,7 +46,10 @@ public class CambiarModoDeVistaEnVivo {
         AccesoVistaEnVivo sesion = accesos.buscar(sesionId)
                 .filter(acceso -> acceso.getUsuarioId().equals(usuarioId))
                 .filter(acceso -> acceso.admiteLectura(ahora))
-                .orElseThrow(() -> new ErrorDeNegocio(MonitoreoError.SESION_NO_ENCONTRADA));
+                .orElseThrow(() -> {
+                    denegados.siLaSesionEsAjena(sesionId, usuarioId);
+                    return new ErrorDeNegocio(MonitoreoError.SESION_NO_ENCONTRADA);
+                });
         transmisiones.bloquear(sesion.getCamaraId());
         return transmisiones.asegurar(sesion.getCamaraId(), pedido, ahora);
     }

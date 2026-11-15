@@ -25,6 +25,10 @@ interface CamaraJpaRepository extends JpaRepository<Camara, UUID> {
             nativeQuery = true)
     List<Object[]> conPausaVencida(Instant ahora);
 
+    /** Native, so not filtered by household: only for the denied access log of live view. */
+    @Query(value = "select hogar_id from camaras where id = :camaraId", nativeQuery = true)
+    List<UUID> hogarDe(UUID camaraId);
+
     Optional<Camara> findByIdAndRetiradaEnIsNull(UUID id);
 
     List<Camara> findByRetiradaEnIsNull(Sort orden);

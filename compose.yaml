@@ -19,7 +19,7 @@ services:
   # http://localhost:4566, which the household agent and the iOS simulator must reach. Sent
   # e-mails: http://localhost:4566/_aws/ses; pushes: http://localhost:4566/_aws/sns/push-notifications.
   floci:
-    image: floci/floci:2.3.0
+    image: floci/floci:2.4.0
     environment:
       # Keep the clips across restarts: in-memory reads, flushed to the volume.
       FLOCI_STORAGE_MODE: hybrid

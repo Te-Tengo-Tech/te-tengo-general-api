@@ -4,6 +4,16 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-15
+
+### Added
+- **Denied live view attempts log** (ADR 0015): every refused attempt to reach a camera's live view is recorded in `accesos_denegados` (migration V34), filed under the camera's household, in its own transaction (`REQUIRES_NEW`) so it survives the rollback of the refused request. From the API: `CAMARA_NO_ENCONTRADA` (a camera of another household or of none), `SIN_CONSENTIMIENTO` and `SESION_AJENA` (changing or closing someone else's session), on opening, preparing and previewing; a paused or disconnected camera is not a denial. From MediaMTX's hook: every `401` with its reason (`ORIGEN_EXTERNO`, `SECRETO_INVALIDO`, `ACCION_NO_PERMITIDA`, `PROTOCOLO_NO_PERMITIDO`, `RUTA_INVALIDA`, `CLAVE_DE_PUBLICACION_INVALIDA`, `PUBLICACION_SIN_VISTA_PREVIA`, `SIN_TOKEN`, `TOKEN_INVALIDO`, `TOKEN_DE_OTRA_CAMARA`, `SESION_TERMINADA`, `LECTURA_SIN_VISTA_PREVIA`, `CAPTURA_NO_PERMITIDA`), except an RTSP publish's first request without credentials. No token, key or secret is stored. `GET /api/accesos-vista-en-vivo/denegados` (any member) lists the household's denials, newest first: `momento`, `canal`, `motivo`, `accion`, `protocolo`, `camaraId`, `nombreHabitacion`, `miembroDelHogar` and `usuario` (only for a member; users of other households are never identified). Answers are unchanged (API contract §4)
+
+## [0.7.0] - 2026-11-15
+
+### Changed
+- **Movements consent text version `3`** (`TT_MOVIMIENTOS_VERSION_TEXTO`, default now `3`): the text names Microsoft Azure (Azure Blob Storage, Chile Central) as the cloud store instead of Cloudflare R2. Registering a consent with version `2` (or `1`) answers `422 VERSION_DE_TEXTO_INVALIDA`; consents already given with version `2` or `1` keep their version and stay in force (no re-consent)
+
 ### Fixed
 - **Alerts sent while an Android phone was offline were lost**: every Android push was an FCM notification message, and FCM keeps only the latest one per app while the phone is offline (it ignores `collapse_key` for them). Measured on 2026-11-15 in production: after each reconnection only the latest notice arrived, and 3 of 5 fall alerts reached the phone only through escalation 5 min later. `POST /api/dispositivos` now takes an optional `avisoEnLaApp: boolean` (absent = `false`, stored as sent on every registration; `Dispositivo` returns it; migration V33). Android devices registered with `true` get **data-only** FCM messages (no `notification` blocks, high priority, 1 h TTL) whose `data` adds `titulo`, `cuerpo`, `grupo` and, for alert notices, `canal` = `alertas_caida`, so the app draws the notification itself; FCM and SNS alike. Every other device gets the same message as before (ADR 0014, API contract §7)
 

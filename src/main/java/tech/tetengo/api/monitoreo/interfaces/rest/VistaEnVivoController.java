@@ -83,7 +83,7 @@ class VistaEnVivoController {
     @PostMapping(path = API + "/vista-en-vivo/preparar", version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void preparar(@RequestBody(required = false) PrepararVistaEnVivoRequest pedido) {
-        prepararVistaEnVivo.ejecutar(pedido == null ? null : pedido.camaraId());
+        prepararVistaEnVivo.ejecutar(pedido == null ? null : pedido.camaraId(), UsuarioActual.id());
     }
 
     @Operation(

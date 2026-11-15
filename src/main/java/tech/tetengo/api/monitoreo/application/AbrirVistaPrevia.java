@@ -12,6 +12,7 @@ import tech.tetengo.api.monitoreo.application.port.AccesoVistaEnVivoRepository;
 import tech.tetengo.api.monitoreo.domain.MonitoreoError;
 import tech.tetengo.api.monitoreo.domain.model.AccesoVistaEnVivo;
 import tech.tetengo.api.monitoreo.domain.model.ModoDeVista;
+import tech.tetengo.api.monitoreo.domain.model.MotivoDeDenegacion;
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 import tech.tetengo.api.shared.infrastructure.security.Secretos;
 
@@ -21,7 +22,8 @@ import tech.tetengo.api.shared.infrastructure.security.Secretos;
  * with the same rules (US-23: connected, not paused, the consent with its live view clause, CA-05.2),
  * the same playback (MediaMTX path {@code camaras/<camaraId>}; the webcam has its camera id since the PC
  * reported it), never recorded, and logged in the live view access log (US-24) as a preview. It lasts 2
- * minutes at most [implementation choice]. A webcam not in use publishes through its PC's channel.
+ * minutes at most [implementation choice]. A webcam not in use publishes through its PC's channel. A
+ * webcam outside the member's household and one without consent are recorded as denials (ADR 0015).
  */
 @Service
 public class AbrirVistaPrevia {
@@ -30,6 +32,7 @@ public class AbrirVistaPrevia {
     private final AccesoVistaEnVivoRepository accesos;
     private final Transmisiones transmisiones;
     private final PropiedadesDeVistaEnVivo propiedades;
+    private final RegistroDeAccesosDenegados denegados;
     private final Clock reloj;
 
     public AbrirVistaPrevia(
@@ -37,18 +40,22 @@ public class AbrirVistaPrevia {
             AccesoVistaEnVivoRepository accesos,
             Transmisiones transmisiones,
             PropiedadesDeVistaEnVivo propiedades,
+            RegistroDeAccesosDenegados denegados,
             Clock reloj) {
         this.camaras = camaras;
         this.accesos = accesos;
         this.transmisiones = transmisiones;
         this.propiedades = propiedades;
+        this.denegados = denegados;
         this.reloj = reloj;
     }
 
     @Transactional
     public SesionDeVistaEnVivo ejecutar(UUID camaraId, UUID usuarioId) {
-        CamaraDetectada camara = camaras.buscarDetectada(camaraId)
-                .orElseThrow(() -> new ErrorDeNegocio(MonitoreoError.CAMARA_NO_ENCONTRADA));
+        CamaraDetectada camara = camaras.buscarDetectada(camaraId).orElseThrow(() -> {
+            denegados.enApi(MotivoDeDenegacion.CAMARA_NO_ENCONTRADA, camaraId, usuarioId);
+            return new ErrorDeNegocio(MonitoreoError.CAMARA_NO_ENCONTRADA);
+        });
         if (!camara.conectada()) {
             throw new ErrorDeNegocio(MonitoreoError.CAMARA_DESCONECTADA);
         }
@@ -56,6 +63,7 @@ public class AbrirVistaPrevia {
             throw new ErrorDeNegocio(MonitoreoError.CAMARA_EN_PAUSA, Map.of("pausadaHasta", camara.pausadaHasta()));
         }
         if (!camara.capturaPermitida()) {
+            denegados.enApi(MotivoDeDenegacion.SIN_CONSENTIMIENTO, camaraId, usuarioId);
             throw new ErrorDeNegocio(MonitoreoError.SIN_CONSENTIMIENTO);
         }
         Instant ahora = reloj.instant();

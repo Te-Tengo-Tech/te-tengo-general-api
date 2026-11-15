@@ -111,7 +111,7 @@ class DatosDeMovimientoIntegrationTest extends AbstractIntegrationTest {
         mvc.perform(get("/api/hogar/consentimiento-movimientos").header("Authorization", bearer(otro)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.vigente").value(false))
-                .andExpect(jsonPath("$.versionTextoVigente").value("2"))
+                .andExpect(jsonPath("$.versionTextoVigente").value("3"))
                 .andExpect(jsonPath("$.constancia").doesNotExist());
     }
 
@@ -123,14 +123,14 @@ class DatosDeMovimientoIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.constancia.otorgadoPor").value("Rosa Huamán"))
                 .andExpect(jsonPath("$.constancia.representante").value(false))
                 .andExpect(jsonPath("$.constancia.registradoPor.nombre").value("Carmen"))
-                .andExpect(jsonPath("$.constancia.versionTexto").value("2"))
+                .andExpect(jsonPath("$.constancia.versionTexto").value("3"))
                 .andExpect(jsonPath("$.constancia.otorgadoEn").exists());
         mvc.perform(
                         post("/api/hogar/consentimiento-movimientos")
                                 .header("Authorization", bearer(titular))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(
-                                        "{\"otorgadoPor\":\"Rosa\",\"representante\":false,\"aceptado\":false,\"versionTexto\":\"2\"}"))
+                                        "{\"otorgadoPor\":\"Rosa\",\"representante\":false,\"aceptado\":false,\"versionTexto\":\"3\"}"))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.codigo").value("CONSENTIMIENTO_NO_ACEPTADO"));
         mvc.perform(
@@ -147,6 +147,13 @@ class DatosDeMovimientoIntegrationTest extends AbstractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(
                                         "{\"otorgadoPor\":\"Rosa\",\"representante\":false,\"aceptado\":true,\"versionTexto\":\"1\"}"))
+                .andExpect(jsonPath("$.codigo").value("VERSION_DE_TEXTO_INVALIDA"));
+        mvc.perform(
+                        post("/api/hogar/consentimiento-movimientos")
+                                .header("Authorization", bearer(titular))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"otorgadoPor\":\"Rosa\",\"representante\":false,\"aceptado\":true,\"versionTexto\":\"2\"}"))
                 .andExpect(jsonPath("$.codigo").value("VERSION_DE_TEXTO_INVALIDA"));
 
         UUID invitado = UUID.randomUUID();
@@ -169,9 +176,25 @@ class DatosDeMovimientoIntegrationTest extends AbstractIntegrationTest {
         mvc.perform(get("/api/hogar/consentimiento-movimientos").header("Authorization", bearer(titular)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.vigente").value(true))
-                .andExpect(jsonPath("$.versionTextoVigente").value("2"))
+                .andExpect(jsonPath("$.versionTextoVigente").value("3"))
                 .andExpect(jsonPath("$.constancia.versionTexto").value("1"));
         retencion(mvc, titular, 30).andExpect(status().isOk());
+    }
+
+    @Test
+    void ca35_2_unConsentimientoDeLaVersionQueNombrabaCloudflareR2SigueVigente() throws Exception {
+        // Given with text version 2 (Cloudflare R2), before version 3 (Microsoft Azure): it keeps its version.
+        jdbc.update("""
+                insert into consentimientos_de_movimientos
+                    (id, hogar_id, otorgado_en, otorgado_por, representante, registrado_por, version_texto,
+                     creado_en, actualizado_en)
+                values (?, ?, now(), 'Rosa Huamán', false, ?, '2', now(), now())
+                """, UUID.randomUUID(), hogar, UUID.fromString(campo(sesion, "$.usuario.id")));
+        mvc.perform(get("/api/hogar/consentimiento-movimientos").header("Authorization", bearer(titular)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vigente").value(true))
+                .andExpect(jsonPath("$.versionTextoVigente").value("3"))
+                .andExpect(jsonPath("$.constancia.versionTexto").value("2"));
     }
 
     @Test
