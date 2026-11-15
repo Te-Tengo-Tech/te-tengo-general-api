@@ -30,7 +30,7 @@
 #   TT_E2E_PROYECTO     compose project name               (default: tt-e2e)
 #   TT_E2E_DIR          work directory for logs and files  (default: a new temporary directory)
 #   TT_E2E_ESPERA       seconds each assertion may wait    (default: 120)
-#   TT_E2E_SIN_BUILD=1  reuse build/libs/*.jar instead of running `./gradlew bootJar`
+#   TT_E2E_SIN_BUILD=1  reuse the current version's jar in build/libs instead of running `./gradlew bootJar`
 #   TT_E2E_IMAGEN       run the API from this container image instead of the jar (no Gradle build),
 #                       e.g. ghcr.io/te-tengo-tech/te-tengo-general-api@sha256:... (the Release
 #                       workflow's verification). The container uses the host network, so it sees the stack
@@ -242,8 +242,14 @@ else
     log "building the API (./gradlew bootJar)"
     ./gradlew bootJar --quiet >"$WORK/gradle.log" 2>&1 || falla "API build (see $WORK/gradle.log)"
   fi
-  JAR="$(find build/libs -name '*.jar' ! -name '*-plain.jar' | head -n1)"
-  [ -n "$JAR" ] || falla "API jar not found in build/libs"
+  # The jar of the version in build.gradle.kts, not whatever `find` lists first: build/libs keeps
+  # the jars of earlier versions, and with TT_E2E_SIN_BUILD=1 a stale one could be run.
+  NOMBRE_API="$(sed -n 's/^rootProject\.name = "\(.*\)"$/\1/p' settings.gradle.kts)"
+  VERSION_API="$(sed -n 's/^version = "\(.*\)"$/\1/p' build.gradle.kts)"
+  [ -n "$NOMBRE_API" ] && [ -n "$VERSION_API" ] \
+    || falla "could not read the project name or version from the Gradle files"
+  JAR="build/libs/$NOMBRE_API-$VERSION_API.jar"
+  [ -f "$JAR" ] || falla "API jar $JAR not found (run without TT_E2E_SIN_BUILD=1 to build it)"
 
   log "starting the API on :$PUERTO_API (profile local, push provider registro)"
   env "${API_ENTORNO[@]}" \
