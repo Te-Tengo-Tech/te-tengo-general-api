@@ -28,11 +28,23 @@ public interface NotificadorPush {
     /**
      * A device. {@code referencia} is the provider's own address of the device, stored with it (the
      * SNS platform endpoint ARN); null when the provider has none yet or needs none.
+     * {@code avisoEnLaApp}: the app registered that it draws the notice itself (API contract §7), so an
+     * Android device gets a data-only message that FCM never collapses while the phone is offline
+     * (ADR 0014). Ignored on iOS and the web.
      */
-    record Destino(String tokenPush, Plataforma plataforma, String referencia) {
+    record Destino(String tokenPush, Plataforma plataforma, String referencia, boolean avisoEnLaApp) {
+
+        public Destino(String tokenPush, Plataforma plataforma, String referencia) {
+            this(tokenPush, plataforma, referencia, false);
+        }
 
         public Destino(String tokenPush, Plataforma plataforma) {
             this(tokenPush, plataforma, null);
+        }
+
+        /** Whether the device gets a data-only message: an Android app that draws the notice itself. */
+        public boolean soloDatos() {
+            return avisoEnLaApp && plataforma == Plataforma.ANDROID;
         }
     }
 

@@ -23,7 +23,7 @@ public final class MovimientosApiDePrueba {
                         .header("Authorization", bearer(tokenTitular))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(
-                                "{\"otorgadoPor\":\"Rosa Huamán\",\"representante\":false,\"aceptado\":true,\"versionTexto\":\"2\"}"));
+                                "{\"otorgadoPor\":\"Rosa Huamán\",\"representante\":false,\"aceptado\":true,\"versionTexto\":\"3\"}"));
     }
 
     public static ResultActions retencion(MockMvc mvc, String tokenTitular, Integer dias) throws Exception {

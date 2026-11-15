@@ -30,7 +30,9 @@ import tools.jackson.databind.json.JsonMapper;
  * {@code APNS} / {@code APNS_SANDBOX}, with the same content as the other providers. Web devices
  * (the PWA's FCM web push tokens) need a web platform application, an FCM one whose {@code GCM}
  * payload carries the web push block; without it they are skipped with a warning and do not count
- * as delivered. Endpoints SNS reports as disabled are reported as invalid tokens. When SNS accepts
+ * as delivered. An Android device whose app draws the notice itself ({@link Destino#soloDatos()})
+ * gets a {@code GCM} payload with a data-only FCM message ({@link CargasPush#mensajeFcmSoloDatos}).
+ * Endpoints SNS reports as disabled are reported as invalid tokens. When SNS accepts
  * no device for any other reason, it throws {@link FallaDePush} so the notice is retried (CA-16.4).
  */
 class NotificadorPushSns implements NotificadorPush, AutoCloseable {
@@ -92,7 +94,9 @@ class NotificadorPushSns implements NotificadorPush, AutoCloseable {
 
     @Override
     public Resultado enviar(List<Destino> destinos, Aviso aviso) {
-        String mensaje = mensaje(ContenidoDelAviso.de(aviso), UUID.randomUUID().toString(), enlaceWeb);
+        ContenidoDelAviso contenido = ContenidoDelAviso.de(aviso);
+        String completo = mensaje(contenido, UUID.randomUUID().toString(), enlaceWeb);
+        String soloDatos = mensajeSoloDatos(contenido);
         int aceptados = 0;
         int sinAplicacion = 0;
         Set<String> invalidos = new HashSet<>();
@@ -103,6 +107,7 @@ class NotificadorPushSns implements NotificadorPush, AutoCloseable {
                 sinAplicacion++;
                 continue;
             }
+            String mensaje = destino.soloDatos() ? soloDatos : completo;
             try {
                 String endpoint = destino.referencia();
                 if (endpoint == null) {
@@ -189,6 +194,20 @@ class NotificadorPushSns implements NotificadorPush, AutoCloseable {
                         Map.of("message", CargasPush.mensajeFcm(contenido, enlaceWeb, Instant.now())))));
         porPlataforma.put("APNS", apns);
         porPlataforma.put("APNS_SANDBOX", apns);
+        return JSON.writeValueAsString(porPlataforma);
+    }
+
+    /**
+     * {@code MessageStructure=json} for an Android app that draws the notice itself: the {@code GCM}
+     * payload is a data-only FCM message.
+     */
+    static String mensajeSoloDatos(ContenidoDelAviso contenido) {
+        Map<String, String> porPlataforma = new LinkedHashMap<>();
+        porPlataforma.put("default", contenido.titulo() + ". " + contenido.cuerpo());
+        porPlataforma.put(
+                "GCM",
+                JSON.writeValueAsString(
+                        Map.of("fcmV1Message", Map.of("message", CargasPush.mensajeFcmSoloDatos(contenido)))));
         return JSON.writeValueAsString(porPlataforma);
     }
 
