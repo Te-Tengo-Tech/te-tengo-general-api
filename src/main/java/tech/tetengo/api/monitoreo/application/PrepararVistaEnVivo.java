@@ -16,7 +16,8 @@ import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
  * Live view v3: a member opened the camera screen, so a live view may start soon. The camera's agent gets
  * {@code {"preparar":true}} and warms up what stays on the PC; nothing is published and no session is
  * opened or recorded (US-24 records only opened sessions). The same rules as opening a session apply
- * (CA-23.3, CA-23.4, CA-05.2), so the app learns early that the camera cannot stream. Nothing is sent
+ * (CA-23.3, CA-23.4, CA-05.2), so the app learns early that the camera cannot stream, and the same
+ * denials are recorded (ADR 0015). Nothing is sent
  * while the camera already streams: the agent is publishing.
  */
 @Service
@@ -25,23 +26,34 @@ public class PrepararVistaEnVivo {
     private final CamarasDelHogar camaras;
     private final TransmisionEnVivoRepository transmisiones;
     private final CanalDelAgente agentes;
+    private final RegistroDeAccesosDenegados denegados;
     private final Clock reloj;
 
     public PrepararVistaEnVivo(
-            CamarasDelHogar camaras, TransmisionEnVivoRepository transmisiones, CanalDelAgente agentes, Clock reloj) {
+            CamarasDelHogar camaras,
+            TransmisionEnVivoRepository transmisiones,
+            CanalDelAgente agentes,
+            RegistroDeAccesosDenegados denegados,
+            Clock reloj) {
         this.camaras = camaras;
         this.transmisiones = transmisiones;
         this.agentes = agentes;
+        this.denegados = denegados;
         this.reloj = reloj;
     }
 
     @Transactional(readOnly = true)
-    public void ejecutar(UUID camaraId) {
+    public void ejecutar(UUID camaraId, UUID usuarioId) {
         if (camaraId == null) {
             throw new ErrorDeNegocio(
                     MonitoreoError.VALIDACION, Map.of("campos", Map.of("camaraId", "Indica la cámara.")));
         }
-        AbrirVistaEnVivo.verificarDisponible(camaras, AbrirVistaEnVivo.estado(camaras, camaraId), reloj.instant());
+        AbrirVistaEnVivo.verificarDisponible(
+                camaras,
+                denegados,
+                AbrirVistaEnVivo.estado(camaras, denegados, camaraId, usuarioId),
+                usuarioId,
+                reloj.instant());
         if (transmisiones.deCamara(camaraId).isEmpty()) {
             TrasConfirmar.ejecutar(() -> agentes.enviar(camaraId, new Preparar()));
         }

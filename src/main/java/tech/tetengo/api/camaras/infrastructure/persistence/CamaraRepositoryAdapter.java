@@ -66,6 +66,11 @@ class CamaraRepositoryAdapter implements CamaraRepository {
     }
 
     @Override
+    public Optional<UUID> hogarDe(UUID camaraId) {
+        return jpa.hogarDe(camaraId).stream().findFirst();
+    }
+
+    @Override
     public List<CamaraDeUnHogar> conPausaVencida(Instant ahora) {
         return jpa.conPausaVencida(ahora).stream()
                 .map(fila -> new CamaraDeUnHogar((UUID) fila[0], (UUID) fila[1]))

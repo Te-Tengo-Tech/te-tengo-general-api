@@ -47,6 +47,9 @@ public interface CamaraRepository {
     /** Paused cameras of every household whose pause is over: a native query, only for jobs. */
     List<CamaraDeUnHogar> conPausaVencida(Instant ahora);
 
+    /** The household of any camera, retired too: a native query, only for the denied access log. */
+    Optional<UUID> hogarDe(UUID camaraId);
+
     record CamaraDeUnHogar(UUID camaraId, UUID hogarId) {}
 
     /**

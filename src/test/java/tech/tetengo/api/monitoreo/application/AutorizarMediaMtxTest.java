@@ -2,6 +2,10 @@ package tech.tetengo.api.monitoreo.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,17 +20,20 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import tech.tetengo.api.camaras.CamarasDelHogar;
 import tech.tetengo.api.camaras.CamarasDelHogar.CamaraDelHogar;
+import tech.tetengo.api.camaras.CamarasDelHogar.CamaraDetectada;
 import tech.tetengo.api.monitoreo.application.port.AccesoVistaEnVivoRepository;
 import tech.tetengo.api.monitoreo.application.port.AccesoVistaEnVivoRepository.SesionDeToken;
 import tech.tetengo.api.monitoreo.application.port.TransmisionEnVivoRepository;
 import tech.tetengo.api.monitoreo.domain.model.AccesoVistaEnVivo;
+import tech.tetengo.api.monitoreo.domain.model.MotivoDeDenegacion;
 import tech.tetengo.api.monitoreo.domain.model.PeticionDeMediaMtx;
 import tech.tetengo.api.shared.infrastructure.multitenancy.EjecutorEnHogar;
 import tech.tetengo.api.shared.infrastructure.security.Secretos;
 
-/** The authorization rules MediaMTX asks the API about (API contract §4). */
+/** The authorization rules MediaMTX asks the API about (API contract §4), and why each denial happened. */
 class AutorizarMediaMtxTest {
 
     private static final String SECRETO = "secreto";
@@ -40,6 +47,7 @@ class AutorizarMediaMtxTest {
     private final TransmisionEnVivoRepository transmisiones = mock(TransmisionEnVivoRepository.class);
     private final CamarasDelHogar camaras = mock(CamarasDelHogar.class);
     private final EjecutorEnHogar enHogar = mock(EjecutorEnHogar.class);
+    private final RegistroDeAccesosDenegados denegados = mock(RegistroDeAccesosDenegados.class);
 
     private AutorizarMediaMtx autorizar;
     private AccesoVistaEnVivo sesion;
@@ -62,7 +70,7 @@ class AutorizarMediaMtxTest {
     private AutorizarMediaMtx autorizar(String secreto) {
         var propiedades = new PropiedadesDeVistaEnVivo(null, null, null, null, secreto, null, null, null);
         return new AutorizarMediaMtx(
-                accesos, transmisiones, camaras, enHogar, propiedades, Clock.fixed(AHORA, ZoneOffset.UTC));
+                accesos, transmisiones, camaras, enHogar, propiedades, denegados, Clock.fixed(AHORA, ZoneOffset.UTC));
     }
 
     private static PeticionDeMediaMtx publicar(String usuario, String clave, String ruta) {
@@ -77,34 +85,65 @@ class AutorizarMediaMtxTest {
         return new PeticionDeMediaMtx(accion, "", "", ruta, query, protocolo);
     }
 
+    /** The denial was recorded with this reason, and nothing else since the last check. */
+    private void registrado(MotivoDeDenegacion motivo) {
+        ArgumentCaptor<MotivoDeDenegacion> motivos = ArgumentCaptor.forClass(MotivoDeDenegacion.class);
+        verify(denegados, atLeast(0)).enMediaMtx(motivos.capture(), any(), any(), any());
+        assertThat(motivos.getAllValues()).containsExactly(motivo);
+        clearInvocations(denegados);
+    }
+
     @Test
     void sinElSecretoCorrectoTodoSeNiega() {
         assertThat(autorizar.ejecutar(null, publicar("agente", "clave-publicacion", ruta)))
                 .isFalse();
+        registrado(MotivoDeDenegacion.SECRETO_INVALIDO);
         assertThat(autorizar.ejecutar("otro", publicar("agente", "clave-publicacion", ruta)))
                 .isFalse();
+        registrado(MotivoDeDenegacion.SECRETO_INVALIDO);
         assertThat(autorizar(" ").ejecutar(" ", publicar("agente", "clave-publicacion", ruta)))
                 .isFalse();
+        registrado(MotivoDeDenegacion.SECRETO_INVALIDO);
         assertThat(autorizar(null).ejecutar("x", publicar("agente", "clave-publicacion", ruta)))
                 .isFalse();
+        registrado(MotivoDeDenegacion.SECRETO_INVALIDO);
+    }
+
+    @Test
+    void desdeFueraDeLaRedInternaTodoSeNiegaAunConElSecreto() {
+        assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, "token=token-espectador"), false))
+                .isFalse();
+        registrado(MotivoDeDenegacion.ORIGEN_EXTERNO);
+        assertThat(sesion.getConectadaEn()).isNull();
     }
 
     @Test
     void elAgentePublicaConLaClaveDeLaTransmisionActual() {
         assertThat(autorizar.ejecutar(SECRETO, publicar("agente", "clave-publicacion", ruta)))
                 .isTrue();
+        verify(denegados, never()).enMediaMtx(any(), any(), any(), any());
     }
 
     @Test
     void seNiegaPublicarConOtraClaveOtroUsuarioOtraRuta() {
         assertThat(autorizar.ejecutar(SECRETO, publicar("agente", "otra", ruta)))
                 .isFalse();
+        registrado(MotivoDeDenegacion.CLAVE_DE_PUBLICACION_INVALIDA);
         assertThat(autorizar.ejecutar(SECRETO, publicar("admin", "clave-publicacion", ruta)))
                 .isFalse();
+        registrado(MotivoDeDenegacion.CLAVE_DE_PUBLICACION_INVALIDA);
         assertThat(autorizar.ejecutar(SECRETO, publicar("agente", "clave-publicacion", "camaras/" + UUID.randomUUID())))
                 .isFalse();
+        registrado(MotivoDeDenegacion.CLAVE_DE_PUBLICACION_INVALIDA);
         assertThat(autorizar.ejecutar(SECRETO, publicar("agente", "clave-publicacion", "otra")))
                 .isFalse();
+        registrado(MotivoDeDenegacion.RUTA_INVALIDA);
+    }
+
+    @Test
+    void laPrimeraPeticionRtspSinCredencialesNoEsUnaDenegacion() {
+        assertThat(autorizar.ejecutar(SECRETO, publicar("", "", ruta))).isFalse();
+        verify(denegados, never()).enMediaMtx(any(), any(), any(), any());
     }
 
     @Test
@@ -112,8 +151,23 @@ class AutorizarMediaMtxTest {
         when(camaras.buscar(camara)).thenReturn(Optional.of(new CamaraDelHogar(camara, "Sala", false)));
         assertThat(autorizar.ejecutar(SECRETO, publicar("agente", "clave-publicacion", ruta)))
                 .isFalse();
+        registrado(MotivoDeDenegacion.CAPTURA_NO_PERMITIDA);
         assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, "token=token-espectador")))
                 .isFalse();
+        registrado(MotivoDeDenegacion.CAPTURA_NO_PERMITIDA);
+    }
+
+    @Test
+    void unaWebcamSinUsarSoloPublicaYSeLeeConSuVistaPrevia() {
+        when(camaras.buscarDetectada(camara))
+                .thenReturn(Optional.of(
+                        new CamaraDetectada(camara, UUID.randomUUID(), "d", "Cam", false, true, true, null)));
+        assertThat(autorizar.ejecutar(SECRETO, publicar("agente", "clave-publicacion", ruta)))
+                .isFalse();
+        registrado(MotivoDeDenegacion.PUBLICACION_SIN_VISTA_PREVIA);
+        assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, "token=token-espectador")))
+                .isFalse();
+        registrado(MotivoDeDenegacion.LECTURA_SIN_VISTA_PREVIA);
     }
 
     @Test
@@ -125,16 +179,28 @@ class AutorizarMediaMtxTest {
         assertThat(sesion.getConectadaEn()).isEqualTo(AHORA);
         assertThat(sesion.getUltimaActividad()).isEqualTo(AHORA);
         verify(accesos, org.mockito.Mockito.times(2)).guardar(sesion);
+        verify(denegados, never()).enMediaMtx(any(), any(), any(), any());
     }
 
     @Test
     void seNiegaLeerSinTokenConOtroTokenOEnOtraCamara() {
         assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, ""))).isFalse();
+        registrado(MotivoDeDenegacion.SIN_TOKEN);
         assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, "token=otro")))
                 .isFalse();
+        registrado(MotivoDeDenegacion.TOKEN_INVALIDO);
         assertThat(autorizar.ejecutar(SECRETO, leer("read", "camaras/" + UUID.randomUUID(), "token=token-espectador")))
                 .isFalse();
+        // The viewer of that token is known: who it was and from which household is recorded.
+        verify(denegados)
+                .enMediaMtx(eq(MotivoDeDenegacion.TOKEN_DE_OTRA_CAMARA), any(), eq(sesion.getUsuarioId()), eq(hogar));
         verify(accesos, never()).guardar(any());
+    }
+
+    @Test
+    void sinTokenNoSeSabeQuienPidio() {
+        autorizar.ejecutar(SECRETO, leer("read", ruta, ""));
+        verify(denegados).enMediaMtx(eq(MotivoDeDenegacion.SIN_TOKEN), any(), isNull(), isNull());
     }
 
     @Test
@@ -142,6 +208,7 @@ class AutorizarMediaMtxTest {
         sesion.finalizar(AHORA.minusSeconds(5));
         assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, "token=token-espectador")))
                 .isFalse();
+        registrado(MotivoDeDenegacion.SESION_TERMINADA);
 
         AccesoVistaEnVivo vencida = new AccesoVistaEnVivo(
                 camara, UUID.randomUUID(), null, AHORA.minus(Duration.ofMinutes(11)), Duration.ofMinutes(10), "v");
@@ -150,6 +217,7 @@ class AutorizarMediaMtxTest {
         when(accesos.buscar(vencida.getId())).thenReturn(Optional.of(vencida));
         assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, "token=vencido")))
                 .isFalse();
+        registrado(MotivoDeDenegacion.SESION_TERMINADA);
     }
 
     @Test
@@ -161,6 +229,7 @@ class AutorizarMediaMtxTest {
                                     accion, "agente", "clave-publicacion", ruta, "token=token-espectador", "hls")))
                     .as(accion)
                     .isFalse();
+            registrado(MotivoDeDenegacion.ACCION_NO_PERMITIDA);
         }
     }
 
@@ -171,8 +240,10 @@ class AutorizarMediaMtxTest {
         assertThat(sesion.getUltimaActividad()).isEqualTo(AHORA);
         assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, "", "webrtc")))
                 .isFalse();
+        registrado(MotivoDeDenegacion.SIN_TOKEN);
         assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, "token=otro", "webrtc")))
                 .isFalse();
+        registrado(MotivoDeDenegacion.TOKEN_INVALIDO);
     }
 
     @Test
@@ -182,6 +253,7 @@ class AutorizarMediaMtxTest {
         assertThat(autorizar.ejecutar(
                         SECRETO, new PeticionDeMediaMtx("read", "", "token-espectador", ruta, "", "webrtc")))
                 .isFalse();
+        registrado(MotivoDeDenegacion.SIN_TOKEN);
     }
 
     @Test
@@ -190,6 +262,7 @@ class AutorizarMediaMtxTest {
             assertThat(autorizar.ejecutar(SECRETO, leer("read", ruta, "token=token-espectador", protocolo)))
                     .as(String.valueOf(protocolo))
                     .isFalse();
+            registrado(MotivoDeDenegacion.PROTOCOLO_NO_PERMITIDO);
         }
         verify(accesos, never()).guardar(any());
     }

@@ -53,6 +53,13 @@ public interface CamarasDelHogar {
     List<CamaraEnHogar> conPausaVencida(Instant ahora);
 
     /**
+     * The household of any camera, retired too, across households; empty for an unknown id. Only for
+     * the denied access log of {@code monitoreo}, which files a denial under the camera's household
+     * rather than the requester's.
+     */
+    Optional<UUID> hogarDeCamara(UUID camaraId);
+
+    /**
      * @param capturaPermitida a current consent and no active pause (CA-05.2, CA-22.1)
      */
     record CamaraDelHogar(UUID id, String nombreHabitacion, boolean capturaPermitida) {}

@@ -127,6 +127,10 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         return jdbc.queryForList("select * from transmisiones_en_vivo");
     }
 
+    private List<String> motivos() {
+        return DatosDePrueba.motivosDenegados(jdbc);
+    }
+
     private String alertaDe(String tokenAgente) throws Exception {
         return campo(
                 ApiDePrueba.enviarEvento(mvc, tokenAgente, UUID.randomUUID(), "caida", reloj.instant())
@@ -181,6 +185,7 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.campos.alertaId").isNotEmpty());
         assertThat(jdbc.queryForObject("select count(*) from accesos_vista_en_vivo", Integer.class))
                 .isZero();
+        assertThat(motivos()).isEmpty();
     }
 
     @Test
@@ -210,6 +215,7 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.campos.modo").isNotEmpty());
         cambiarModo(token, sesion, "{}").andExpect(status().isBadRequest());
+        assertThat(motivos()).isEmpty();
     }
 
     @Test
@@ -226,6 +232,13 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         cambiarModo(token, sesion, "{\"modo\":\"SOLO_POSTURA\"}")
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.codigo").value("SESION_NO_ENCONTRADA"));
+        // Another member's session is a denial; the viewer's own session that ended is not.
+        assertThat(DatosDePrueba.denegados(jdbc)).singleElement().satisfies(d -> {
+            assertThat(d.get("motivo")).isEqualTo("SESION_AJENA");
+            assertThat(d.get("usuario_id")).isEqualTo(invitado);
+            assertThat(d.get("hogar_id")).isEqualTo(hogar);
+            assertThat(d.get("hogar_del_usuario")).isEqualTo(hogar);
+        });
     }
 
     @Test
@@ -234,6 +247,7 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         abrir(token, camara, "{}")
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("CAMARA_DESCONECTADA"));
+        assertThat(motivos()).isEmpty();
     }
 
     @Test
@@ -246,6 +260,7 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("CAMARA_EN_PAUSA"))
                 .andExpect(jsonPath("$.pausadaHasta").value(hasta));
+        assertThat(motivos()).isEmpty();
     }
 
     @Test
@@ -254,6 +269,31 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         abrir(token, camara, "{}")
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("SIN_CONSENTIMIENTO"));
+        // ADR 0015: the use case threw inside its transaction, which rolled back; the denial did not.
+        assertThat(DatosDePrueba.denegados(jdbc)).singleElement().satisfies(d -> {
+            assertThat(d.get("canal")).isEqualTo("API");
+            assertThat(d.get("motivo")).isEqualTo("SIN_CONSENTIMIENTO");
+            assertThat(d.get("camara_id")).hasToString(camara);
+            assertThat(d.get("hogar_id")).hasToString(campo(titular, "$.hogarId"));
+            assertThat(d.get("usuario_id")).hasToString(campo(titular, "$.usuario.id"));
+            assertThat(d.get("hogar_del_usuario")).hasToString(campo(titular, "$.hogarId"));
+            assertThat(d.get("accion")).isNull();
+            assertThat(((Timestamp) d.get("ocurrido_en")).toInstant()).isEqualTo(reloj.instant());
+        });
+    }
+
+    @Test
+    void unaCamaraQueNoExisteEnNingunHogarSeRegistraSinHogar() throws Exception {
+        UUID inexistente = UUID.randomUUID();
+        abrir(token, inexistente.toString(), "{}")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.codigo").value("CAMARA_NO_ENCONTRADA"));
+        assertThat(DatosDePrueba.denegados(jdbc)).singleElement().satisfies(d -> {
+            assertThat(d.get("motivo")).isEqualTo("CAMARA_NO_ENCONTRADA");
+            assertThat(d.get("camara_id")).isEqualTo(inexistente);
+            assertThat(d.get("hogar_id")).isNull();
+            assertThat(d.get("hogar_del_usuario")).hasToString(campo(titular, "$.hogarId"));
+        });
     }
 
     @Test
@@ -305,6 +345,28 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
 
         mvc.perform(delete("/api/vista-en-vivo/" + campo(sesion, "$.sesionId")).header("Authorization", bearer(token)));
         leer(sesion).andExpect(status().isUnauthorized());
+        assertThat(motivos())
+                .containsExactly(
+                        "SIN_TOKEN",
+                        "TOKEN_INVALIDO",
+                        "TOKEN_DE_OTRA_CAMARA",
+                        "SECRETO_INVALIDO",
+                        "ACCION_NO_PERMITIDA",
+                        "SESION_TERMINADA");
+        assertThat(DatosDePrueba.denegados(jdbc)).allSatisfy(d -> {
+            assertThat(d.get("canal")).isEqualTo("MEDIAMTX");
+            assertThat(d.values())
+                    .noneMatch(valor -> valor != null && valor.toString().contains(tokenDe(sesion)));
+            assertThat(d.values())
+                    .noneMatch(valor -> "secreto-de-prueba".equals(valor) || "otro-secreto".equals(valor));
+        });
+        assertThat(DatosDePrueba.denegados(jdbc).getLast()).satisfies(d -> {
+            assertThat(d.get("accion")).isEqualTo("read");
+            assertThat(d.get("protocolo")).isEqualTo("hls");
+            assertThat(d.get("camara_id")).hasToString(camara);
+            assertThat(d.get("hogar_id")).hasToString(campo(titular, "$.hogarId"));
+            assertThat(d.get("usuario_id")).hasToString(campo(titular, "$.usuario.id"));
+        });
     }
 
     @Test
@@ -325,6 +387,13 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         mvc.perform(delete("/api/vista-en-vivo/" + campo(sesion, "$.sesionId")).header("Authorization", bearer(token)));
         autorizar("secreto-de-prueba", "read", "", "", "camaras/" + camara, query, "webrtc")
                 .andExpect(status().isUnauthorized());
+        assertThat(motivos())
+                .containsExactly(
+                        "SIN_TOKEN",
+                        "PROTOCOLO_NO_PERMITIDO",
+                        "PROTOCOLO_NO_PERMITIDO",
+                        "PROTOCOLO_NO_PERMITIDO",
+                        "SESION_TERMINADA");
     }
 
     @Test
@@ -341,6 +410,22 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
             autorizar("secreto-de-prueba", accion, "agente", "clave-de-prueba", "camaras/" + camara, "")
                     .andExpect(status().isUnauthorized());
         }
+        // The RTSP client's first request carries no credentials: not a denial.
+        autorizar("secreto-de-prueba", "publish", "", "", "camaras/" + camara, "")
+                .andExpect(status().isUnauthorized());
+        assertThat(motivos())
+                .containsExactly(
+                        "CLAVE_DE_PUBLICACION_INVALIDA",
+                        "CLAVE_DE_PUBLICACION_INVALIDA",
+                        "ACCION_NO_PERMITIDA",
+                        "ACCION_NO_PERMITIDA",
+                        "ACCION_NO_PERMITIDA");
+        assertThat(DatosDePrueba.denegados(jdbc).getFirst()).satisfies(d -> {
+            assertThat(d.get("accion")).isEqualTo("publish");
+            assertThat(d.get("protocolo")).isEqualTo("rtsp");
+            assertThat(d.get("usuario_id")).isNull();
+            assertThat(d.values()).noneMatch(valor -> "otra".equals(valor) || "clave-de-prueba".equals(valor));
+        });
     }
 
     @Test
@@ -370,6 +455,7 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         assertThat(transmisiones()).isEmpty();
         assertThat(transmision.lectoresExpulsados()).contains(huella);
         leer(sesion).andExpect(status().isUnauthorized());
+        assertThat(motivos()).containsExactly("SESION_TERMINADA");
     }
 
     @Test
@@ -456,6 +542,16 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         assertThat(transmisiones())
                 .singleElement()
                 .satisfies(t -> assertThat(t.get("modo")).isEqualTo("VIDEO"));
+
+        // Every attempt is filed under Ana's household (the camera's), with Beto's household as the asker's.
+        assertThat(motivos()).containsExactly("CAMARA_NO_ENCONTRADA", "SESION_AJENA", "SESION_AJENA");
+        assertThat(DatosDePrueba.denegados(jdbc)).allSatisfy(d -> {
+            assertThat(d.get("canal")).isEqualTo("API");
+            assertThat(d.get("camara_id")).hasToString(camara);
+            assertThat(d.get("hogar_id")).hasToString(campo(titular, "$.hogarId"));
+            assertThat(d.get("usuario_id")).hasToString(campo(otro, "$.usuario.id"));
+            assertThat(d.get("hogar_del_usuario")).hasToString(campo(otro, "$.hogarId"));
+        });
     }
 
     @Test
@@ -465,6 +561,13 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         String deAna = sesion(token, camara, "{}");
         autorizar("secreto-de-prueba", "read", "", "", "camaras/" + camaraDeBeto, "token=" + tokenDe(deAna))
                 .andExpect(status().isUnauthorized());
+        assertThat(DatosDePrueba.denegados(jdbc)).singleElement().satisfies(d -> {
+            assertThat(d.get("motivo")).isEqualTo("TOKEN_DE_OTRA_CAMARA");
+            assertThat(d.get("camara_id")).hasToString(camaraDeBeto);
+            assertThat(d.get("hogar_id")).hasToString(campo(otro, "$.hogarId"));
+            assertThat(d.get("usuario_id")).hasToString(campo(titular, "$.usuario.id"));
+            assertThat(d.get("hogar_del_usuario")).hasToString(campo(titular, "$.hogarId"));
+        });
     }
 
     @Test
@@ -494,6 +597,7 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         assertThat(jdbc.queryForObject("select count(*) from accesos_vista_en_vivo", Integer.class))
                 .isZero();
         assertThat(transmisiones()).isEmpty();
+        assertThat(motivos()).isEmpty();
     }
 
     @Test
@@ -527,6 +631,8 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         preparar(token, cuerpo)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("CAMARA_DESCONECTADA"));
+        // Neither the missing camaraId, the pause nor the disconnection is a denial.
+        assertThat(motivos()).containsExactly("CAMARA_NO_ENCONTRADA", "SIN_CONSENTIMIENTO");
     }
 
     @Test
@@ -541,5 +647,10 @@ class VistaEnVivoIntegrationTest extends AbstractIntegrationTest {
         preparar(campo(otro, "$.tokenAcceso"), cuerpo)
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.codigo").value("CAMARA_NO_ENCONTRADA"));
+        assertThat(DatosDePrueba.denegados(jdbc)).singleElement().satisfies(d -> {
+            assertThat(d.get("motivo")).isEqualTo("CAMARA_NO_ENCONTRADA");
+            assertThat(d.get("hogar_id")).isEqualTo(hogar);
+            assertThat(d.get("hogar_del_usuario")).hasToString(campo(otro, "$.hogarId"));
+        });
     }
 }
