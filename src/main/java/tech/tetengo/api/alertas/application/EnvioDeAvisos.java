@@ -306,7 +306,8 @@ public class EnvioDeAvisos {
                 .map(d -> new Destino(
                         d.getTokenPush(),
                         NotificadorPush.Plataforma.valueOf(d.getPlataforma().name()),
-                        d.getReferenciaPush()))
+                        d.getReferenciaPush(),
+                        d.isAvisoEnLaApp()))
                 .toList();
     }
 

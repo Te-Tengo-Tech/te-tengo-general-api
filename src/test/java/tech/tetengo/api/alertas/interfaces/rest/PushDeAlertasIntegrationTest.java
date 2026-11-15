@@ -440,6 +440,80 @@ class PushDeAlertasIntegrationTest extends AbstractIntegrationTest {
                 .isEqualTo(reloj.instant());
     }
 
+    private ResultActions registrarConAvisoEnLaApp(String token, String tokenPush, String plataforma, boolean valor)
+            throws Exception {
+        return mvc.perform(post("/api/dispositivos")
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"tokenPush\":\"%s\",\"plataforma\":\"%s\",\"avisoEnLaApp\":%s}"
+                        .formatted(tokenPush, plataforma, valor)));
+    }
+
+    private boolean avisoEnLaApp(String tokenPush) {
+        return jdbc.queryForObject(
+                "select aviso_en_la_app from dispositivos where token_push = ?", Boolean.class, tokenPush);
+    }
+
+    @Test
+    void elAndroidQueDibujaElAvisoLoRegistraYCadaRegistroGuardaLoQueManda() throws Exception {
+        String sesion = campo(titular, "$.tokenAcceso");
+        // Without the field (the devices of the setup, and older apps) it is false.
+        assertThat(avisoEnLaApp("telefono-ana")).isFalse();
+        String id = campo(
+                registrarConAvisoEnLaApp(sesion, "telefono-ana", "ANDROID", true)
+                        .andExpect(status().isCreated())
+                        .andExpect(jsonPath("$.avisoEnLaApp").value(true))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString(),
+                "$.id");
+        assertThat(avisoEnLaApp("telefono-ana")).isTrue();
+        mvc.perform(get("/api/dispositivos/" + id).header("Authorization", bearer(sesion)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.avisoEnLaApp").value(true));
+
+        // The push adapters learn it with each destination.
+        evento("caida", cuando);
+        assertThat(push.deTipo(TipoAviso.ALERTA_CAIDA).getFirst().destinos())
+                .extracting(d -> d.tokenPush() + "=" + d.avisoEnLaApp())
+                .containsExactlyInAnyOrder("telefono-ana=true", "telefono-beto=false");
+
+        // An older app registers the same token without the field: back to notification messages.
+        registrarDispositivo(sesion, "telefono-ana", "ANDROID")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(id))
+                .andExpect(jsonPath("$.avisoEnLaApp").value(false));
+        assertThat(avisoEnLaApp("telefono-ana")).isFalse();
+    }
+
+    @Test
+    void avisoEnLaAppSeGuardaEnIosPeroSoloAndroidRecibeMensajesDeDatos() throws Exception {
+        registrarConAvisoEnLaApp(tokenDeBeto(), "telefono-beto", "IOS", true)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.avisoEnLaApp").value(true));
+
+        evento("caida", cuando);
+
+        assertThat(push.deTipo(TipoAviso.ALERTA_CAIDA).getFirst().destinos())
+                .filteredOn(d -> d.tokenPush().equals("telefono-beto"))
+                .singleElement()
+                .satisfies(d -> {
+                    assertThat(d.avisoEnLaApp()).isTrue();
+                    assertThat(d.soloDatos()).isFalse();
+                });
+    }
+
+    @Test
+    void avisoEnLaAppDebeSerBooleano() throws Exception {
+        mvc.perform(
+                        post("/api/dispositivos")
+                                .header("Authorization", bearer(campo(titular, "$.tokenAcceso")))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"tokenPush\":\"telefono-ana\",\"plataforma\":\"ANDROID\",\"avisoEnLaApp\":\"tal vez\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void elTelefonoConsultaSiSigueRecibiendoAvisos() throws Exception {
         String sesion = campo(titular, "$.tokenAcceso");

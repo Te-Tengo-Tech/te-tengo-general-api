@@ -28,7 +28,9 @@ import tech.tetengo.api.shared.application.port.NotificadorPush;
 /**
  * Push through Firebase Cloud Messaging (HTTP v1, Firebase Admin SDK) to the FCM registration tokens
  * the app registers on Android, iOS and the web (PWA): every message carries the Android, APNs and
- * web push blocks ({@link CargasPush}), and FCM applies the one of the token's platform.
+ * web push blocks ({@link CargasPush}), and FCM applies the one of the token's platform. An Android
+ * device whose app draws the notice itself ({@link Destino#soloDatos()}) gets a data-only message
+ * instead ({@link CargasPush#mensajeFcmSoloDatos}); each device's message is chosen on its own.
  *
  * <ul>
  *   <li><b>Transient errors</b> ({@code UNAVAILABLE}, {@code INTERNAL}, {@code QUOTA_EXCEEDED}) are
@@ -90,7 +92,9 @@ class NotificadorPushFcm implements NotificadorPush {
         ContenidoDelAviso contenido = ContenidoDelAviso.de(aviso);
         Instant ahora = reloj.instant();
         List<Message> mensajes = destinos.stream()
-                .map(d -> mensaje(d.tokenPush(), contenido, enlaceWeb, ahora))
+                .map(d -> d.soloDatos()
+                        ? mensajeSoloDatos(d.tokenPush(), contenido)
+                        : mensaje(d.tokenPush(), contenido, enlaceWeb, ahora))
                 .toList();
         MensajeriaFcm.Respuesta[] respuestas = enviarConReintentos(mensajes, aviso);
         int aceptados = 0;
@@ -220,6 +224,18 @@ class NotificadorPushFcm implements NotificadorPush {
                                 .build())
                         .build())
                 .setWebpushConfig(webpush(contenido, enlaceWeb))
+                .build();
+    }
+
+    /** The same payload as {@link CargasPush#mensajeFcmSoloDatos}, built with the Admin SDK. */
+    static Message mensajeSoloDatos(String token, ContenidoDelAviso contenido) {
+        return Message.builder()
+                .setToken(token)
+                .putAllData(CargasPush.datosParaLaApp(contenido))
+                .setAndroidConfig(AndroidConfig.builder()
+                        .setPriority(AndroidConfig.Priority.HIGH)
+                        .setTtl(CargasPush.VIGENCIA.toMillis())
+                        .build())
                 .build();
     }
 

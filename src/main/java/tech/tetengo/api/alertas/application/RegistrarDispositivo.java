@@ -39,19 +39,20 @@ public class RegistrarDispositivo {
 
     /**
      * Upsert by token: a new device, or the same one reactivated, reassigned and marked as seen now
-     * even when nothing else changed. Notices of the household still waiting for a device (CA-16.4)
+     * even when nothing else changed; {@code avisoEnLaApp} is stored as sent, so an app that stops
+     * sending it gets notification messages again. Notices of the household still waiting for a device (CA-16.4)
      * are attempted again right after the commit, so a phone that registers during a fall gets it.
      */
     @Transactional
-    public Dispositivo ejecutar(UUID usuarioId, String tokenPush, Plataforma plataforma) {
+    public Dispositivo ejecutar(UUID usuarioId, String tokenPush, Plataforma plataforma, boolean avisoEnLaApp) {
         Instant ahora = reloj.instant();
         Dispositivo dispositivo = dispositivos
                 .buscarPorToken(tokenPush)
                 .map(existente -> {
-                    existente.asignar(usuarioId, plataforma, ahora);
+                    existente.asignar(usuarioId, plataforma, avisoEnLaApp, ahora);
                     return existente;
                 })
-                .orElseGet(() -> new Dispositivo(tokenPush, usuarioId, plataforma, ahora));
+                .orElseGet(() -> new Dispositivo(tokenPush, usuarioId, plataforma, avisoEnLaApp, ahora));
         Dispositivo guardado = dispositivos.guardar(dispositivo);
         HogarActual.obtener()
                 .ifPresent(hogar -> pendientes.delHogar().forEach(pendiente -> {

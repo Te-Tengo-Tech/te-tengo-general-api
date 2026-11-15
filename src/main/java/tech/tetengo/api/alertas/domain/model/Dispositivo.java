@@ -32,6 +32,13 @@ public class Dispositivo extends AggregateRoot {
     @Column(nullable = false)
     private boolean activo = true;
 
+    /**
+     * The app draws the notice itself from a data-only message (API contract §7, ADR 0014). Stored as
+     * sent on every registration, whatever the platform; only Android devices use it.
+     */
+    @Column(name = "aviso_en_la_app", nullable = false)
+    private boolean avisoEnLaApp;
+
     @Column(name = "referencia_push", length = 1024)
     private String referenciaPush;
 
@@ -45,24 +52,27 @@ public class Dispositivo extends AggregateRoot {
 
     protected Dispositivo() {}
 
-    public Dispositivo(String tokenPush, UUID usuarioId, Plataforma plataforma, Instant ahora) {
+    public Dispositivo(String tokenPush, UUID usuarioId, Plataforma plataforma, boolean avisoEnLaApp, Instant ahora) {
         this.tokenPush = Objects.requireNonNull(tokenPush, "tokenPush");
-        asignar(usuarioId, plataforma, ahora);
+        asignar(usuarioId, plataforma, avisoEnLaApp, ahora);
     }
 
     /**
      * The phone now belongs to whoever registered it last (e.g. another account signed in). A
      * registration also reactivates the device and records when it was last seen, even when nothing
      * else changed; the provider's address is dropped when the device was inactive or changed
-     * platform, so the provider creates or re-enables it on the next push.
+     * platform, so the provider creates or re-enables it on the next push. {@code avisoEnLaApp} is
+     * what this registration says: an older app that does not send it goes back to notification
+     * messages.
      */
-    public void asignar(UUID usuarioId, Plataforma plataforma, Instant ahora) {
+    public void asignar(UUID usuarioId, Plataforma plataforma, boolean avisoEnLaApp, Instant ahora) {
         Objects.requireNonNull(plataforma, "plataforma");
         if (!activo || (this.plataforma != null && this.plataforma != plataforma)) {
             referenciaPush = null;
         }
         this.usuarioId = Objects.requireNonNull(usuarioId, "usuarioId");
         this.plataforma = plataforma;
+        this.avisoEnLaApp = avisoEnLaApp;
         this.activo = true;
         this.desactivadoEn = null;
         this.vistoEn = Objects.requireNonNull(ahora, "ahora");
@@ -94,6 +104,10 @@ public class Dispositivo extends AggregateRoot {
 
     public Plataforma getPlataforma() {
         return plataforma;
+    }
+
+    public boolean isAvisoEnLaApp() {
+        return avisoEnLaApp;
     }
 
     public boolean isActivo() {
