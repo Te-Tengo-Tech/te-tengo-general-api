@@ -233,6 +233,15 @@ async def vigilar_control(proxy: Proxy, control: Path) -> None:
         await asyncio.sleep(0.05)
 
 
+async def informar_progreso(proxy: Proxy, cada: float) -> None:
+    """Cumulative bytes of every open tunnel every ``cada`` s, so long-lived tunnels (WebSockets) can
+    be split by time window (the security measurement, scripts/seguridad)."""
+    while True:
+        await asyncio.sleep(cada)
+        for tunel in list(proxy.tuneles.values()):
+            proxy.registro("progreso", id=tunel.ident, host=tunel.host, subida=tunel.subida, bajada=tunel.bajada)
+
+
 async def principal(args: argparse.Namespace) -> None:
     registro = Registro(Path(args.registro))
     proxy = Proxy(registro, args.nuevas, args.existentes)
@@ -249,6 +258,8 @@ async def principal(args: argparse.Namespace) -> None:
         if not control.exists():
             control.write_text("paso\n")
         asyncio.create_task(vigilar_control(proxy, control))
+    if args.progreso:
+        asyncio.create_task(informar_progreso(proxy, args.progreso))
     registro("inicio", puerto=puerto, pid=os.getpid(), nuevas=args.nuevas, existentes=args.existentes)
     if args.puerto_archivo:
         temporal = Path(args.puerto_archivo + ".tmp")
@@ -267,6 +278,8 @@ def main() -> int:
     analizador.add_argument("--registro", required=True, help="JSON-lines log")
     analizador.add_argument("--nuevas", choices=("agujero", "rechazar"), default="agujero")
     analizador.add_argument("--existentes", choices=("cortar", "congelar"), default="cortar")
+    analizador.add_argument("--progreso", type=float, default=0,
+                            help="log the bytes of every open tunnel every N s (0: never)")
     asyncio.run(principal(analizador.parse_args()))
     return 0
 
