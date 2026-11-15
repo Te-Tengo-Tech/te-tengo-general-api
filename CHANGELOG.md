@@ -4,6 +4,8 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-15
+
 ### Changed
 - **Movements consent text version `3`** (`TT_MOVIMIENTOS_VERSION_TEXTO`, default now `3`): the text names Microsoft Azure (Azure Blob Storage, Chile Central) as the cloud store instead of Cloudflare R2. Registering a consent with version `2` (or `1`) answers `422 VERSION_DE_TEXTO_INVALIDA`; consents already given with version `2` or `1` keep their version and stay in force (no re-consent)
 
