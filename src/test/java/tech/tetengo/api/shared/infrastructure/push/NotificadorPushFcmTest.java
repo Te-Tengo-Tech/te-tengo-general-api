@@ -201,6 +201,111 @@ class NotificadorPushFcmTest {
     }
 
     @Test
+    void unAndroidQueDibujaElAvisoRecibeUnMensajeSoloDeDatosQueFcmNoColapsa() {
+        mensajeria.respuestas = List.of(aceptada(), aceptada(), aceptada(), aceptada());
+        List<Destino> destinos = List.of(
+                new Destino("token-ana", Plataforma.ANDROID, null, true),
+                new Destino("token-viejo", Plataforma.ANDROID),
+                new Destino("token-beto", Plataforma.IOS, null, true),
+                new Destino("token-web", Plataforma.WEB, null, true));
+
+        Resultado resultado = notificador.enviar(destinos, CAIDA);
+
+        assertThat(resultado.aceptados()).isEqualTo(4);
+        String alerta = CAIDA.alertaId().toString();
+        Map<String, Object> esperado = new LinkedHashMap<>();
+        esperado.put("token", "token-ana");
+        esperado.put(
+                "data",
+                Map.of(
+                        "tipo", "ALERTA_CAIDA",
+                        "alertaId", alerta,
+                        "camaraId", CAIDA.camaraId().toString(),
+                        "habitacion", "Sala",
+                        "ocurridaEn", "2026-10-07T15:42:31Z",
+                        "etiqueta", "URGENTE · CAÍDA",
+                        "titulo", "Posible caída de Rosa en la Sala",
+                        "cuerpo", "10:42 · Toca para ver qué hacer y llamarla.",
+                        "grupo", alerta,
+                        "canal", "alertas_caida"));
+        esperado.put("android", Map.of("priority", "high", "ttl", "3600s"));
+        assertThat(json(mensajeria.enviados.get(0))).isEqualTo(normalizar(esperado));
+        // The same message as the JSON payload of SNS.
+        Map<String, Object> deCargas = new LinkedHashMap<>(CargasPush.mensajeFcmSoloDatos(ContenidoDelAviso.de(CAIDA)));
+        deCargas.put("token", "token-ana");
+        assertThat(json(mensajeria.enviados.get(0))).isEqualTo(normalizar(deCargas));
+
+        // An app that did not ask for it, iOS and the web keep today's notification message.
+        ContenidoDelAviso contenido = ContenidoDelAviso.de(CAIDA);
+        String[] tokens = {"token-viejo", "token-beto", "token-web"};
+        for (int i = 1; i < 4; i++) {
+            Map<String, Object> completo = new LinkedHashMap<>(CargasPush.mensajeFcm(contenido, PWA, AHORA));
+            completo.put("token", tokens[i - 1]);
+            assertThat(json(mensajeria.enviados.get(i))).isEqualTo(normalizar(completo));
+        }
+    }
+
+    @Test
+    void elAvisoSoloDeDatosDeUnaCamaraNoLlevaCanal() {
+        Aviso desconectada = new Aviso(
+                TipoAviso.CAMARA_DESCONECTADA,
+                null,
+                UUID.fromString("0199c0de-0000-7000-8000-000000000001"),
+                "Sala",
+                AHORA);
+        mensajeria.respuestas = List.of(aceptada());
+
+        notificador.enviar(List.of(new Destino("token-ana", Plataforma.ANDROID, "arn", true)), desconectada);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> mensaje = (Map<String, Object>) json(mensajeria.enviados.getFirst());
+        assertThat(mensaje).containsOnlyKeys("token", "data", "android");
+        assertThat(mensaje)
+                .extractingByKey("data")
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .containsEntry("tipo", "CAMARA_DESCONECTADA")
+                .containsEntry("grupo", "camara-0199c0de-0000-7000-8000-000000000001")
+                .containsEntry("titulo", "La cámara de la Sala se desconectó")
+                .containsKey("cuerpo")
+                .doesNotContainKey("canal")
+                .doesNotContainKey("alertaId");
+        assertThat(mensaje)
+                .extractingByKey("android")
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .doesNotContainKey("notification");
+    }
+
+    @Test
+    void unTokenRechazadoConMensajeSoloDeDatosSeReportaIgual() {
+        mensajeria.respuestas = List.of(error(MessagingErrorCode.UNREGISTERED));
+
+        Resultado resultado =
+                notificador.enviar(List.of(new Destino("token-ana", Plataforma.ANDROID, null, true)), CAIDA);
+
+        assertThat(resultado.aceptados()).isZero();
+        assertThat(resultado.tokensInvalidos()).containsExactly("token-ana");
+    }
+
+    @Test
+    void elPayloadDeSnsParaUnAndroidQueDibujaElAvisoEsSoloDeDatos() {
+        ContenidoDelAviso contenido = ContenidoDelAviso.de(CAIDA);
+        var json = JsonMapper.builder().build();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> soloDatos = json.readValue(NotificadorPushSns.mensajeSoloDatos(contenido), Map.class);
+        assertThat(soloDatos).containsOnlyKeys("default", "GCM");
+        assertThat(json.readValue((String) soloDatos.get("GCM"), Map.class))
+                .isEqualTo(normalizar(
+                        Map.of("fcmV1Message", Map.of("message", CargasPush.mensajeFcmSoloDatos(contenido)))));
+
+        // Everyone else keeps the full payload of every platform.
+        @SuppressWarnings("unchecked")
+        Map<String, Object> completo = json.readValue(NotificadorPushSns.mensaje(contenido, "id-1", PWA), Map.class);
+        assertThat(completo).containsOnlyKeys("default", "GCM", "APNS", "APNS_SANDBOX");
+        assertThat((String) completo.get("GCM")).contains("\"notification\"");
+    }
+
+    @Test
     void losTokensQueFcmYaNoAceptaSeReportan() {
         mensajeria.respuestas = List.of(aceptada(), error(MessagingErrorCode.UNREGISTERED));
 

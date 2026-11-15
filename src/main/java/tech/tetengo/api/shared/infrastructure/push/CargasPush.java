@@ -31,6 +31,11 @@ import java.util.Map;
  *
  * The FCM message carries the Android, APNs and web push blocks; FCM applies the one of the token's
  * platform, so the same message serves the native app and the PWA.
+ *
+ * <p><b>Android apps that draw the notice themselves</b> ({@code avisoEnLaApp}, API contract §7,
+ * ADR 0014) get a data-only message instead ({@link #mensajeFcmSoloDatos}): FCM keeps only the last
+ * notification message of an app while the phone is offline and ignores {@code collapse_key} for
+ * them, while data-only messages are not collapsed (up to 100 per device).
  */
 final class CargasPush {
 
@@ -62,6 +67,38 @@ final class CargasPush {
                 "apns", Map.of("headers", cabecerasApns(contenido, ahora), "payload", Map.of("aps", aps(contenido))));
         mensaje.put("webpush", webpush(contenido, enlaceWeb));
         return mensaje;
+    }
+
+    /**
+     * The data-only {@code message} of FCM HTTP v1 without its {@code token}, for an Android app that
+     * draws the notice itself: no {@code notification} block anywhere, only the data of
+     * {@link #datosParaLaApp} with high priority and the same lifetime. It only goes to Android
+     * tokens, so it carries no APNs or web push block.
+     */
+    static Map<String, Object> mensajeFcmSoloDatos(ContenidoDelAviso contenido) {
+        Map<String, Object> android = new LinkedHashMap<>();
+        android.put("priority", "high");
+        android.put("ttl", VIGENCIA.toSeconds() + "s");
+        Map<String, Object> mensaje = new LinkedHashMap<>();
+        mensaje.put("data", datosParaLaApp(contenido));
+        mensaje.put("android", android);
+        return mensaje;
+    }
+
+    /**
+     * The contract's data payload plus what the app needs to draw the notice: {@code titulo},
+     * {@code cuerpo}, {@code grupo} (the Android {@code tag}) and, for notices about an alert,
+     * {@code canal} ({@link #CANAL_ALERTAS}). Every value is a string, as FCM requires.
+     */
+    static Map<String, String> datosParaLaApp(ContenidoDelAviso contenido) {
+        Map<String, String> datos = new LinkedHashMap<>(contenido.datos());
+        datos.put("titulo", contenido.titulo());
+        datos.put("cuerpo", contenido.cuerpo());
+        datos.put("grupo", contenido.grupo());
+        if (contenido.alertaId() != null) {
+            datos.put("canal", CANAL_ALERTAS);
+        }
+        return datos;
     }
 
     private static Map<String, Object> android(ContenidoDelAviso contenido) {

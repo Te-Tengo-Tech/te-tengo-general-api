@@ -33,12 +33,15 @@ class DispositivoController {
     @Operation(
             summary = "Register a push device",
             description =
-                    "201 Dispositivo. Upsert by token: the app calls it on every start and resume; it reactivates the device and records when it was last seen. plataforma is ANDROID, IOS or WEB (the PWA's FCM web push token).")
+                    "201 Dispositivo. Upsert by token: the app calls it on every start and resume; it reactivates the device and records when it was last seen. plataforma is ANDROID, IOS or WEB (the PWA's FCM web push token). avisoEnLaApp (optional, false when absent): the Android app draws the notice itself, so it gets data-only messages that FCM does not collapse while the phone is offline; ignored on IOS and WEB.")
     @PostMapping(version = ApiVersioning.V1)
     @ResponseStatus(HttpStatus.CREATED)
     DispositivoResponse registrar(@Valid @RequestBody RegistrarDispositivoRequest pedido) {
         return DispositivoResponse.de(registrarDispositivo.ejecutar(
-                UsuarioActual.id(), pedido.tokenPush(), Plataforma.valueOf(pedido.plataforma())));
+                UsuarioActual.id(),
+                pedido.tokenPush(),
+                Plataforma.valueOf(pedido.plataforma()),
+                Boolean.TRUE.equals(pedido.avisoEnLaApp())));
     }
 
     @Operation(
