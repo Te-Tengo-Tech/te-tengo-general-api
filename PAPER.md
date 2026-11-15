@@ -10,4 +10,4 @@ This branch is the backend behind the paper (alert flow, consent and access log)
 | Local end-to-end run without the deployment | `scripts/medir-latencia-e2e.sh` |
 | Clip retention (Section 3.5: not defined yet) | `src/main/resources/application.yml`, `retencion-de-clips` |
 
-Test paths are relative to `src/test/java/tech/tetengo/api/`. Run the tests with `./mvnw verify` (Docker is needed for the integration tests).
+Test paths are relative to `src/test/java/tech/tetengo/api/`. Run the tests with `./gradlew test` (Docker is needed for the integration tests).
