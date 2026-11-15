@@ -18,6 +18,10 @@ interface AccesoVistaEnVivoJpaRepository extends JpaRepository<AccesoVistaEnVivo
     @Query(value = "select id, hogar_id from accesos_vista_en_vivo where token_hash = :huella", nativeQuery = true)
     List<Object[]> porToken(String huella);
 
+    /** Native, across households: only for the denied access log. */
+    @Query(value = "select camara_id, usuario_id from accesos_vista_en_vivo where id = :id", nativeQuery = true)
+    List<Object[]> deCualquierHogar(UUID id);
+
     /** Native, across households: only for the session end job. */
     @Query(value = "select distinct hogar_id from accesos_vista_en_vivo where fin is null", nativeQuery = true)
     List<UUID> hogaresConSesionesAbiertas();

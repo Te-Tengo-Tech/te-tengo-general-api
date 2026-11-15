@@ -4,6 +4,11 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-15
+
+### Added
+- **Denied live view attempts log** (ADR 0015): every refused attempt to reach a camera's live view is recorded in `accesos_denegados` (migration V34), filed under the camera's household, in its own transaction (`REQUIRES_NEW`) so it survives the rollback of the refused request. From the API: `CAMARA_NO_ENCONTRADA` (a camera of another household or of none), `SIN_CONSENTIMIENTO` and `SESION_AJENA` (changing or closing someone else's session), on opening, preparing and previewing; a paused or disconnected camera is not a denial. From MediaMTX's hook: every `401` with its reason (`ORIGEN_EXTERNO`, `SECRETO_INVALIDO`, `ACCION_NO_PERMITIDA`, `PROTOCOLO_NO_PERMITIDO`, `RUTA_INVALIDA`, `CLAVE_DE_PUBLICACION_INVALIDA`, `PUBLICACION_SIN_VISTA_PREVIA`, `SIN_TOKEN`, `TOKEN_INVALIDO`, `TOKEN_DE_OTRA_CAMARA`, `SESION_TERMINADA`, `LECTURA_SIN_VISTA_PREVIA`, `CAPTURA_NO_PERMITIDA`), except an RTSP publish's first request without credentials. No token, key or secret is stored. `GET /api/accesos-vista-en-vivo/denegados` (any member) lists the household's denials, newest first: `momento`, `canal`, `motivo`, `accion`, `protocolo`, `camaraId`, `nombreHabitacion`, `miembroDelHogar` and `usuario` (only for a member; users of other households are never identified). Answers are unchanged (API contract §4)
+
 ## [0.7.0] - 2026-11-15
 
 ### Changed

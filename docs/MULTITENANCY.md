@@ -32,6 +32,7 @@ There is no JWT outside a web request, so the household must be bound explicitly
 - **Event listeners** (`@Async @TransactionalEventListener`) receive the `hogarId` in the event and run their work through `EjecutorEnHogar`, which binds the household and **then** opens a new transaction. Hibernate fixes a session's tenant when the session opens, so `@ApplicationModuleListener` (whose transaction starts before the method body) is not used for household data.
 - **Scheduled jobs** first find their candidates across households with a native query that returns `(id, hogar_id)` pairs (native queries are not filtered), then process each one through `EjecutorEnHogar`, one transaction per household.
 - **MediaMTX's authorization hook** (live view, ADR 0007) carries no JWT either: it finds the session or the transmission by the SHA-256 of its token with a native query that returns its `hogar_id`, then reads and writes through `EjecutorEnHogar`.
+- **The denied live view attempts log** (ADR 0015) files each denial under the **camera's** household, which may not be the requester's (or there may be none): it finds that household with a native lookup and writes with a native insert in its own transaction. `accesos_denegados.hogar_id` is the one nullable `hogar_id` (a camera id that exists nowhere); reading it goes through `@TenantId` as usual.
 
 ## The household agent
 The agent receives a **per-camera token** when it registers. That token carries `hogar_id` and `camara_id`, so its events can only write to its own household. See [AGENT_CONTRACT.md](AGENT_CONTRACT.md).
