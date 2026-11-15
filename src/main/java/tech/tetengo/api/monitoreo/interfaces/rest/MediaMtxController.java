@@ -42,7 +42,7 @@ class MediaMtxController {
     @Operation(
             summary = "Authorize a MediaMTX publish or read",
             description =
-                    "MediaMTX authMethod http, from the server's internal network, with the shared secret as the password of HTTP Basic credentials (or the legacy secreto query parameter). 200 allows: publish on camaras/<camaraId> as user agente with the transmission's publish token (a webcam not in use only while its preview is open); read over HLS or WebRTC (WHEP), or playback, with ?token=<viewer token> of an open session of that camera (its preview for a webcam not in use). 401 for anything else, without the right secret, or from outside the private networks.")
+                    "MediaMTX authMethod http, from the server's internal network, with the shared secret as the password of HTTP Basic credentials (or the legacy secreto query parameter). 200 allows: publish on camaras/<camaraId> as user agente with the transmission's publish token (a webcam not in use only while its preview is open); read over HLS or WebRTC (WHEP), or playback, with ?token=<viewer token> of an open session of that camera (its preview for a webcam not in use). 401 for anything else, without the right secret, or from outside the private networks; every 401 is recorded in the denied access log (ADR 0015), except an RTSP publish's first request without credentials.")
     @SecurityRequirements
     @PostMapping(path = ApiVersioning.BASE + "/interno/mediamtx/autorizar", version = ApiVersioning.V1)
     ResponseEntity<Void> autorizar(
@@ -50,17 +50,17 @@ class MediaMtxController {
             @RequestParam(required = false) String secreto,
             @RequestBody(required = false) AutorizacionMediaMtxRequest pedido,
             HttpServletRequest peticion) {
-        boolean permitido = pedido != null
-                && RedInterna.contiene(peticion.getRemoteAddr())
-                && autorizar.ejecutar(
-                        claveBasica(credenciales).orElse(secreto),
-                        new PeticionDeMediaMtx(
-                                pedido.action(),
-                                pedido.user(),
-                                pedido.password(),
-                                pedido.path(),
-                                pedido.query(),
-                                pedido.protocol()));
+        PeticionDeMediaMtx aAutorizar = pedido == null
+                ? new PeticionDeMediaMtx(null, null, null, null, null, null)
+                : new PeticionDeMediaMtx(
+                        pedido.action(),
+                        pedido.user(),
+                        pedido.password(),
+                        pedido.path(),
+                        pedido.query(),
+                        pedido.protocol());
+        boolean permitido = autorizar.ejecutar(
+                claveBasica(credenciales).orElse(secreto), aAutorizar, RedInterna.contiene(peticion.getRemoteAddr()));
         return ResponseEntity.status(permitido ? HttpStatus.OK : HttpStatus.UNAUTHORIZED)
                 .build();
     }

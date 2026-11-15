@@ -15,6 +15,7 @@ import tech.tetengo.api.monitoreo.application.port.MosaicoDeVistaEnVivoRepositor
 import tech.tetengo.api.monitoreo.domain.MonitoreoError;
 import tech.tetengo.api.monitoreo.domain.model.AccesoVistaEnVivo;
 import tech.tetengo.api.monitoreo.domain.model.ModoDeVista;
+import tech.tetengo.api.monitoreo.domain.model.MotivoDeDenegacion;
 import tech.tetengo.api.shared.domain.exception.ErrorDeNegocio;
 import tech.tetengo.api.shared.infrastructure.security.Secretos;
 
@@ -23,7 +24,8 @@ import tech.tetengo.api.shared.infrastructure.security.Secretos;
  * camera (CA-23.2). Not while it is disconnected (CA-23.3), paused, saying until when (CA-23.4), or
  * without consent (CA-05.2). The session is recorded for the access log (US-24) and the camera's
  * transmission starts if it was not running. A session opened from «Ver todas» (US-41) carries the
- * mosaic's id, so the access log shows all of them as one entry (CA-41.6).
+ * mosaic's id, so the access log shows all of them as one entry (CA-41.6). A camera outside the
+ * member's household and a camera without consent are denials and are recorded (ADR 0015).
  */
 @Service
 public class AbrirVistaEnVivo {
@@ -34,6 +36,7 @@ public class AbrirVistaEnVivo {
     private final MosaicoDeVistaEnVivoRepository mosaicos;
     private final Transmisiones transmisiones;
     private final PropiedadesDeVistaEnVivo propiedades;
+    private final RegistroDeAccesosDenegados denegados;
     private final Clock reloj;
 
     public AbrirVistaEnVivo(
@@ -43,6 +46,7 @@ public class AbrirVistaEnVivo {
             MosaicoDeVistaEnVivoRepository mosaicos,
             Transmisiones transmisiones,
             PropiedadesDeVistaEnVivo propiedades,
+            RegistroDeAccesosDenegados denegados,
             Clock reloj) {
         this.camaras = camaras;
         this.alertas = alertas;
@@ -50,6 +54,7 @@ public class AbrirVistaEnVivo {
         this.mosaicos = mosaicos;
         this.transmisiones = transmisiones;
         this.propiedades = propiedades;
+        this.denegados = denegados;
         this.reloj = reloj;
     }
 
@@ -67,7 +72,7 @@ public class AbrirVistaEnVivo {
     public SesionDeVistaEnVivo ejecutar(UUID camaraId, UUID usuarioId, UUID alertaId, String modo, UUID mosaicoId) {
         ModoDeVista pedido = modo == null ? null : CambiarModoDeVistaEnVivo.modo(modo);
         Instant ahora = reloj.instant();
-        EstadoDeCamara camara = estado(camaras, camaraId);
+        EstadoDeCamara camara = estado(camaras, denegados, camaraId, usuarioId);
         if (alertaId != null && !alertas.esDeLaCamara(alertaId, camaraId)) {
             throw new ErrorDeNegocio(
                     MonitoreoError.VALIDACION, Map.of("campos", Map.of("alertaId", "La alerta no es de esta cámara.")));
@@ -78,7 +83,7 @@ public class AbrirVistaEnVivo {
                     MonitoreoError.VALIDACION,
                     Map.of("campos", Map.of("mosaicoId", "No abriste esta vista de varias cámaras.")));
         }
-        verificarDisponible(camaras, camara, ahora);
+        verificarDisponible(camaras, denegados, camara, usuarioId, ahora);
         transmisiones.bloquear(camaraId);
         String token = Secretos.generar();
         AccesoVistaEnVivo acceso = accesos.guardar(new AccesoVistaEnVivo(
@@ -93,16 +98,26 @@ public class AbrirVistaEnVivo {
                 modoDelStream);
     }
 
-    /** The camera of the household, or {@code 404 CAMARA_NO_ENCONTRADA}. */
-    static EstadoDeCamara estado(CamarasDelHogar camaras, UUID camaraId) {
-        return camaras.estado(camaraId).orElseThrow(() -> new ErrorDeNegocio(MonitoreoError.CAMARA_NO_ENCONTRADA));
+    /** The camera of the household, or {@code 404 CAMARA_NO_ENCONTRADA}, which is recorded as a denial. */
+    static EstadoDeCamara estado(
+            CamarasDelHogar camaras, RegistroDeAccesosDenegados denegados, UUID camaraId, UUID usuarioId) {
+        return camaras.estado(camaraId).orElseThrow(() -> {
+            denegados.enApi(MotivoDeDenegacion.CAMARA_NO_ENCONTRADA, camaraId, usuarioId);
+            return new ErrorDeNegocio(MonitoreoError.CAMARA_NO_ENCONTRADA);
+        });
     }
 
     /**
      * The camera may stream now: connected (CA-23.3), not paused (CA-23.4, with {@code pausadaHasta}) and with
-     * the older adult's consent (CA-05.2); otherwise the matching {@code 409}.
+     * the older adult's consent (CA-05.2); otherwise the matching {@code 409}. Only the missing consent is
+     * recorded as a denial: a disconnected or paused camera is not one.
      */
-    static void verificarDisponible(CamarasDelHogar camaras, EstadoDeCamara camara, Instant ahora) {
+    static void verificarDisponible(
+            CamarasDelHogar camaras,
+            RegistroDeAccesosDenegados denegados,
+            EstadoDeCamara camara,
+            UUID usuarioId,
+            Instant ahora) {
         if ("DESCONECTADA".equals(camara.estadoConexion())) {
             throw new ErrorDeNegocio(MonitoreoError.CAMARA_DESCONECTADA);
         }
@@ -113,6 +128,7 @@ public class AbrirVistaEnVivo {
                 .map(CamaraDelHogar::capturaPermitida)
                 .orElse(false);
         if (!capturaPermitida) {
+            denegados.enApi(MotivoDeDenegacion.SIN_CONSENTIMIENTO, camara.id(), usuarioId);
             throw new ErrorDeNegocio(MonitoreoError.SIN_CONSENTIMIENTO);
         }
     }

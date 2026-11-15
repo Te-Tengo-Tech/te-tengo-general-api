@@ -47,6 +47,13 @@ class AccesoVistaEnVivoRepositoryAdapter implements AccesoVistaEnVivoRepository 
     }
 
     @Override
+    public Optional<SesionDeCualquierHogar> deCualquierHogar(UUID sesionId) {
+        return jpa.deCualquierHogar(sesionId).stream()
+                .findFirst()
+                .map(fila -> new SesionDeCualquierHogar((UUID) fila[0], (UUID) fila[1]));
+    }
+
+    @Override
     public List<UUID> hogaresConSesionesAbiertas() {
         return jpa.hogaresConSesionesAbiertas();
     }

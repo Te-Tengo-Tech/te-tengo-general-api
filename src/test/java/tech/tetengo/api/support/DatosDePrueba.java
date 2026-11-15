@@ -2,6 +2,8 @@ package tech.tetengo.api.support;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tech.tetengo.api.shared.domain.model.Rol;
@@ -60,6 +62,16 @@ public final class DatosDePrueba {
                 ahora,
                 ahora,
                 ahora);
+    }
+
+    /** The rows of the denied access log (ADR 0015), oldest first. */
+    public static List<Map<String, Object>> denegados(JdbcTemplate jdbc) {
+        return jdbc.queryForList("select * from accesos_denegados order by ocurrido_en, id");
+    }
+
+    /** The reasons of the denied access log, oldest first. */
+    public static List<String> motivosDenegados(JdbcTemplate jdbc) {
+        return jdbc.queryForList("select motivo from accesos_denegados order by ocurrido_en, id", String.class);
     }
 
     public static void membresia(JdbcTemplate jdbc, UUID hogar, UUID usuario, Rol rol) {

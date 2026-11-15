@@ -127,6 +127,12 @@ public class ServicioDeCamaras implements CamarasDelHogar {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> hogarDeCamara(UUID camaraId) {
+        return camaras.hogarDe(camaraId);
+    }
+
     private static EstadoDeCamara estado(Camara camara) {
         return new EstadoDeCamara(
                 camara.getId(),

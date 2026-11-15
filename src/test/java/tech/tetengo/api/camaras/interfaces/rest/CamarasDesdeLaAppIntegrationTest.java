@@ -236,6 +236,10 @@ class CamarasDesdeLaAppIntegrationTest extends AbstractIntegrationTest {
         mvc.perform(post("/api/camaras/" + desenchufada + "/vista-previa").header("Authorization", bearer(titular)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("CAMARA_DESCONECTADA"));
+
+        // ADR 0015: only the missing consent is a denial; the household's own webcam «sin usar» opened as
+        // a live view, and the unplugged one, are not.
+        assertThat(DatosDePrueba.motivosDenegados(jdbc)).containsExactly("SIN_CONSENTIMIENTO");
     }
 
     @Test
@@ -251,6 +255,11 @@ class CamarasDesdeLaAppIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.codigo").value("CAMARA_NO_ENCONTRADA"));
         mvc.perform(post("/api/camaras/" + camara + "/vista-previa").header("Authorization", bearer(otro)))
                 .andExpect(status().isNotFound());
+        assertThat(DatosDePrueba.denegados(jdbc)).singleElement().satisfies(d -> {
+            assertThat(d.get("motivo")).isEqualTo("CAMARA_NO_ENCONTRADA");
+            assertThat(d.get("camara_id")).hasToString(camara);
+            assertThat(d.get("hogar_id")).isEqualTo(hogar);
+        });
     }
 
     @Test
