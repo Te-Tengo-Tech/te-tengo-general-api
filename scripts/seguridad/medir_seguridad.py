@@ -46,6 +46,16 @@ LATENCIA = AQUI.parent / "latencia-e2e"
 AGENTE = DIR / "agente"
 
 
+def escritorio() -> Path:
+    """The desktop agent repository: TT_E2E_ESCRITORIO, or a sibling of this repository."""
+    raiz = AQUI.parents[1]
+    for c in filter(None, [os.environ.get("TT_E2E_ESCRITORIO"), raiz.parent / "te-tengo-desktop-pywebview",
+                           raiz.parent.parent / "te-tengo-desktop-pywebview"]):
+        if (Path(c) / ".venv").exists():
+            return Path(c).resolve()
+    sys.exit("desktop agent repository not found (TT_E2E_ESCRITORIO)")
+
+
 def log(msg: str) -> None:
     print(f"[seguridad {time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
@@ -167,9 +177,7 @@ def vincular(args) -> None:
 
 def arrancar_agente(trabajo: Path) -> subprocess.Popen:
     """The isolated agent with the standing clip that «vincular» prepared (no fall)."""
-    esc = Path(os.environ.get("TT_E2E_ESCRITORIO", AQUI.parents[2] / ".." / "te-tengo-desktop-pywebview")).resolve()
-    if not esc.exists():
-        esc = Path("/Users/jhosepmyr/Projects/te-tengo/te-tengo-desktop-pywebview")
+    esc = escritorio()
     clips = sorted(Path(args_global.vinculo).glob("clips/fall-01.tsv"))
     if not clips:
         sys.exit("no clip: run «vincular» first with the same --vinculo dir")
@@ -381,7 +389,7 @@ def confidencialidad(args) -> None:
     trabajo = Path(args.dir)
     trabajo.mkdir(parents=True, exist_ok=True)
     a = Cuenta("seguridad-a")
-    esc = Path("/Users/jhosepmyr/Projects/te-tengo/te-tengo-desktop-pywebview")
+    esc = escritorio()
     py = esc / ".venv/bin/python"
     tsv = subprocess.run([str(py), str(LATENCIA / "preparar_clips.py"), str(esc / "datos/urfd"), str(trabajo / "clips"),
                           str(args.previa), "25", "fall-01"], capture_output=True, text=True, check=True).stdout
