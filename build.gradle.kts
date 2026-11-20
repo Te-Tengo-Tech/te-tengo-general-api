@@ -88,7 +88,7 @@ dependencies {
   // Push: Amazon SNS mobile push, or Firebase Cloud Messaging (HTTP v1) through the Admin SDK.
   // Only messaging is used, so Firestore and Cloud Storage (and their gRPC stack) are left out.
   implementation("software.amazon.awssdk:sns")
-  implementation("com.google.firebase:firebase-admin:9.11.0") {
+  implementation("com.google.firebase:firebase-admin:9.12.0") {
     exclude(group = "com.google.cloud", module = "google-cloud-firestore")
     exclude(group = "com.google.cloud", module = "google-cloud-storage")
   }
