@@ -19,7 +19,7 @@ services:
   # http://localhost:4566, which the household agent and the iOS simulator must reach. Sent
   # e-mails: http://localhost:4566/_aws/ses; pushes: http://localhost:4566/_aws/sns/push-notifications.
   floci:
-    image: floci/floci:2.4.0
+    image: floci/floci:2.5.0
     environment:
       # Keep the clips across restarts: in-memory reads, flushed to the volume.
       FLOCI_STORAGE_MODE: hybrid
@@ -55,7 +55,7 @@ services:
   # add the Mac's LAN address to watch from a phone). TT_MEDIAMTX_PUERTO_ICE: the ICE port, the same
   # number inside and outside the container because the candidates announce it (default 8189).
   mediamtx:
-    image: bluenviron/mediamtx:1.21.3
+    image: bluenviron/mediamtx:1.21.4
     environment:
       MTX_AUTHHTTPADDRESS: "http://mediamtx:${TT_VIVO_SECRETO_AUTORIZACION:-secreto-local-de-vista-en-vivo}@host.docker.internal:${TT_API_PUERTO:-8080}/api/interno/mediamtx/autorizar"
       MTX_HLSALLOWORIGINS: "${TT_MEDIAMTX_HLS_ORIGENES:-*}"
