@@ -1,8 +1,8 @@
 plugins {
   java
-  id("org.springframework.boot") version "4.1.2"
+  id("org.springframework.boot") version "4.2.0"
   id("io.spring.dependency-management") version "1.1.7"
-  id("com.diffplug.spotless") version "8.11.0"
+  id("com.diffplug.spotless") version "8.12.0"
   id("org.owasp.dependencycheck") version "13.0.0"
   jacoco
 }
@@ -48,7 +48,7 @@ dependencies {
   // Web, WebSocket (vista en vivo) y documentación OpenAPI
   implementation("org.springframework.boot:spring-boot-starter-webmvc")
   implementation("org.springframework.boot:spring-boot-starter-websocket")
-  implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
+  implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.1")
 
   // Seguridad: JWT (resource server)
   implementation("org.springframework.boot:spring-boot-starter-security")
@@ -88,7 +88,7 @@ dependencies {
   // Push: Amazon SNS mobile push, or Firebase Cloud Messaging (HTTP v1) through the Admin SDK.
   // Only messaging is used, so Firestore and Cloud Storage (and their gRPC stack) are left out.
   implementation("software.amazon.awssdk:sns")
-  implementation("com.google.firebase:firebase-admin:9.11.0") {
+  implementation("com.google.firebase:firebase-admin:9.12.0") {
     exclude(group = "com.google.cloud", module = "google-cloud-firestore")
     exclude(group = "com.google.cloud", module = "google-cloud-storage")
   }
